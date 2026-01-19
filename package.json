@@ -45,6 +45,7 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.13.0",
+    "better-sqlite3": "^12.6.2",
     "lucide-react": "^0.562.0",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.0",

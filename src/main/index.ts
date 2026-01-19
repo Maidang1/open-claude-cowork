@@ -6,6 +6,8 @@ import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 
+import { initDB, setSetting, getSetting } from "./db/store";
+
 const execAsync = promisify(exec);
 
 export let mainWindow: BrowserWindow | null = null;
@@ -39,6 +41,15 @@ const initIpc = () => {
       return null;
     }
     return filePaths[0];
+  });
+
+  // DB IPC Handlers
+  ipcMain.handle("db:get-last-workspace", () => {
+    return getSetting("last_workspace");
+  });
+
+  ipcMain.handle("db:set-last-workspace", (_, workspace: string) => {
+    setSetting("last_workspace", workspace);
   });
 
   // ACP IPC Handlers
@@ -206,6 +217,12 @@ const initIpc = () => {
     }
   });
 
+  ipcMain.handle("agent:permission-response", (_, id: string, response: any) => {
+    if (acpClient) {
+      acpClient.resolvePermission(id, response);
+    }
+  });
+
   ipcMain.handle("agent:send", async (_, message: string) => {
     if (acpClient) {
       await acpClient.sendMessage(message);
@@ -241,6 +258,7 @@ const onCreateMainWindow = () => {
 };
 
 app.on("ready", async () => {
+  initDB();
   initIpc();
   onCreateMainWindow();
 });

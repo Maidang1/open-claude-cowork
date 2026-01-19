@@ -35,6 +35,9 @@ interface Message {
   content: string; // Markdown text
   thought?: string; // Thought process
   toolCalls?: ToolCall[];
+  // Permission Request Fields
+  permissionId?: string;
+  options?: any[];
 }
 
 interface IncomingMessage {
@@ -48,6 +51,7 @@ interface IncomingMessage {
     | "permission_request";
   text?: string;
   toolCallId?: string;
+  id?: string; // For permission requests
   name?: string;
   kind?: string;
   status?: string;
@@ -61,6 +65,66 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
   const isUser = msg.sender === "user";
   const isSystem = msg.sender === "system";
   const [isThoughtOpen, setIsThoughtOpen] = useState(false);
+
+  // Permission Request UI
+  if (msg.permissionId) {
+    const handlePermission = async (optionId: string | null) => {
+      let response;
+      if (optionId) {
+        response = { outcome: { outcome: "selected", optionId } };
+      } else {
+        response = { outcome: { outcome: "cancelled" } };
+      }
+      await window.electron.invoke("agent:permission-response", msg.permissionId, response);
+      // Optimistically update UI (remove options, show decision)
+      // In a real app, we might wait for confirmation or update message state
+    };
+
+    return (
+      <div className="message-wrapper" style={{ alignItems: "center" }}>
+        <div className="system-init-block" style={{ border: "1px solid #f97316" }}>
+          <div style={{ fontWeight: 600, marginBottom: 8, color: "#ea580c" }}>
+            ⚠️ Permission Request
+          </div>
+          <div style={{ marginBottom: "12px" }}>{msg.content}</div>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            {msg.options?.map((opt: any) => (
+              <button
+                key={opt.optionId}
+                type="button"
+                onClick={() => handlePermission(opt.optionId)}
+                style={{
+                  padding: "6px 12px",
+                  borderRadius: "4px",
+                  border: "1px solid #e5e7eb",
+                  backgroundColor: "#fff",
+                  cursor: "pointer",
+                  fontSize: "0.9em",
+                }}
+              >
+                {opt.label || opt.kind}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => handlePermission(null)}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "4px",
+                border: "1px solid #ef4444",
+                backgroundColor: "#fff",
+                color: "#ef4444",
+                cursor: "pointer",
+                fontSize: "0.9em",
+              }}
+            >
+              Deny
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isSystem) {
     return (
@@ -202,7 +266,9 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
 const App = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
-  const [agentCommand, setAgentCommand] = useState("qwen --acp");
+  const [agentCommand, setAgentCommand] = useState(
+    "qwen --acp --allowed-tools run_shell_command --experimental-skills",
+  );
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
   const [isConnected, setIsConnected] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -222,10 +288,25 @@ const App = () => {
         typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
       handleIncomingMessage(data);
     });
+
+    // Load last workspace
+    window.electron.invoke("db:get-last-workspace").then((lastWs: string | null) => {
+      if (lastWs) {
+        setCurrentWorkspace(lastWs);
+      }
+    });
+
     return () => {
       removeListener();
     };
   }, []);
+
+  // Save last workspace when it changes
+  useEffect(() => {
+    if (currentWorkspace) {
+      window.electron.invoke("db:set-last-workspace", currentWorkspace);
+    }
+  }, [currentWorkspace]);
 
   // Auto-resize textarea
   // biome-ignore lint/correctness/useExhaustiveDependencies: Logic requires this
@@ -253,6 +334,8 @@ const App = () => {
           id: Date.now().toString(),
           sender: "system",
           content: `Requesting permission to run tool: ${data.tool}`,
+          permissionId: data.id,
+          options: data.options,
         },
       ]);
       return;

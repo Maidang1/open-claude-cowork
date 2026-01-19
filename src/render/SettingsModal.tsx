@@ -86,7 +86,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       if (res.success) {
         setInstallStatus("installed");
         // Ensure command is set correctly
-        onAgentCommandChange("qwen --acp");
+        onAgentCommandChange("qwen --acp --allowed-tools run_shell_command --experimental-skills");
       } else {
         alert(`Installation failed: ${res.error}`);
         setInstallStatus("not-installed");
@@ -141,7 +141,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const handlePresetChange = (p: AgentPreset) => {
     setPreset(p);
     if (p === "qwen") {
-      onAgentCommandChange("qwen --acp");
+      onAgentCommandChange("qwen --acp --allowed-tools run_shell_command --experimental-skills");
     } else {
       onAgentCommandChange("");
     }

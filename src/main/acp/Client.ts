@@ -1,8 +1,11 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, spawn, exec } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { Readable, Writable } from "node:stream";
+import { promisify } from "node:util";
 import { ClientSideConnection, ndJsonStream } from "@agentclientprotocol/sdk";
+
+const execAsync = promisify(exec);
 
 export class ACPClient {
   private process: ChildProcess | null = null;
@@ -12,8 +15,20 @@ export class ACPClient {
   private sessionId: string | null = null;
   private cwd: string = process.cwd();
 
+  private pendingPermissions = new Map<string, (response: any) => void>();
+
   constructor(onMessage: (msg: any) => void) {
     this.onMessageCallback = onMessage;
+  }
+
+  resolvePermission(id: string, response: any) {
+    const resolver = this.pendingPermissions.get(id);
+    if (resolver) {
+      resolver(response);
+      this.pendingPermissions.delete(id);
+    } else {
+      console.warn(`[Client] No pending permission found for id: ${id}`);
+    }
   }
 
   async connect(
@@ -81,36 +96,20 @@ export class ACPClient {
       (_agent) => ({
         requestPermission: async (params) => {
           const options = params.options;
-          const allowOption = options.find(
-            (o) => o.kind === "allow_always" || o.kind === "allow_once",
-          );
+          const permissionId = Math.random().toString(36).substring(7);
 
-          // Notify UI about permission request (Optional: render a decision block)
+          // Notify UI about permission request and wait for response
           this.onMessageCallback?.({
             type: "permission_request",
+            id: permissionId,
             tool: params.toolCall?.title || "Unknown Tool",
             options: options,
           });
 
-          if (allowOption) {
-            return {
-              outcome: {
-                outcome: "selected",
-                optionId: allowOption.optionId,
-              },
-            };
-          }
-
-          if (options.length > 0) {
-            return {
-              outcome: {
-                outcome: "selected",
-                optionId: options[0].optionId,
-              },
-            };
-          }
-
-          return { outcome: { outcome: "cancelled" } };
+          // Return a promise that resolves when UI responds
+          return new Promise((resolve) => {
+            this.pendingPermissions.set(permissionId, resolve);
+          });
         },
         sessionUpdate: async (params) => {
           const update = params.update;
@@ -168,6 +167,38 @@ export class ACPClient {
         },
         extMethod: async (method, params: any) => {
           console.log(`[Client] ExtMethod call: ${method}`, params);
+          if (method === "runShellCommand") {
+             const command = params.command;
+             // Reuse the permission request flow
+             const permissionId = Math.random().toString(36).substring(7);
+             
+             this.onMessageCallback?.({
+                type: "permission_request",
+                id: permissionId,
+                tool: "runShellCommand",
+                content: `Request to run shell command:\n${command}`,
+                options: [
+                  { optionId: "allow", label: "Allow" },
+                  { optionId: "deny", label: "Deny" } // Handled by null check in UI
+                ]
+             });
+
+             const response: any = await new Promise((resolve) => {
+                this.pendingPermissions.set(permissionId, resolve);
+             });
+
+             if (response?.outcome?.outcome === "selected" && response.outcome.optionId === "allow") {
+                this.onMessageCallback?.({ type: "tool_log", text: `Executing shell command: ${command}` });
+                try {
+                  const { stdout, stderr } = await execAsync(command, { cwd: this.cwd });
+                  return { stdout, stderr, exitCode: 0 };
+                } catch (e: any) {
+                   return { stdout: "", stderr: e.message, exitCode: e.code || 1 };
+                }
+             } else {
+                throw new Error("User denied shell command execution");
+             }
+          }
           return {};
         },
       }),
@@ -186,6 +217,8 @@ export class ACPClient {
             readTextFile: true,
             writeTextFile: true,
           },
+          // @ts-ignore - Assuming protocol extension allows this or custom handling
+          runShellCommand: true 
         },
         clientInfo: { name: "test-client", version: "1.0.0" },
       });
