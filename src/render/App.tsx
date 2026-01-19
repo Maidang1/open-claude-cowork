@@ -203,6 +203,7 @@ const App = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [agentCommand, setAgentCommand] = useState("qwen --acp");
+  const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
   const [isConnected, setIsConnected] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
@@ -333,7 +334,12 @@ const App = () => {
       currentAgentMsgId.current = null;
     } else {
       handleIncomingMessage({ type: "system", text: `Connecting to: ${agentCommand}...` });
-      const result = await window.electron.invoke("agent:connect", agentCommand, currentWorkspace);
+      const result = await window.electron.invoke(
+        "agent:connect",
+        agentCommand,
+        currentWorkspace,
+        agentEnv,
+      );
       if (result.success) {
         setIsConnected(true);
         handleIncomingMessage({ type: "system", text: "Connected!" });
@@ -353,7 +359,12 @@ const App = () => {
     if (isConnected && currentWorkspace) {
       handleIncomingMessage({ type: "system", text: "Starting new task..." });
       // We can reuse the connect logic to restart the agent process/session
-      const result = await window.electron.invoke("agent:connect", agentCommand, currentWorkspace);
+      const result = await window.electron.invoke(
+        "agent:connect",
+        agentCommand,
+        currentWorkspace,
+        agentEnv,
+      );
       if (result.success) {
         handleIncomingMessage({ type: "system", text: "New session started." });
       } else {
@@ -406,8 +417,11 @@ const App = () => {
         onClose={() => setIsSettingsOpen(false)}
         agentCommand={agentCommand}
         onAgentCommandChange={setAgentCommand}
+        agentEnv={agentEnv}
+        onAgentEnvChange={setAgentEnv}
         isConnected={isConnected}
         onConnectToggle={handleConnect}
+        currentWorkspace={currentWorkspace}
       />
 
       {/* Sidebar */}

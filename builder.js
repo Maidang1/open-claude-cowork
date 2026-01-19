@@ -25,6 +25,10 @@ const config = {
         {
             from: "./public/assets/icons",
             to: "assets/icons"
+        },
+        {
+            from: "./resources/node_bin",
+            to: "node_bin"
         }
     ],
     icon: resolve(

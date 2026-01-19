@@ -10,7 +10,7 @@
     "rebuild:main": "npm run build:main && electron ./release/dist/main/index.js",
     "build:main": "rsbuild build --config ./builder/rsbuild.main.ts",
     "build:render": "rsbuild build --config ./builder/rsbuild.render.ts",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "electron-builder install-app-deps && node scripts/download-node.js",
     "icon": "electron-icon-builder -i=./public/assets/icons/icon.png -o=./public/assets/icons -f",
     "lint": "pnpm biome check --write ./src"
   },

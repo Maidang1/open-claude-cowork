@@ -16,7 +16,12 @@ export class ACPClient {
     this.onMessageCallback = onMessage;
   }
 
-  async connect(command: string, args: string[] = [], cwd?: string) {
+  async connect(
+    command: string,
+    args: string[] = [],
+    cwd?: string,
+    env?: Record<string, string>,
+  ) {
     if (this.process) {
       this.disconnect();
     }
@@ -25,10 +30,23 @@ export class ACPClient {
 
     console.log(`[Client] Spawning agent: ${command} ${args.join(" ")} in ${this.cwd}`);
     this.process = spawn(command, args, {
-      stdio: ["pipe", "pipe", "inherit"],
+      stdio: ["pipe", "pipe", "pipe"],
       shell: true,
       cwd: this.cwd,
+      env: env ? { ...process.env, ...env } : process.env,
     });
+
+    // Capture stderr
+    if (this.process.stderr) {
+      this.process.stderr.on("data", (data) => {
+        const text = data.toString();
+        console.error(`[Client] stderr: ${text}`);
+        this.onMessageCallback?.({
+          type: "system",
+          text: `System Error (stderr): ${text}`,
+        });
+      });
+    }
 
     this.process.on("error", (err) => {
       console.error("[Client] Process error:", err);

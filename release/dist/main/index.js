@@ -30,7 +30,7 @@ class ACPClient {
     constructor(onMessage){
         this.onMessageCallback = onMessage;
     }
-    async connect(command, args = [], cwd) {
+    async connect(command, args = [], cwd, env) {
         if (this.process) {
             this.disconnect();
         }
@@ -40,11 +40,27 @@ class ACPClient {
             stdio: [
                 "pipe",
                 "pipe",
-                "inherit"
+                "pipe"
             ],
             shell: true,
-            cwd: this.cwd
+            cwd: this.cwd,
+            env: env ? {
+                ...process.env,
+                ...env
+            } : process.env
         });
+        // Capture stderr
+        if (this.process.stderr) {
+            this.process.stderr.on("data", (data)=>{
+                var _this_onMessageCallback, _this;
+                const text = data.toString();
+                console.error(`[Client] stderr: ${text}`);
+                (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                    type: "system",
+                    text: `System Error (stderr): ${text}`
+                });
+            });
+        }
         this.process.on("error", (err)=>{
             var _this_onMessageCallback, _this;
             console.error("[Client] Process error:", err);
@@ -266,6 +282,10 @@ module.exports = require("electron");
 module.exports = require("node:child_process");
 
 },
+"node:fs"(module) {
+module.exports = require("node:fs");
+
+},
 "node:fs/promises"(module) {
 module.exports = require("node:fs/promises");
 
@@ -276,6 +296,10 @@ module.exports = require("node:path");
 },
 "node:stream"(module) {
 module.exports = require("node:stream");
+
+},
+"node:util"(module) {
+module.exports = require("node:util");
 
 },
 "./node_modules/.pnpm/@agentclientprotocol+sdk@0.13.0_zod@4.3.5/node_modules/@agentclientprotocol/sdk/dist/acp.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
@@ -19199,13 +19223,32 @@ __webpack_require__.d(__webpack_exports__, {
 /* import */ var electron__rspack_import_1 = __webpack_require__("electron");
 /* import */ var electron__rspack_import_1_default = /*#__PURE__*/__webpack_require__.n(electron__rspack_import_1);
 /* import */ var _acp_Client__rspack_import_2 = __webpack_require__("./src/main/acp/Client.ts");
+/* import */ var node_child_process__rspack_import_3 = __webpack_require__("node:child_process");
+/* import */ var node_child_process__rspack_import_3_default = /*#__PURE__*/__webpack_require__.n(node_child_process__rspack_import_3);
+/* import */ var node_util__rspack_import_4 = __webpack_require__("node:util");
+/* import */ var node_util__rspack_import_4_default = /*#__PURE__*/__webpack_require__.n(node_util__rspack_import_4);
+/* import */ var node_fs_promises__rspack_import_5 = __webpack_require__("node:fs/promises");
+/* import */ var node_fs_promises__rspack_import_5_default = /*#__PURE__*/__webpack_require__.n(node_fs_promises__rspack_import_5);
+/* import */ var node_fs__rspack_import_6 = __webpack_require__("node:fs");
+/* import */ var node_fs__rspack_import_6_default = /*#__PURE__*/__webpack_require__.n(node_fs__rspack_import_6);
 
 
 
+
+
+
+
+const execAsync = (0,node_util__rspack_import_4.promisify)(node_child_process__rspack_import_3.exec);
 let mainWindow = null;
 let acpClient = null;
 const isDev = !electron__rspack_import_1.app.isPackaged;
 const loadUrl = isDev ? `http://localhost:${"8088"}` : `file://${node_path__rspack_import_0_default().resolve(__dirname, "../render/index.html")}`;
+const getAgentsDir = ()=>node_path__rspack_import_0_default().join(electron__rspack_import_1.app.getPath("userData"), "agents");
+const getLocalAgentBin = (command)=>{
+    const agentsDir = getAgentsDir();
+    const binPath = node_path__rspack_import_0_default().join(agentsDir, "node_modules", ".bin", command);
+    return (0,node_fs__rspack_import_6.existsSync)(binPath) ? binPath : null;
+};
 const initIpc = ()=>{
     electron__rspack_import_1.ipcMain.on("ping", ()=>{
         electron__rspack_import_1.dialog.showMessageBox(mainWindow, {
@@ -19224,7 +19267,7 @@ const initIpc = ()=>{
         return filePaths[0];
     });
     // ACP IPC Handlers
-    electron__rspack_import_1.ipcMain.handle("agent:connect", async (_, command, cwd)=>{
+    electron__rspack_import_1.ipcMain.handle("agent:connect", async (_, command, cwd, env)=>{
         if (!acpClient) {
             acpClient = new _acp_Client__rspack_import_2.ACPClient((msg)=>{
                 // Forward agent messages to renderer
@@ -19234,14 +19277,166 @@ const initIpc = ()=>{
             });
         }
         // Command splitting (naive)
-        const [cmd, ...args] = command.split(" ");
+        const parts = command.split(" ");
+        let cmd = parts[0];
+        const args = parts.slice(1);
+        // Check if it's a local agent
+        const localBin = getLocalAgentBin(cmd);
+        if (localBin) {
+            console.log(`[Main] Using local agent binary: ${localBin}`);
+            // Ensure execution permission for local binary
+            try {
+                await node_fs_promises__rspack_import_5_default().chmod(localBin, 493);
+            } catch (e) {
+                console.error(`[Main] Failed to chmod local bin: ${e}`);
+            }
+            // Special handling for node scripts (like qwen which is a symlink to cli.js)
+            // If we just execute the JS file directly, it might fail if shebang is not respected or env is weird
+            // So we prefix with 'node' if it looks like a JS file or we know it's a node script
+            if (localBin.endsWith(".js") || cmd === "qwen") {
+                // Quote the path because Client.ts uses { shell: true } which requires manual quoting for paths with spaces
+                args.unshift(`"${localBin}"`);
+                // Try to resolve absolute path to node
+                try {
+                    const { stdout } = await execAsync("which node");
+                    cmd = stdout.trim();
+                    console.log(`[Main] Resolved system node path: ${cmd}`);
+                } catch (e) {
+                    // Fallback to bundled node if system node not found
+                    const bundledNode = node_path__rspack_import_0_default().resolve(__dirname, "../../resources/node_bin/node");
+                    if ((0,node_fs__rspack_import_6.existsSync)(bundledNode)) {
+                        cmd = bundledNode;
+                        console.log(`[Main] Using bundled node path: ${cmd}`);
+                    } else {
+                        console.warn("[Main] Failed to resolve node path and no bundled node found, falling back to 'node'");
+                        cmd = "node";
+                    }
+                }
+            } else {
+                cmd = localBin;
+            }
+        }
         try {
-            await acpClient.connect(cmd, args, cwd);
+            await acpClient.connect(cmd, args, cwd, env);
             return {
                 success: true
             };
         } catch (e) {
             console.error("Connect error:", e);
+            return {
+                success: false,
+                error: e.message
+            };
+        }
+    });
+    electron__rspack_import_1.ipcMain.handle("agent:check-command", async (_, command)=>{
+        // 1. Check local agent
+        if (getLocalAgentBin(command)) {
+            return {
+                installed: true,
+                source: "local"
+            };
+        }
+        // 2. Check system
+        try {
+            await execAsync(`which ${command}`);
+            return {
+                installed: true,
+                source: "system"
+            };
+        } catch  {
+            // 3. Special check for Node environment availability
+            if (command === "node") {
+                // Check bundled node
+                const bundledNode = node_path__rspack_import_0_default().resolve(__dirname, "../../resources/node_bin/node");
+                if ((0,node_fs__rspack_import_6.existsSync)(bundledNode)) {
+                    return {
+                        installed: true,
+                        source: "bundled"
+                    };
+                }
+            }
+            return {
+                installed: false
+            };
+        }
+    });
+    electron__rspack_import_1.ipcMain.handle("agent:install", async (_, packageName)=>{
+        const agentsDir = getAgentsDir();
+        try {
+            // Ensure dir exists
+            if (!(0,node_fs__rspack_import_6.existsSync)(agentsDir)) {
+                await node_fs_promises__rspack_import_5_default().mkdir(agentsDir, {
+                    recursive: true
+                });
+                // Init package.json if needed
+                await node_fs_promises__rspack_import_5_default().writeFile(node_path__rspack_import_0_default().join(agentsDir, "package.json"), "{}", "utf-8");
+            }
+            // Install
+            console.log(`[Main] Installing ${packageName} to ${agentsDir}...`);
+            // We rely on system npm for now, but in future could use bundled npm
+            // Quote paths to handle spaces
+            await execAsync(`npm install ${packageName}`, {
+                cwd: agentsDir
+            });
+            return {
+                success: true
+            };
+        } catch (e) {
+            console.error("Install error:", e);
+            return {
+                success: false,
+                error: e.message
+            };
+        }
+    });
+    electron__rspack_import_1.ipcMain.handle("agent:auth-terminal", async (_, command, cwd)=>{
+        // Resolve full path if it's a local agent command (e.g. "qwen")
+        let targetCmd = command;
+        let localBin = getLocalAgentBin(command);
+        if (localBin) {
+            // If it's a JS/Node script, prefix with node
+            if (localBin.endsWith(".js") || command === "qwen") {
+                let nodePath = "node";
+                // Try to find absolute node path
+                try {
+                    const { stdout } = await execAsync("which node");
+                    nodePath = stdout.trim();
+                } catch  {
+                    const bundledNode = node_path__rspack_import_0_default().resolve(__dirname, "../../resources/node_bin/node");
+                    if ((0,node_fs__rspack_import_6.existsSync)(bundledNode)) {
+                        nodePath = bundledNode;
+                    }
+                }
+                targetCmd = `"${nodePath}" "${localBin}"`;
+            } else {
+                targetCmd = `"${localBin}"`;
+            }
+        }
+        console.log(`[Main] Launching auth terminal for: ${targetCmd} in ${cwd || "default cwd"}`);
+        try {
+            if (process.platform === "darwin") {
+                // macOS: Open Terminal
+                // If cwd is provided, cd to it first
+                const script = cwd ? `cd "${cwd.replace(/"/g, '\\"')}" && ${targetCmd.replace(/"/g, '\\"')}` : targetCmd.replace(/"/g, '\\"');
+                await execAsync(`osascript -e 'tell application "Terminal" to do script "${script}"'`);
+                await execAsync(`osascript -e 'tell application "Terminal" to activate'`);
+            } else if (process.platform === "win32") {
+                // Windows: Start cmd
+                const options = cwd ? {
+                    cwd
+                } : {};
+                await execAsync(`start cmd /k "${targetCmd}"`, options);
+            } else {
+                // Linux: Try x-terminal-emulator or gnome-terminal
+                const cdCmd = cwd ? `cd "${cwd}" && ` : "";
+                await execAsync(`x-terminal-emulator -e "bash -c '${cdCmd}${targetCmd}; exec bash'" || gnome-terminal -- bash -c "${cdCmd}${targetCmd}; exec bash"`);
+            }
+            return {
+                success: true
+            };
+        } catch (e) {
+            console.error("Auth terminal error:", e);
             return {
                 success: false,
                 error: e.message
