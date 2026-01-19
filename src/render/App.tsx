@@ -1,10 +1,201 @@
-import React, { useState, useEffect, useRef } from 'react';
+import {
+  Brain,
+  CheckCircle,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Plus,
+  Send,
+  Settings,
+  XCircle,
+} from "lucide-react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import remarkGfm from "remark-gfm";
 import "./App.css";
 
-interface Message {
-  sender: 'user' | 'agent' | 'system';
-  text: string;
+// --- Types ---
+
+interface ToolCall {
+  id: string;
+  name: string;
+  kind?: string;
+  status: "pending" | "in_progress" | "completed" | "failed";
+  result?: any;
 }
+
+interface Message {
+  id: string;
+  sender: "user" | "agent" | "system";
+  content: string; // Markdown text
+  thought?: string; // Thought process
+  toolCalls?: ToolCall[];
+}
+
+interface IncomingMessage {
+  type:
+    | "agent_text"
+    | "agent_thought"
+    | "tool_call"
+    | "tool_call_update"
+    | "tool_log"
+    | "system"
+    | "permission_request";
+  text?: string;
+  toolCallId?: string;
+  name?: string;
+  kind?: string;
+  status?: string;
+  options?: any[];
+  tool?: string;
+}
+
+// --- Components ---
+
+const MessageBubble = ({ msg }: { msg: Message }) => {
+  const isUser = msg.sender === "user";
+  const isSystem = msg.sender === "system";
+  const [isThoughtOpen, setIsThoughtOpen] = useState(false);
+
+  if (isSystem) {
+    return (
+      <div className="message-wrapper" style={{ alignItems: "center" }}>
+        <div className="system-init-block">
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>System Notification</div>
+          <div>{msg.content}</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="message-wrapper">
+      <div className={`message-role ${isUser ? "user" : "assistant"}`}>
+        {isUser ? "User" : "Assistant"}
+      </div>
+
+      <div className="message-content">
+        {/* Thought Process (Collapsible) */}
+        {msg.thought && (
+          <div
+            style={{
+              backgroundColor: "#f9fafb",
+              borderRadius: "8px",
+              padding: "8px 12px",
+              fontSize: "0.9em",
+              color: "#6b7280",
+              border: "1px solid #e5e7eb",
+              cursor: "pointer",
+              marginBottom: "12px",
+            }}
+            onClick={() => setIsThoughtOpen(!isThoughtOpen)}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 500 }}>
+              <Brain size={14} />
+              <span>Thinking Process</span>
+              {isThoughtOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </div>
+            {isThoughtOpen && (
+              <div
+                style={{
+                  marginTop: "8px",
+                  whiteSpace: "pre-wrap",
+                  fontStyle: "italic",
+                  paddingLeft: "20px",
+                }}
+              >
+                {msg.thought}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Main Content */}
+        {msg.content && (
+          <div className="markdown-content">
+            {isUser ? (
+              <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
+            ) : (
+              <Markdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code(props) {
+                    const { children, className, node, ...rest } = props;
+                    const match = /language-(\w+)/.exec(className || "");
+                    return match ? (
+                      // @ts-expect-error
+                      <SyntaxHighlighter
+                        {...rest}
+                        PreTag="div"
+                        language={match[1]}
+                        style={vscDarkPlus}
+                        customStyle={{ borderRadius: "8px", fontSize: "0.85em", margin: 0 }}
+                      >
+                        {String(children).replace(/\n$/, "")}
+                      </SyntaxHighlighter>
+                    ) : (
+                      <code
+                        {...rest}
+                        className={className}
+                        style={{
+                          backgroundColor: "#f3f4f6",
+                          padding: "2px 4px",
+                          borderRadius: "4px",
+                          color: "#ef4444",
+                        }}
+                      >
+                        {children}
+                      </code>
+                    );
+                  },
+                }}
+              >
+                {msg.content}
+              </Markdown>
+            )}
+          </div>
+        )}
+
+        {/* Tool Calls */}
+        {msg.toolCalls && msg.toolCalls.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px" }}>
+            {msg.toolCalls.map((tool) => (
+              <div
+                key={tool.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "8px 12px",
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: "6px",
+                  fontSize: "0.85em",
+                  color: "#374151",
+                }}
+              >
+                {tool.status === "pending" || tool.status === "in_progress" ? (
+                  <Loader2 size={14} className="animate-spin" color="#f97316" />
+                ) : tool.status === "completed" ? (
+                  <CheckCircle size={14} color="#10b981" />
+                ) : (
+                  <XCircle size={14} color="#ef4444" />
+                )}
+                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{tool.name}</span>
+                <span style={{ color: "#9ca3af" }}>— {tool.status}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// --- Main App ---
 
 const App = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -12,21 +203,117 @@ const App = () => {
   const [agentCommand, setAgentCommand] = useState("qwen --acp");
   const [isConnected, setIsConnected] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Ref to track current generating message ID for stream updates
+  const currentAgentMsgId = useRef<string | null>(null);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Setup once
   useEffect(() => {
     // Listen for agent messages
-    const removeListener = window.electron.on("agent:message", (msg: string) => {
-       // Check if msg is object (if serialized weirdly)
-       const text = typeof msg === 'string' ? msg : JSON.stringify(msg);
-       addMessage('agent', text);
+    const removeListener = window.electron.on("agent:message", (msg: IncomingMessage | string) => {
+      // Normalize
+      const data: IncomingMessage =
+        typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
+      handleIncomingMessage(data);
     });
     return () => {
-        removeListener();
+      removeListener();
     };
   }, []);
 
-  const addMessage = (sender: Message['sender'], text: string) => {
-    setMessages(prev => [...prev, { sender, text }]);
+  // Auto-resize textarea
+  // biome-ignore lint/correctness/useExhaustiveDependencies: Logic requires this
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [inputText]);
+
+  const handleIncomingMessage = (data: IncomingMessage) => {
+    // System Messages
+    if (data.type === "system") {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now().toString(), sender: "system", content: data.text || "" },
+      ]);
+      return;
+    }
+
+    if (data.type === "permission_request") {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          sender: "system",
+          content: `Requesting permission to run tool: ${data.tool}`,
+        },
+      ]);
+      return;
+    }
+
+    // Agent Messages
+    setMessages((prev) => {
+      const lastMsg = prev[prev.length - 1];
+      const isAgentGenerating =
+        lastMsg && lastMsg.sender === "agent" && currentAgentMsgId.current === lastMsg.id;
+
+      if (data.type === "agent_text") {
+        if (isAgentGenerating) {
+          return prev.map((m) =>
+            m.id === lastMsg.id ? { ...m, content: m.content + (data.text || "") } : m,
+          );
+        } else {
+          const newId = Date.now().toString();
+          currentAgentMsgId.current = newId;
+          return [...prev, { id: newId, sender: "agent", content: data.text || "" }];
+        }
+      }
+
+      if (data.type === "agent_thought") {
+        if (isAgentGenerating) {
+          return prev.map((m) =>
+            m.id === lastMsg.id ? { ...m, thought: (m.thought || "") + (data.text || "") } : m,
+          );
+        } else {
+          const newId = Date.now().toString();
+          currentAgentMsgId.current = newId;
+          return [...prev, { id: newId, sender: "agent", content: "", thought: data.text || "" }];
+        }
+      }
+
+      if (data.type === "tool_call") {
+        if (isAgentGenerating) {
+          const newTool: ToolCall = {
+            id: data.toolCallId || "",
+            name: data.name || "Unknown Tool",
+            kind: data.kind,
+            status: (data.status as any) || "in_progress",
+          };
+          return prev.map((m) =>
+            m.id === lastMsg.id ? { ...m, toolCalls: [...(m.toolCalls || []), newTool] } : m,
+          );
+        }
+      }
+
+      if (data.type === "tool_call_update") {
+        if (isAgentGenerating) {
+          return prev.map((m) => {
+            if (m.id !== lastMsg.id) return m;
+            return {
+              ...m,
+              toolCalls: m.toolCalls?.map((t) =>
+                t.id === data.toolCallId ? { ...t, status: data.status as any } : t,
+              ),
+            };
+          });
+        }
+      }
+
+      return prev;
+    });
+
     setTimeout(scrollToBottom, 100);
   };
 
@@ -36,102 +323,183 @@ const App = () => {
 
   const handleConnect = async () => {
     if (isConnected) {
-        await window.electron.invoke("agent:disconnect");
-        setIsConnected(false);
-        addMessage('system', "Disconnected.");
+      await window.electron.invoke("agent:disconnect");
+      setIsConnected(false);
+      handleIncomingMessage({ type: "system", text: "Disconnected." });
+      currentAgentMsgId.current = null;
     } else {
-        addMessage('system', `Connecting to: ${agentCommand}...`);
-        const result = await window.electron.invoke("agent:connect", agentCommand);
-        if (result.success) {
-            setIsConnected(true);
-            addMessage('system', "Connected!");
-        } else {
-            addMessage('system', `Connection failed: ${result.error}`);
-        }
+      handleIncomingMessage({ type: "system", text: `Connecting to: ${agentCommand}...` });
+      const result = await window.electron.invoke("agent:connect", agentCommand);
+      if (result.success) {
+        setIsConnected(true);
+        handleIncomingMessage({ type: "system", text: "Connected!" });
+      } else {
+        handleIncomingMessage({ type: "system", text: `Connection failed: ${result.error}` });
+      }
     }
   };
 
   const handleSend = async () => {
     if (!inputText.trim()) return;
     if (!isConnected) {
-        addMessage('system', "Error: Not connected to agent.");
-        return;
+      handleIncomingMessage({ type: "system", text: "Error: Not connected to agent." });
+      return;
     }
 
     const text = inputText;
     setInputText("");
-    addMessage('user', text);
+
+    currentAgentMsgId.current = null;
+
+    setMessages((prev) => [...prev, { id: Date.now().toString(), sender: "user", content: text }]);
+    setTimeout(scrollToBottom, 100);
 
     try {
-        await window.electron.invoke("agent:send", text);
+      await window.electron.invoke("agent:send", text);
     } catch (e: any) {
-        addMessage('system', `Send error: ${e.message}`);
+      handleIncomingMessage({ type: "system", text: `Send error: ${e.message}` });
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
 
   return (
-    <div className="container" style={{ display: 'flex', flexDirection: 'column', height: '100vh', padding: '20px', boxSizing: 'border-box' }}>
-      <h1>ACP Client Chat</h1>
-      
-      <div className="connection-bar" style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
-        <input 
-            type="text" 
-            value={agentCommand} 
-            onChange={(e) => setAgentCommand(e.target.value)}
-            placeholder="Agent Command (e.g. npx tsx agent.ts)"
-            style={{ flex: 1, padding: '8px', borderRadius: '4px', border: '1px solid #ccc', color: '#333' }}
-        />
-        <button onClick={handleConnect} style={{ padding: '8px 16px', cursor: 'pointer' }}>
-            {isConnected ? "Disconnect" : "Connect"}
+    <div className="app-layout">
+      {/* Sidebar */}
+      <div className="sidebar">
+        <button type="button" className="new-chat-btn">
+          <Plus size={16} />
+          <span>New Task</span>
         </button>
+
+        <div className="history-list">
+          <div className="history-item active">
+            <div className="history-item-title">"Idle Session"</div>
+            <div className="history-item-subtitle">/Users/felixwliu/codes...</div>
+          </div>
+          {/* Mock items */}
+          {/* <div className="history-item">
+                  <div className="history-item-title">Refactor Auth</div>
+                  <div className="history-item-subtitle">2 hours ago</div>
+              </div> */}
+        </div>
+
+        <div
+          style={{
+            marginTop: "auto",
+            borderTop: "1px solid #e5e7eb",
+            paddingTop: "16px",
+            display: "flex",
+            gap: "8px",
+            alignItems: "center",
+          }}
+        >
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              backgroundColor: "#f97316",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "white",
+              fontWeight: 600,
+            }}
+          >
+            U
+          </div>
+          <div style={{ fontSize: "0.9em", fontWeight: 500 }}>User</div>
+          <Settings size={16} style={{ marginLeft: "auto", color: "#9ca3af", cursor: "pointer" }} />
+        </div>
       </div>
 
-      <div className="chat-window" style={{ 
-          flex: 1, 
-          border: '1px solid #ccc', 
-          borderRadius: '4px', 
-          padding: '10px', 
-          overflowY: 'auto',
-          backgroundColor: '#f5f5f5',
-          marginBottom: '20px'
-      }}>
-        {messages.map((msg, idx) => (
-            <div key={idx} style={{ 
-                marginBottom: '8px', 
-                textAlign: msg.sender === 'user' ? 'right' : 'left',
-                color: msg.sender === 'system' ? '#888' : 'black'
-            }}>
-                <span style={{ 
-                    background: msg.sender === 'user' ? '#007bff' : (msg.sender === 'agent' ? '#fff' : 'transparent'),
-                    color: msg.sender === 'user' ? 'white' : 'black',
-                    padding: '8px 12px',
-                    borderRadius: '12px',
-                    display: 'inline-block',
-                    maxWidth: '80%',
-                    border: msg.sender === 'agent' ? '1px solid #ddd' : 'none',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-word'
-                }}>
-                    {msg.sender === 'system' && <strong>[System] </strong>}
-                    {msg.sender === 'agent' && <strong>[Agent] </strong>}
-                    {msg.text}
-                </span>
+      {/* Main Chat Area */}
+      <div className="chat-main">
+        {/* Connection Overlay (Top Right) */}
+        <div className="connection-overlay">
+          <input
+            type="text"
+            value={agentCommand}
+            onChange={(e) => setAgentCommand(e.target.value)}
+            style={{
+              border: "1px solid #e5e7eb",
+              borderRadius: "4px",
+              padding: "4px 8px",
+              fontSize: "0.85em",
+              color: "#374151",
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleConnect}
+            style={{
+              border: "none",
+              backgroundColor: isConnected ? "#ef4444" : "#10b981",
+              color: "white",
+              borderRadius: "4px",
+              padding: "4px 8px",
+              fontSize: "0.85em",
+              cursor: "pointer",
+            }}
+          >
+            {isConnected ? "Disconnect" : "Connect"}
+          </button>
+        </div>
+
+        <div className="chat-header">
+          <div className="chat-title">"Idle Session"</div>
+        </div>
+
+        <div className="messages-container">
+          {/* Welcome / Empty State */}
+          {messages.length === 0 && (
+            <div style={{ textAlign: "center", color: "#9ca3af", marginTop: "40px" }}>
+              <div style={{ marginBottom: "8px" }}>Beginning of conversation</div>
+              <div
+                style={{
+                  width: "40px",
+                  height: "1px",
+                  backgroundColor: "#e5e7eb",
+                  margin: "0 auto",
+                }}
+              ></div>
             </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
+          )}
 
-      <div className="input-area" style={{ display: 'flex', gap: '10px' }}>
-        <input 
-            type="text" 
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="Type a message..."
-            style={{ flex: 1, padding: '10px', borderRadius: '4px', border: '1px solid #ccc', color: '#333' }}
-            disabled={!isConnected}
-        />
-        <button onClick={handleSend} disabled={!isConnected} style={{ padding: '10px 20px', cursor: 'pointer' }}>Send</button>
+          {messages.map((msg) => (
+            <MessageBubble key={msg.id} msg={msg} />
+          ))}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className="input-container">
+          <div className="input-box">
+            <textarea
+              ref={textareaRef}
+              className="chat-input"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Describe what you want agent to handle..."
+              rows={1}
+              disabled={!isConnected}
+            />
+            <button
+              type="button"
+              className="send-button"
+              onClick={handleSend}
+              disabled={!isConnected || !inputText.trim()}
+            >
+              <Send size={16} />
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

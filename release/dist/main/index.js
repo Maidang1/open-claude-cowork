@@ -6,15 +6,15 @@ __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   ACPClient: () => (ACPClient)
 });
-/* import */ var _agentclientprotocol_sdk__rspack_import_0 = __webpack_require__("./node_modules/.pnpm/@agentclientprotocol+sdk@0.13.0_zod@4.3.5/node_modules/@agentclientprotocol/sdk/dist/acp.js");
-/* import */ var node_child_process__rspack_import_1 = __webpack_require__("node:child_process");
-/* import */ var node_child_process__rspack_import_1_default = /*#__PURE__*/__webpack_require__.n(node_child_process__rspack_import_1);
-/* import */ var node_fs_promises__rspack_import_2 = __webpack_require__("node:fs/promises");
-/* import */ var node_fs_promises__rspack_import_2_default = /*#__PURE__*/__webpack_require__.n(node_fs_promises__rspack_import_2);
-/* import */ var node_path__rspack_import_3 = __webpack_require__("node:path");
-/* import */ var node_path__rspack_import_3_default = /*#__PURE__*/__webpack_require__.n(node_path__rspack_import_3);
-/* import */ var node_stream__rspack_import_4 = __webpack_require__("node:stream");
-/* import */ var node_stream__rspack_import_4_default = /*#__PURE__*/__webpack_require__.n(node_stream__rspack_import_4);
+/* import */ var node_child_process__rspack_import_0 = __webpack_require__("node:child_process");
+/* import */ var node_child_process__rspack_import_0_default = /*#__PURE__*/__webpack_require__.n(node_child_process__rspack_import_0);
+/* import */ var node_fs_promises__rspack_import_1 = __webpack_require__("node:fs/promises");
+/* import */ var node_fs_promises__rspack_import_1_default = /*#__PURE__*/__webpack_require__.n(node_fs_promises__rspack_import_1);
+/* import */ var node_path__rspack_import_2 = __webpack_require__("node:path");
+/* import */ var node_path__rspack_import_2_default = /*#__PURE__*/__webpack_require__.n(node_path__rspack_import_2);
+/* import */ var node_stream__rspack_import_3 = __webpack_require__("node:stream");
+/* import */ var node_stream__rspack_import_3_default = /*#__PURE__*/__webpack_require__.n(node_stream__rspack_import_3);
+/* import */ var _agentclientprotocol_sdk__rspack_import_4 = __webpack_require__("./node_modules/.pnpm/@agentclientprotocol+sdk@0.13.0_zod@4.3.5/node_modules/@agentclientprotocol/sdk/dist/acp.js");
 
 
 
@@ -23,6 +23,7 @@ __webpack_require__.d(__webpack_exports__, {
 class ACPClient {
     process = null;
     connection = null;
+    // Callback now sends structured objects instead of strings
     onMessageCallback = null;
     sessionId = null;
     constructor(onMessage){
@@ -33,7 +34,7 @@ class ACPClient {
             this.disconnect();
         }
         console.log(`[Client] Spawning agent: ${command} ${args.join(" ")}`);
-        this.process = (0,node_child_process__rspack_import_1.spawn)(command, args, {
+        this.process = (0,node_child_process__rspack_import_0.spawn)(command, args, {
             stdio: [
                 "pipe",
                 "pipe",
@@ -45,12 +46,18 @@ class ACPClient {
         this.process.on("error", (err)=>{
             var _this_onMessageCallback, _this;
             console.error("[Client] Process error:", err);
-            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, `System: Agent process error: ${err.message}`);
+            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                type: "system",
+                text: `System: Agent process error: ${err.message}`
+            });
         });
         this.process.on("exit", (code)=>{
             var _this_onMessageCallback, _this;
             console.log(`[Client] Agent exited with code ${code}`);
-            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, `System: Agent disconnected (code ${code})`);
+            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                type: "system",
+                text: `System: Agent disconnected (code ${code})`
+            });
             this.process = null;
             this.connection = null;
             this.sessionId = null;
@@ -59,20 +66,21 @@ class ACPClient {
         if (!this.process.stdout || !this.process.stdin) {
             throw new Error("Failed to access process streams");
         }
-        // @ts-ignore
-        const input = node_stream__rspack_import_4.Readable.toWeb(this.process.stdout);
-        // @ts-ignore
-        const output = node_stream__rspack_import_4.Writable.toWeb(this.process.stdin);
-        const stream = (0,_agentclientprotocol_sdk__rspack_import_0.ndJsonStream)(output, input);
+        const input = node_stream__rspack_import_3.Readable.toWeb(this.process.stdout);
+        const output = node_stream__rspack_import_3.Writable.toWeb(this.process.stdin);
+        const stream = (0,_agentclientprotocol_sdk__rspack_import_4.ndJsonStream)(output, input);
         // Create Connection
-        this.connection = new _agentclientprotocol_sdk__rspack_import_0.ClientSideConnection((agent)=>({
+        this.connection = new _agentclientprotocol_sdk__rspack_import_4.ClientSideConnection((_agent)=>({
                 requestPermission: async (params)=>{
-                    // Auto-approve for now. Protocol expects outcome.
-                    // RequestPermissionResponse -> outcome: RequestPermissionOutcome
-                    // RequestPermissionOutcome -> { outcome: "selected", optionId: ... } | { outcome: "cancelled" }
-                    // We need to pick an option. Usually the request provides options.
+                    var _params_toolCall, // Notify UI about permission request (Optional: render a decision block)
+                    _this_onMessageCallback, _this;
                     const options = params.options;
-                    const allowOption = options.find((o)=>o.kind === 'allow_always' || o.kind === 'allow_once');
+                    const allowOption = options.find((o)=>o.kind === "allow_always" || o.kind === "allow_once");
+                    (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                        type: "permission_request",
+                        tool: ((_params_toolCall = params.toolCall) === null || _params_toolCall === void 0 ? void 0 : _params_toolCall.title) || "Unknown Tool",
+                        options: options
+                    });
                     if (allowOption) {
                         return {
                             outcome: {
@@ -81,7 +89,6 @@ class ACPClient {
                             }
                         };
                     }
-                    // Fallback to first option if no explicit allow found, or cancel
                     if (options.length > 0) {
                         return {
                             outcome: {
@@ -98,22 +105,50 @@ class ACPClient {
                 },
                 sessionUpdate: async (params)=>{
                     const update = params.update;
-                    if (update.sessionUpdate === 'agent_message_chunk') {
-                        const content = update.content;
-                        if (content.type === 'text') {
-                            var // Note: This might be partial text. 
-                            // For this simple demo, we just print what we get.
-                            // Ideally we should accumulate it in the UI.
-                            _this_onMessageCallback, _this;
-                            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, `Agent: ${content.text}`);
+                    // Agent Text Message
+                    if (update.sessionUpdate === "agent_message_chunk") {
+                        if (update.content.type === "text") {
+                            var _this_onMessageCallback, _this;
+                            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                                type: "agent_text",
+                                text: update.content.text
+                            });
                         }
+                    } else if (update.sessionUpdate === "agent_thought_chunk") {
+                        if (update.content.type === "text") {
+                            var _this_onMessageCallback1, _this1;
+                            (_this_onMessageCallback1 = (_this1 = this).onMessageCallback) === null || _this_onMessageCallback1 === void 0 ? void 0 : _this_onMessageCallback1.call(_this1, {
+                                type: "agent_thought",
+                                text: update.content.text
+                            });
+                        }
+                    } else if (update.sessionUpdate === "tool_call") {
+                        var _this_onMessageCallback2, _this2;
+                        (_this_onMessageCallback2 = (_this2 = this).onMessageCallback) === null || _this_onMessageCallback2 === void 0 ? void 0 : _this_onMessageCallback2.call(_this2, {
+                            type: "tool_call",
+                            toolCallId: update.toolCallId,
+                            name: update.title,
+                            kind: update.kind,
+                            status: update.status
+                        });
+                    } else if (update.sessionUpdate === "tool_call_update") {
+                        var _this_onMessageCallback3, _this3;
+                        (_this_onMessageCallback3 = (_this3 = this).onMessageCallback) === null || _this_onMessageCallback3 === void 0 ? void 0 : _this_onMessageCallback3.call(_this3, {
+                            type: "tool_call_update",
+                            toolCallId: update.toolCallId,
+                            status: update.status
+                        });
                     }
                 },
-                // Implement Standard FS Capabilities
                 readTextFile: async (params)=>{
+                    var _this_onMessageCallback, _this;
                     console.log(`[Client] readTextFile: ${params.path}`);
+                    (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                        type: "tool_log",
+                        text: `Reading file: ${params.path}`
+                    });
                     try {
-                        const content = await node_fs_promises__rspack_import_2_default().readFile(node_path__rspack_import_3_default().resolve(process.cwd(), params.path), "utf-8");
+                        const content = await node_fs_promises__rspack_import_1_default().readFile(node_path__rspack_import_2_default().resolve(process.cwd(), params.path), "utf-8");
                         return {
                             content
                         };
@@ -122,15 +157,19 @@ class ACPClient {
                     }
                 },
                 writeTextFile: async (params)=>{
+                    var _this_onMessageCallback, _this;
                     console.log(`[Client] writeTextFile: ${params.path}`);
+                    (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                        type: "tool_log",
+                        text: `Writing file: ${params.path}`
+                    });
                     try {
-                        await node_fs_promises__rspack_import_2_default().writeFile(node_path__rspack_import_3_default().resolve(process.cwd(), params.path), params.content, "utf-8");
+                        await node_fs_promises__rspack_import_1_default().writeFile(node_path__rspack_import_2_default().resolve(process.cwd(), params.path), params.content, "utf-8");
                         return {};
                     } catch (e) {
                         throw new Error(`Failed to write file: ${e.message}`);
                     }
                 },
-                // Fallback for custom methods if needed
                 extMethod: async (method, params)=>{
                     console.log(`[Client] ExtMethod call: ${method}`, params);
                     return {};
@@ -159,11 +198,17 @@ class ACPClient {
                 mcpServers: []
             });
             this.sessionId = sessionResult.sessionId;
-            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, "System: Connected and Session Created.");
+            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                type: "system",
+                text: "System: Connected and Session Created."
+            });
         } catch (e) {
             var _this_onMessageCallback1, _this1;
             console.error("Init failed:", e);
-            (_this_onMessageCallback1 = (_this1 = this).onMessageCallback) === null || _this_onMessageCallback1 === void 0 ? void 0 : _this_onMessageCallback1.call(_this1, `System: Init failed: ${e.message}`);
+            (_this_onMessageCallback1 = (_this1 = this).onMessageCallback) === null || _this_onMessageCallback1 === void 0 ? void 0 : _this_onMessageCallback1.call(_this1, {
+                type: "system",
+                text: `System: Init failed: ${e.message}`
+            });
             this.disconnect();
             throw e;
         }
@@ -187,7 +232,10 @@ class ACPClient {
         } catch (err) {
             var _this_onMessageCallback, _this;
             console.error("Prompt error", err);
-            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, `System Error: ${err.message}`);
+            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                type: "system",
+                text: `System Error: ${err.message}`
+            });
         }
     }
     disconnect() {
@@ -19146,7 +19194,6 @@ __webpack_require__.d(__webpack_exports__, {
 
 
 
-
 let mainWindow = null;
 let acpClient = null;
 const isDev = !electron__rspack_import_1.app.isPackaged;
@@ -19219,12 +19266,12 @@ electron__rspack_import_1.app.on("ready", async ()=>{
     initIpc();
     onCreateMainWindow();
 });
-electron__rspack_import_1.app.on('window-all-closed', ()=>{
-    if (process.platform !== 'darwin') {
+electron__rspack_import_1.app.on("window-all-closed", ()=>{
+    if (process.platform !== "darwin") {
         electron__rspack_import_1.app.quit();
     }
 });
-electron__rspack_import_1.app.on('activate', ()=>{
+electron__rspack_import_1.app.on("activate", ()=>{
     if (electron__rspack_import_1.BrowserWindow.getAllWindows().length === 0) {
         onCreateMainWindow();
     }

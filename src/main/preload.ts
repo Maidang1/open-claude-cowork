@@ -14,12 +14,12 @@ contextBridge.exposeInMainWorld("electron", {
     ipcRenderer.on(channel, subscription);
     // Return a cleanup function
     return () => {
-        ipcRenderer.removeListener(channel, subscription);
+      ipcRenderer.removeListener(channel, subscription);
     };
   },
   version: {
     electron: versions.electron,
     chrome: versions.chrome,
-    node: versions.node
-  }
+    node: versions.node,
+  },
 });

@@ -1,6 +1,5 @@
-import path from "node:path";
-import { app, BrowserWindow, ipcMain, dialog } from "electron";
-import { resolve } from "node:path";
+import path, { resolve } from "node:path";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { ACPClient } from "./acp/Client";
 
 export let mainWindow: BrowserWindow | null = null;
@@ -14,46 +13,46 @@ const loadUrl: string = isDev
 const initIpc = () => {
   ipcMain.on("ping", () => {
     dialog.showMessageBox(mainWindow!, {
-      message: "hello"
-    })
+      message: "hello",
+    });
   });
 
   // ACP IPC Handlers
   ipcMain.handle("agent:connect", async (_, command: string) => {
-     if (!acpClient) {
-         acpClient = new ACPClient((msg) => {
-             // Forward agent messages to renderer
-             if (mainWindow && !mainWindow.isDestroyed()) {
-                 mainWindow.webContents.send("agent:message", msg);
-             }
-         });
-     }
-     
-     // Command splitting (naive)
-     const [cmd, ...args] = command.split(" ");
-     try {
-         await acpClient.connect(cmd, args);
-         return { success: true };
-     } catch (e: any) {
-         console.error("Connect error:", e);
-         return { success: false, error: e.message };
-     }
+    if (!acpClient) {
+      acpClient = new ACPClient((msg) => {
+        // Forward agent messages to renderer
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("agent:message", msg);
+        }
+      });
+    }
+
+    // Command splitting (naive)
+    const [cmd, ...args] = command.split(" ");
+    try {
+      await acpClient.connect(cmd, args);
+      return { success: true };
+    } catch (e: any) {
+      console.error("Connect error:", e);
+      return { success: false, error: e.message };
+    }
   });
 
   ipcMain.handle("agent:send", async (_, message: string) => {
-      if (acpClient) {
-          await acpClient.sendMessage(message);
-      } else {
-          throw new Error("Agent not connected");
-      }
+    if (acpClient) {
+      await acpClient.sendMessage(message);
+    } else {
+      throw new Error("Agent not connected");
+    }
   });
 
   ipcMain.handle("agent:disconnect", () => {
-      if (acpClient) {
-          acpClient.disconnect();
-          acpClient = null;
-      }
-      return { success: true };
+    if (acpClient) {
+      acpClient.disconnect();
+      acpClient = null;
+    }
+    return { success: true };
   });
 };
 
@@ -79,13 +78,13 @@ app.on("ready", async () => {
   onCreateMainWindow();
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
     app.quit();
   }
 });
 
-app.on('activate', () => {
+app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     onCreateMainWindow();
   }

@@ -27,6 +27,7 @@
     "@types/node": "^25.0.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "@types/react-syntax-highlighter": "^15.5.13",
     "babel-plugin-react-compiler": "^1.0.0",
     "cross-env": "^10.1.0",
     "dayjs": "^1.11.19",
@@ -44,6 +45,10 @@
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.13.0",
+    "lucide-react": "^0.562.0",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^16.1.0",
+    "remark-gfm": "^4.0.1",
     "zod": "^4.3.5"
   }
 }
