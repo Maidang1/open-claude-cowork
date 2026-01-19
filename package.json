@@ -1,5 +1,5 @@
 {
-  "name": "electron-rsbuild-template",
+  "name": "open-claude-cowork",
   "version": "1.0.0",
   "main": "./release/dist/main/index.js",
   "scripts": {
