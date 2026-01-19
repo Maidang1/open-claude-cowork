@@ -10,13 +10,15 @@ const versionArr = version.split('-')
 const bundleShortVersion = versionArr[0]
 const bundleVersion = versionArr[1]
 
+const productName = process.env?._PRODUCT_NAME ?? name
+
 /**
  * @type {import('electron-builder').Configuration}
  * @see https://www.electron.build/configuration
  */
 const config = {
     asar: true,
-    productName: process.env?._PRODUCT_NAME ?? name,
+    productName: productName,
     appId: process.env?._APP_ID,
     directories: {
         output: `./release/app/${dir}`,
