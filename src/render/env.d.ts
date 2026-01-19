@@ -12,7 +12,7 @@ declare global {
         electron: string;
         chrome: string;
         node: string;
-      }
+      };
     };
   }
 }

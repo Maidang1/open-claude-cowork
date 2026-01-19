@@ -16,6 +16,8 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 import "./App.css";
+import SettingsModal from "./SettingsModal";
+import WorkspaceWelcome from "./WorkspaceWelcome";
 
 // --- Types ---
 
@@ -202,6 +204,8 @@ const App = () => {
   const [inputText, setInputText] = useState("");
   const [agentCommand, setAgentCommand] = useState("qwen --acp");
   const [isConnected, setIsConnected] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -329,12 +333,35 @@ const App = () => {
       currentAgentMsgId.current = null;
     } else {
       handleIncomingMessage({ type: "system", text: `Connecting to: ${agentCommand}...` });
-      const result = await window.electron.invoke("agent:connect", agentCommand);
+      const result = await window.electron.invoke("agent:connect", agentCommand, currentWorkspace);
       if (result.success) {
         setIsConnected(true);
         handleIncomingMessage({ type: "system", text: "Connected!" });
+        setIsSettingsOpen(false); // Close settings on successful connection
       } else {
         handleIncomingMessage({ type: "system", text: `Connection failed: ${result.error}` });
+      }
+    }
+  };
+
+  const handleNewTask = async () => {
+    // Clear messages
+    setMessages([]);
+    currentAgentMsgId.current = null;
+
+    // Reset session if connected
+    if (isConnected && currentWorkspace) {
+      handleIncomingMessage({ type: "system", text: "Starting new task..." });
+      // We can reuse the connect logic to restart the agent process/session
+      const result = await window.electron.invoke("agent:connect", agentCommand, currentWorkspace);
+      if (result.success) {
+        handleIncomingMessage({ type: "system", text: "New session started." });
+      } else {
+        handleIncomingMessage({
+          type: "system",
+          text: `Failed to restart session: ${result.error}`,
+        });
+        setIsConnected(false);
       }
     }
   };
@@ -368,19 +395,34 @@ const App = () => {
     }
   };
 
+  if (!currentWorkspace) {
+    return <WorkspaceWelcome onSelect={setCurrentWorkspace} />;
+  }
+
   return (
     <div className="app-layout">
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        agentCommand={agentCommand}
+        onAgentCommandChange={setAgentCommand}
+        isConnected={isConnected}
+        onConnectToggle={handleConnect}
+      />
+
       {/* Sidebar */}
       <div className="sidebar">
-        <button type="button" className="new-chat-btn">
+        <button type="button" className="new-chat-btn" onClick={handleNewTask}>
           <Plus size={16} />
           <span>New Task</span>
         </button>
 
         <div className="history-list">
           <div className="history-item active">
-            <div className="history-item-title">"Idle Session"</div>
-            <div className="history-item-subtitle">/Users/felixwliu/codes...</div>
+            <div className="history-item-title">Current Workspace</div>
+            <div className="history-item-subtitle" title={currentWorkspace}>
+              {currentWorkspace.split("/").pop()}
+            </div>
           </div>
           {/* Mock items */}
           {/* <div className="history-item">
@@ -415,45 +457,36 @@ const App = () => {
             U
           </div>
           <div style={{ fontSize: "0.9em", fontWeight: 500 }}>User</div>
-          <Settings size={16} style={{ marginLeft: "auto", color: "#9ca3af", cursor: "pointer" }} />
+          <Settings
+            size={16}
+            style={{ marginLeft: "auto", color: "#9ca3af", cursor: "pointer" }}
+            onClick={() => setIsSettingsOpen(true)}
+          />
         </div>
       </div>
 
       {/* Main Chat Area */}
       <div className="chat-main">
-        {/* Connection Overlay (Top Right) */}
-        <div className="connection-overlay">
-          <input
-            type="text"
-            value={agentCommand}
-            onChange={(e) => setAgentCommand(e.target.value)}
-            style={{
-              border: "1px solid #e5e7eb",
-              borderRadius: "4px",
-              padding: "4px 8px",
-              fontSize: "0.85em",
-              color: "#374151",
-            }}
-          />
-          <button
-            type="button"
-            onClick={handleConnect}
-            style={{
-              border: "none",
-              backgroundColor: isConnected ? "#ef4444" : "#10b981",
-              color: "white",
-              borderRadius: "4px",
-              padding: "4px 8px",
-              fontSize: "0.85em",
-              cursor: "pointer",
-            }}
-          >
-            {isConnected ? "Disconnect" : "Connect"}
-          </button>
-        </div>
+        {/* Connection Overlay (Top Right) - REMOVED */}
 
         <div className="chat-header">
-          <div className="chat-title">"Idle Session"</div>
+          <div className="chat-title">
+            {isConnected ? (
+              <span style={{ color: "#10b981", display: "flex", alignItems: "center", gap: "6px" }}>
+                <div
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    backgroundColor: "#10b981",
+                  }}
+                ></div>
+                Connected
+              </span>
+            ) : (
+              <span style={{ color: "#9ca3af" }}>Disconnected</span>
+            )}
+          </div>
         </div>
 
         <div className="messages-container">

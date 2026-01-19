@@ -10,21 +10,24 @@ export class ACPClient {
   // Callback now sends structured objects instead of strings
   private onMessageCallback: ((msg: any) => void) | null = null;
   private sessionId: string | null = null;
+  private cwd: string = process.cwd();
 
   constructor(onMessage: (msg: any) => void) {
     this.onMessageCallback = onMessage;
   }
 
-  async connect(command: string, args: string[] = []) {
+  async connect(command: string, args: string[] = [], cwd?: string) {
     if (this.process) {
       this.disconnect();
     }
 
-    console.log(`[Client] Spawning agent: ${command} ${args.join(" ")}`);
+    this.cwd = cwd || process.cwd();
+
+    console.log(`[Client] Spawning agent: ${command} ${args.join(" ")} in ${this.cwd}`);
     this.process = spawn(command, args, {
       stdio: ["pipe", "pipe", "inherit"],
       shell: true,
-      cwd: process.cwd(),
+      cwd: this.cwd,
     });
 
     this.process.on("error", (err) => {
@@ -39,7 +42,7 @@ export class ACPClient {
       console.log(`[Client] Agent exited with code ${code}`);
       this.onMessageCallback?.({
         type: "system",
-        text: `System: Agent disconnected (code ${code})`,
+        text: `System: Agent disconnected (code ${code}). Check if '${command}' is installed and in your PATH.`,
       });
       this.process = null;
       this.connection = null;
@@ -129,7 +132,7 @@ export class ACPClient {
           console.log(`[Client] readTextFile: ${params.path}`);
           this.onMessageCallback?.({ type: "tool_log", text: `Reading file: ${params.path}` });
           try {
-            const content = await fs.readFile(path.resolve(process.cwd(), params.path), "utf-8");
+            const content = await fs.readFile(path.resolve(this.cwd, params.path), "utf-8");
             return { content };
           } catch (e: any) {
             throw new Error(`Failed to read file: ${e.message}`);
@@ -139,7 +142,7 @@ export class ACPClient {
           console.log(`[Client] writeTextFile: ${params.path}`);
           this.onMessageCallback?.({ type: "tool_log", text: `Writing file: ${params.path}` });
           try {
-            await fs.writeFile(path.resolve(process.cwd(), params.path), params.content, "utf-8");
+            await fs.writeFile(path.resolve(this.cwd, params.path), params.content, "utf-8");
             return {};
           } catch (e: any) {
             throw new Error(`Failed to write file: ${e.message}`);
@@ -155,6 +158,9 @@ export class ACPClient {
 
     // Initialize Protocol
     try {
+      if (!this.connection) {
+        throw new Error("Connection closed before initialization");
+      }
       const initResult = await this.connection.initialize({
         protocolVersion: 1,
         clientCapabilities: {
@@ -168,8 +174,11 @@ export class ACPClient {
       console.log("Initialized:", initResult);
 
       // New Session
+      if (!this.connection) {
+        throw new Error("Connection closed before session creation");
+      }
       const sessionResult = await this.connection.newSession({
-        cwd: process.cwd(),
+        cwd: this.cwd,
         mcpServers: [],
       });
       this.sessionId = sessionResult.sessionId;

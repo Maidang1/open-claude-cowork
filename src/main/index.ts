@@ -17,8 +17,18 @@ const initIpc = () => {
     });
   });
 
+  ipcMain.handle("dialog:openFolder", async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow!, {
+      properties: ["openDirectory"],
+    });
+    if (canceled || filePaths.length === 0) {
+      return null;
+    }
+    return filePaths[0];
+  });
+
   // ACP IPC Handlers
-  ipcMain.handle("agent:connect", async (_, command: string) => {
+  ipcMain.handle("agent:connect", async (_, command: string, cwd?: string) => {
     if (!acpClient) {
       acpClient = new ACPClient((msg) => {
         // Forward agent messages to renderer
@@ -31,7 +41,7 @@ const initIpc = () => {
     // Command splitting (naive)
     const [cmd, ...args] = command.split(" ");
     try {
-      await acpClient.connect(cmd, args);
+      await acpClient.connect(cmd, args, cwd);
       return { success: true };
     } catch (e: any) {
       console.error("Connect error:", e);

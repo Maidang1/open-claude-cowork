@@ -26,14 +26,16 @@ class ACPClient {
     // Callback now sends structured objects instead of strings
     onMessageCallback = null;
     sessionId = null;
+    cwd = process.cwd();
     constructor(onMessage){
         this.onMessageCallback = onMessage;
     }
-    async connect(command, args = []) {
+    async connect(command, args = [], cwd) {
         if (this.process) {
             this.disconnect();
         }
-        console.log(`[Client] Spawning agent: ${command} ${args.join(" ")}`);
+        this.cwd = cwd || process.cwd();
+        console.log(`[Client] Spawning agent: ${command} ${args.join(" ")} in ${this.cwd}`);
         this.process = (0,node_child_process__rspack_import_0.spawn)(command, args, {
             stdio: [
                 "pipe",
@@ -41,7 +43,7 @@ class ACPClient {
                 "inherit"
             ],
             shell: true,
-            cwd: process.cwd()
+            cwd: this.cwd
         });
         this.process.on("error", (err)=>{
             var _this_onMessageCallback, _this;
@@ -56,7 +58,7 @@ class ACPClient {
             console.log(`[Client] Agent exited with code ${code}`);
             (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
                 type: "system",
-                text: `System: Agent disconnected (code ${code})`
+                text: `System: Agent disconnected (code ${code}). Check if '${command}' is installed and in your PATH.`
             });
             this.process = null;
             this.connection = null;
@@ -148,7 +150,7 @@ class ACPClient {
                         text: `Reading file: ${params.path}`
                     });
                     try {
-                        const content = await node_fs_promises__rspack_import_1_default().readFile(node_path__rspack_import_2_default().resolve(process.cwd(), params.path), "utf-8");
+                        const content = await node_fs_promises__rspack_import_1_default().readFile(node_path__rspack_import_2_default().resolve(this.cwd, params.path), "utf-8");
                         return {
                             content
                         };
@@ -164,7 +166,7 @@ class ACPClient {
                         text: `Writing file: ${params.path}`
                     });
                     try {
-                        await node_fs_promises__rspack_import_1_default().writeFile(node_path__rspack_import_2_default().resolve(process.cwd(), params.path), params.content, "utf-8");
+                        await node_fs_promises__rspack_import_1_default().writeFile(node_path__rspack_import_2_default().resolve(this.cwd, params.path), params.content, "utf-8");
                         return {};
                     } catch (e) {
                         throw new Error(`Failed to write file: ${e.message}`);
@@ -178,6 +180,9 @@ class ACPClient {
         // Initialize Protocol
         try {
             var _this_onMessageCallback, _this;
+            if (!this.connection) {
+                throw new Error("Connection closed before initialization");
+            }
             const initResult = await this.connection.initialize({
                 protocolVersion: 1,
                 clientCapabilities: {
@@ -193,8 +198,11 @@ class ACPClient {
             });
             console.log("Initialized:", initResult);
             // New Session
+            if (!this.connection) {
+                throw new Error("Connection closed before session creation");
+            }
             const sessionResult = await this.connection.newSession({
-                cwd: process.cwd(),
+                cwd: this.cwd,
                 mcpServers: []
             });
             this.sessionId = sessionResult.sessionId;
@@ -19204,8 +19212,19 @@ const initIpc = ()=>{
             message: "hello"
         });
     });
+    electron__rspack_import_1.ipcMain.handle("dialog:openFolder", async ()=>{
+        const { canceled, filePaths } = await electron__rspack_import_1.dialog.showOpenDialog(mainWindow, {
+            properties: [
+                "openDirectory"
+            ]
+        });
+        if (canceled || filePaths.length === 0) {
+            return null;
+        }
+        return filePaths[0];
+    });
     // ACP IPC Handlers
-    electron__rspack_import_1.ipcMain.handle("agent:connect", async (_, command)=>{
+    electron__rspack_import_1.ipcMain.handle("agent:connect", async (_, command, cwd)=>{
         if (!acpClient) {
             acpClient = new _acp_Client__rspack_import_2.ACPClient((msg)=>{
                 // Forward agent messages to renderer
@@ -19217,7 +19236,7 @@ const initIpc = ()=>{
         // Command splitting (naive)
         const [cmd, ...args] = command.split(" ");
         try {
-            await acpClient.connect(cmd, args);
+            await acpClient.connect(cmd, args, cwd);
             return {
                 success: true
             };
