@@ -1,0 +1,5 @@
+{
+  "watch": ["./src/main/**/*"],
+  "ext": "ts json",
+  "exec": "npm run rebuild:main"
+}
