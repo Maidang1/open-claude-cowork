@@ -26,6 +26,40 @@ const getLocalAgentBin = (command: string) => {
   return existsSync(binPath) ? binPath : null;
 };
 
+const getPackageJsonPath = (packageName: string) => {
+  const parts = packageName.split("/").filter(Boolean);
+  return path.join(getAgentsDir(), "node_modules", ...parts, "package.json");
+};
+
+const readInstalledPackageVersion = async (packageName: string) => {
+  try {
+    const pkgJsonPath = getPackageJsonPath(packageName);
+    const data = await fs.readFile(pkgJsonPath, "utf-8");
+    const parsed = JSON.parse(data);
+    return typeof parsed.version === "string" ? parsed.version : null;
+  } catch {
+    return null;
+  }
+};
+
+const extractPackageName = (specifier: string) => {
+  const trimmed = specifier.trim();
+  if (!trimmed) return trimmed;
+
+  if (trimmed.startsWith("@")) {
+    const secondAt = trimmed.indexOf("@", 1);
+    return secondAt === -1 ? trimmed : trimmed.slice(0, secondAt);
+  }
+
+  const lastAt = trimmed.lastIndexOf("@");
+  return lastAt > 0 ? trimmed.slice(0, lastAt) : trimmed;
+};
+
+const toLatestSpecifier = (specifier: string) => {
+  const pkgName = extractPackageName(specifier);
+  return pkgName ? `${pkgName}@latest` : specifier;
+};
+
 const initIpc = () => {
   ipcMain.on("ping", () => {
     dialog.showMessageBox(mainWindow!, {
@@ -87,7 +121,7 @@ const initIpc = () => {
         if (localBin.endsWith(".js") || cmd === "qwen") {
           // Quote the path because Client.ts uses { shell: true } which requires manual quoting for paths with spaces
           args.unshift(`"${localBin}"`);
-          
+
           // Try to resolve absolute path to node
           try {
             const { stdout } = await execAsync("which node");
@@ -95,13 +129,18 @@ const initIpc = () => {
             console.log(`[Main] Resolved system node path: ${cmd}`);
           } catch (e) {
             // Fallback to bundled node if system node not found
-            const bundledNode = path.resolve(__dirname, "../../resources/node_bin/node");
+            const bundledNode = path.resolve(
+              __dirname,
+              "../../resources/node_bin/node",
+            );
             if (existsSync(bundledNode)) {
-               cmd = bundledNode;
-               console.log(`[Main] Using bundled node path: ${cmd}`);
+              cmd = bundledNode;
+              console.log(`[Main] Using bundled node path: ${cmd}`);
             } else {
-               console.warn("[Main] Failed to resolve node path and no bundled node found, falling back to 'node'");
-               cmd = "node";
+              console.warn(
+                "[Main] Failed to resolve node path and no bundled node found, falling back to 'node'",
+              );
+              cmd = "node";
             }
           }
         } else {
@@ -133,7 +172,10 @@ const initIpc = () => {
       // 3. Special check for Node environment availability
       if (command === "node") {
         // Check bundled node
-        const bundledNode = path.resolve(__dirname, "../../resources/node_bin/node");
+        const bundledNode = path.resolve(
+          __dirname,
+          "../../resources/node_bin/node",
+        );
         if (existsSync(bundledNode)) {
           return { installed: true, source: "bundled" };
         }
@@ -141,6 +183,25 @@ const initIpc = () => {
       return { installed: false };
     }
   });
+
+  ipcMain.handle(
+    "agent:get-package-version",
+    async (_, packageName: string) => {
+      const pkgName = extractPackageName(packageName);
+      if (!pkgName) {
+        return { success: false, error: "Invalid package name" };
+      }
+      try {
+        const version = await readInstalledPackageVersion(pkgName);
+        if (version) {
+          return { success: true, version };
+        }
+        return { success: false, error: "Package not installed" };
+      } catch (e: any) {
+        return { success: false, error: e.message };
+      }
+    },
+  );
 
   ipcMain.handle("agent:install", async (_, packageName: string) => {
     const agentsDir = getAgentsDir();
@@ -152,11 +213,30 @@ const initIpc = () => {
         await fs.writeFile(path.join(agentsDir, "package.json"), "{}", "utf-8");
       }
 
+      const pkgName = extractPackageName(packageName);
+      const latestSpecifier = toLatestSpecifier(packageName);
+
+      // Remove previously installed version so npm cannot reuse the old lock entry
+      if (pkgName) {
+        try {
+          await execAsync(`npm uninstall ${pkgName}`, { cwd: agentsDir });
+        } catch (uninstallErr) {
+          console.warn(
+            `[Main] npm uninstall ${pkgName} failed (likely not installed): ${uninstallErr}`,
+          );
+        }
+      }
+
       // Install
-      console.log(`[Main] Installing ${packageName} to ${agentsDir}...`);
+      console.log(`[Main] Installing ${latestSpecifier} to ${agentsDir}...`);
       // We rely on system npm for now, but in future could use bundled npm
       // Quote paths to handle spaces
-      await execAsync(`npm install ${packageName}`, { cwd: agentsDir });
+      await execAsync(
+        `npm install ${latestSpecifier} --force --prefer-online --registry https://registry.npmmirror.com`,
+        {
+          cwd: agentsDir,
+        },
+      );
       return { success: true };
     } catch (e: any) {
       console.error("Install error:", e);
@@ -164,64 +244,109 @@ const initIpc = () => {
     }
   });
 
-  ipcMain.handle("agent:auth-terminal", async (_, command: string, cwd?: string) => {
-    // Resolve full path if it's a local agent command (e.g. "qwen")
-    let targetCmd = command;
-    let localBin = getLocalAgentBin(command);
-
-    if (localBin) {
-      // If it's a JS/Node script, prefix with node
-      if (localBin.endsWith(".js") || command === "qwen") {
-         let nodePath = "node";
-         // Try to find absolute node path
-         try {
-           const { stdout } = await execAsync("which node");
-           nodePath = stdout.trim();
-         } catch {
-            const bundledNode = path.resolve(__dirname, "../../resources/node_bin/node");
-            if (existsSync(bundledNode)) {
-               nodePath = bundledNode;
-            }
-         }
-         targetCmd = `"${nodePath}" "${localBin}"`;
-      } else {
-         targetCmd = `"${localBin}"`;
-      }
+  ipcMain.handle("agent:uninstall", async (_, packageName: string) => {
+    const pkgName = extractPackageName(packageName);
+    if (!pkgName) {
+      return { success: false, error: "Invalid package name" };
     }
 
-    console.log(`[Main] Launching auth terminal for: ${targetCmd} in ${cwd || "default cwd"}`);
+    const agentsDir = getAgentsDir();
+    if (!existsSync(agentsDir)) {
+      return { success: true };
+    }
+
+    const existingVersion = await readInstalledPackageVersion(pkgName);
+    if (!existingVersion) {
+      return { success: true };
+    }
 
     try {
-      if (process.platform === "darwin") {
-        // macOS: Open Terminal
-        // If cwd is provided, cd to it first
-        const script = cwd 
-          ? `cd "${cwd.replace(/"/g, '\\"')}" && ${targetCmd.replace(/"/g, '\\"')}`
-          : targetCmd.replace(/"/g, '\\"');
-        
-        await execAsync(`osascript -e 'tell application "Terminal" to do script "${script}"'`);
-        await execAsync(`osascript -e 'tell application "Terminal" to activate'`);
-      } else if (process.platform === "win32") {
-        // Windows: Start cmd
-        const options = cwd ? { cwd } : {};
-        await execAsync(`start cmd /k "${targetCmd}"`, options);
-      } else {
-        // Linux: Try x-terminal-emulator or gnome-terminal
-        const cdCmd = cwd ? `cd "${cwd}" && ` : "";
-        await execAsync(`x-terminal-emulator -e "bash -c '${cdCmd}${targetCmd}; exec bash'" || gnome-terminal -- bash -c "${cdCmd}${targetCmd}; exec bash"`);
-      }
+      console.log(`[Main] Uninstalling ${pkgName} from ${agentsDir}...`);
+      await execAsync(`npm uninstall ${pkgName}`, { cwd: agentsDir });
       return { success: true };
     } catch (e: any) {
-      console.error("Auth terminal error:", e);
+      console.error("Uninstall error:", e);
       return { success: false, error: e.message };
     }
   });
 
-  ipcMain.handle("agent:permission-response", (_, id: string, response: any) => {
-    if (acpClient) {
-      acpClient.resolvePermission(id, response);
-    }
-  });
+  ipcMain.handle(
+    "agent:auth-terminal",
+    async (_, command: string, cwd?: string) => {
+      // Resolve full path if it's a local agent command (e.g. "qwen")
+      let targetCmd = command;
+      let localBin = getLocalAgentBin(command);
+
+      if (localBin) {
+        // If it's a JS/Node script, prefix with node
+        if (localBin.endsWith(".js") || command === "qwen") {
+          let nodePath = "node";
+          // Try to find absolute node path
+          try {
+            const { stdout } = await execAsync("which node");
+            nodePath = stdout.trim();
+          } catch {
+            const bundledNode = path.resolve(
+              __dirname,
+              "../../resources/node_bin/node",
+            );
+            if (existsSync(bundledNode)) {
+              nodePath = bundledNode;
+            }
+          }
+          targetCmd = `"${nodePath}" "${localBin}"`;
+        } else {
+          targetCmd = `"${localBin}"`;
+        }
+      }
+
+      console.log(
+        `[Main] Launching auth terminal for: ${targetCmd} in ${cwd || "default cwd"}`,
+      );
+
+      try {
+        if (process.platform === "darwin") {
+          // macOS: Open Terminal
+          // If cwd is provided, cd to it first
+          const cdPrefix = cwd ? `cd ${JSON.stringify(cwd)} && ` : "";
+          const script = `${cdPrefix}${targetCmd}`.trim();
+          const escapedScript = script
+            .replace(/\\/g, "\\\\")
+            .replace(/"/g, '\\"');
+
+          await execAsync(
+            `osascript -e 'tell application "Terminal" to do script "${escapedScript}"'`,
+          );
+          await execAsync(
+            `osascript -e 'tell application "Terminal" to activate'`,
+          );
+        } else if (process.platform === "win32") {
+          // Windows: Start cmd
+          const options = cwd ? { cwd } : {};
+          await execAsync(`start cmd /k "${targetCmd}"`, options);
+        } else {
+          // Linux: Try x-terminal-emulator or gnome-terminal
+          const cdCmd = cwd ? `cd "${cwd}" && ` : "";
+          await execAsync(
+            `x-terminal-emulator -e "bash -c '${cdCmd}${targetCmd}; exec bash'" || gnome-terminal -- bash -c "${cdCmd}${targetCmd}; exec bash"`,
+          );
+        }
+        return { success: true };
+      } catch (e: any) {
+        console.error("Auth terminal error:", e);
+        return { success: false, error: e.message };
+      }
+    },
+  );
+
+  ipcMain.handle(
+    "agent:permission-response",
+    (_, id: string, response: any) => {
+      if (acpClient) {
+        acpClient.resolvePermission(id, response);
+      }
+    },
+  );
 
   ipcMain.handle("agent:send", async (_, message: string) => {
     if (acpClient) {

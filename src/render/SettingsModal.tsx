@@ -1,4 +1,12 @@
-import { X, Check, Download, Loader2, Trash2, Plus } from "lucide-react";
+import {
+  X,
+  Check,
+  Download,
+  Loader2,
+  Trash2,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 
@@ -30,9 +38,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const modalRef = useRef<HTMLDivElement>(null);
   const [preset, setPreset] = useState<AgentPreset>("custom");
   const [installStatus, setInstallStatus] = useState<
-    "checking" | "installed" | "not-installed" | "installing"
+    | "checking"
+    | "installed"
+    | "not-installed"
+    | "installing"
+    | "updating"
+    | "uninstalling"
   >("checking");
-  const [nodeStatus, setNodeStatus] = useState<"checking" | "installed" | "not-installed">("checking");
+  const [nodeStatus, setNodeStatus] = useState<
+    "checking" | "installed" | "not-installed"
+  >("checking");
+  const [installedVersion, setInstalledVersion] = useState<string | null>(null);
   const [newEnvKey, setNewEnvKey] = useState("");
   const [newEnvVal, setNewEnvVal] = useState("");
 
@@ -69,30 +85,78 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const checkInstall = async () => {
     setInstallStatus("checking");
+    setInstalledVersion(null);
     try {
       // Check for 'qwen' command (default bin for @qwen-code/qwen-code is 'qwen')
       const res = await window.electron.invoke("agent:check-command", "qwen");
-      setInstallStatus(res.installed ? "installed" : "not-installed");
+      if (res.installed) {
+        const versionRes = await window.electron.invoke(
+          "agent:get-package-version",
+          "@qwen-code/qwen-code",
+        );
+        if (versionRes.success && versionRes.version) {
+          setInstalledVersion(versionRes.version);
+        }
+        setInstallStatus("installed");
+      } else {
+        setInstallStatus("not-installed");
+      }
     } catch (e) {
       setInstallStatus("not-installed");
+      setInstalledVersion(null);
     }
   };
 
-  const handleInstall = async () => {
-    setInstallStatus("installing");
+  const installLatest = async (mode: "install" | "update") => {
+    setInstallStatus(mode === "install" ? "installing" : "updating");
     try {
       // Install '@qwen-code/qwen-code@latest'
-      const res = await window.electron.invoke("agent:install", "@qwen-code/qwen-code@latest");
+      const res = await window.electron.invoke(
+        "agent:install",
+        "@qwen-code/qwen-code@latest",
+      );
       if (res.success) {
         setInstallStatus("installed");
+        setInstalledVersion(null);
+        checkInstall();
         // Ensure command is set correctly
-        onAgentCommandChange("qwen --acp --allowed-tools run_shell_command --experimental-skills");
+        onAgentCommandChange(
+          "qwen --acp --allowed-tools run_shell_command --experimental-skills",
+        );
       } else {
         alert(`Installation failed: ${res.error}`);
         setInstallStatus("not-installed");
       }
     } catch (e) {
       setInstallStatus("not-installed");
+    }
+  };
+
+  const handleInstall = () => {
+    installLatest("install");
+  };
+
+  const handleUpdate = () => {
+    installLatest("update");
+  };
+
+  const handleUninstall = async () => {
+    setInstallStatus("uninstalling");
+    try {
+      const res = await window.electron.invoke(
+        "agent:uninstall",
+        "@qwen-code/qwen-code",
+      );
+      if (res.success) {
+        setInstallStatus("not-installed");
+        setInstalledVersion(null);
+      } else {
+        alert(`Uninstall failed: ${res.error}`);
+        setInstallStatus("installed");
+      }
+    } catch (e) {
+      alert(`Uninstall failed: ${(e as Error).message}`);
+      setInstallStatus("installed");
     }
   };
 
@@ -126,7 +190,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     try {
       // Use the raw command or "qwen"
       const cmd = preset === "qwen" ? "qwen" : agentCommand.split(" ")[0];
-      await window.electron.invoke("agent:auth-terminal", cmd, currentWorkspace);
+      await window.electron.invoke(
+        "agent:auth-terminal",
+        cmd,
+        currentWorkspace,
+      );
     } catch (e: any) {
       alert(`Failed to launch terminal: ${e.message}`);
     }
@@ -141,7 +209,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const handlePresetChange = (p: AgentPreset) => {
     setPreset(p);
     if (p === "qwen") {
-      onAgentCommandChange("qwen --acp --allowed-tools run_shell_command --experimental-skills");
+      onAgentCommandChange(
+        "qwen --acp --allowed-tools run_shell_command --experimental-skills",
+      );
     } else {
       onAgentCommandChange("");
     }
@@ -186,7 +256,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             marginBottom: "20px",
           }}
         >
-          <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600 }}>Settings</h2>
+          <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600 }}>
+            Settings
+          </h2>
           <button
             type="button"
             onClick={onClose}
@@ -220,8 +292,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <div style={{ marginTop: "2px" }}>⚠️</div>
             <div>
               <strong>Node.js Environment Missing</strong>
-              <div style={{ marginTop: "4px", fontSize: "0.85rem", opacity: 0.9 }}>
-                No system Node.js found. Some agents may fail to start. Please install Node.js or ensure the bundled runtime is available.
+              <div
+                style={{ marginTop: "4px", fontSize: "0.85rem", opacity: 0.9 }}
+              >
+                No system Node.js found. Some agents may fail to start. Please
+                install Node.js or ensure the bundled runtime is available.
               </div>
             </div>
           </div>
@@ -288,25 +363,70 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>Status:</span>
+              <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>
+                Status:
+              </span>
               {installStatus === "checking" && (
-                <span style={{ color: "#6b7280", fontSize: "0.9rem" }}>Checking...</span>
+                <span style={{ color: "#6b7280", fontSize: "0.9rem" }}>
+                  Checking...
+                </span>
               )}
               {installStatus === "installed" && (
                 <span
-                  style={{ color: "#10b981", display: "flex", alignItems: "center", gap: "4px" }}
+                  style={{
+                    color: "#10b981",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
                 >
                   <Check size={16} /> Installed
+                  {installedVersion && (
+                    <span style={{ color: "#6b7280", fontSize: "0.85rem" }}>
+                      v{installedVersion}
+                    </span>
+                  )}
                 </span>
               )}
               {installStatus === "not-installed" && (
-                <span style={{ color: "#ef4444", fontSize: "0.9rem" }}>Not Installed</span>
+                <span style={{ color: "#ef4444", fontSize: "0.9rem" }}>
+                  Not Installed
+                </span>
               )}
               {installStatus === "installing" && (
                 <span
-                  style={{ color: "#f97316", display: "flex", alignItems: "center", gap: "4px" }}
+                  style={{
+                    color: "#f97316",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
                 >
                   <Loader2 size={16} className="animate-spin" /> Installing...
+                </span>
+              )}
+              {installStatus === "updating" && (
+                <span
+                  style={{
+                    color: "#f97316",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <Loader2 size={16} className="animate-spin" /> Updating...
+                </span>
+              )}
+              {installStatus === "uninstalling" && (
+                <span
+                  style={{
+                    color: "#f97316",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <Loader2 size={16} className="animate-spin" /> Uninstalling...
                 </span>
               )}
             </div>
@@ -330,6 +450,46 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               >
                 <Download size={14} /> Install
               </button>
+            )}
+            {installStatus === "installed" && (
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={handleUpdate}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "4px",
+                    backgroundColor: "#f97316",
+                    color: "white",
+                    border: "none",
+                    fontSize: "0.85rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <RefreshCw size={14} /> Update
+                </button>
+                <button
+                  type="button"
+                  onClick={handleUninstall}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "4px",
+                    backgroundColor: "white",
+                    color: "#ef4444",
+                    border: "1px solid #ef4444",
+                    fontSize: "0.85rem",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <Trash2 size={14} /> Uninstall
+                </button>
+              </div>
             )}
           </div>
         )}
@@ -382,7 +542,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           </label>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {Object.entries(agentEnv).map(([key, val]) => (
-              <div key={key} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <div
+                key={key}
+                style={{ display: "flex", gap: "8px", alignItems: "center" }}
+              >
                 <input
                   readOnly
                   value={key}
@@ -411,7 +574,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={() => removeEnvVar(key)}
-                  style={{ border: "none", background: "none", cursor: "pointer", color: "#ef4444" }}
+                  style={{
+                    border: "none",
+                    background: "none",
+                    cursor: "pointer",
+                    color: "#ef4444",
+                  }}
                 >
                   <Trash2 size={16} />
                 </button>
@@ -468,9 +636,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             paddingTop: "16px",
           }}
         >
-          {preset === "qwen" && installStatus === "installed" && !isConnected ? (
+          {preset === "qwen" &&
+          installStatus === "installed" &&
+          !isConnected ? (
             <>
-              <div style={{ marginRight: "auto", display: "flex", alignItems: "center", gap: "8px" }}>
+              <div
+                style={{
+                  marginRight: "auto",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
                 <button
                   type="button"
                   onClick={handleAuthTerminal}
@@ -489,7 +666,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     gap: "6px",
                   }}
                 >
-                  <span style={{ fontSize: "1.1em" }}>🔑</span> Authenticate in Terminal
+                  <span style={{ fontSize: "1.1em" }}>🔑</span> Authenticate in
+                  Terminal
                 </button>
               </div>
               <button

@@ -75,14 +75,21 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
       } else {
         response = { outcome: { outcome: "cancelled" } };
       }
-      await window.electron.invoke("agent:permission-response", msg.permissionId, response);
+      await window.electron.invoke(
+        "agent:permission-response",
+        msg.permissionId,
+        response,
+      );
       // Optimistically update UI (remove options, show decision)
       // In a real app, we might wait for confirmation or update message state
     };
 
     return (
       <div className="message-wrapper" style={{ alignItems: "center" }}>
-        <div className="system-init-block" style={{ border: "1px solid #f97316" }}>
+        <div
+          className="system-init-block"
+          style={{ border: "1px solid #f97316" }}
+        >
           <div style={{ fontWeight: 600, marginBottom: 8, color: "#ea580c" }}>
             ⚠️ Permission Request
           </div>
@@ -130,7 +137,9 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
     return (
       <div className="message-wrapper" style={{ alignItems: "center" }}>
         <div className="system-init-block">
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>System Notification</div>
+          <div style={{ fontWeight: 600, marginBottom: 8 }}>
+            System Notification
+          </div>
           <div>{msg.content}</div>
         </div>
       </div>
@@ -159,10 +168,21 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
             }}
             onClick={() => setIsThoughtOpen(!isThoughtOpen)}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 500 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontWeight: 500,
+              }}
+            >
               <Brain size={14} />
               <span>Thinking Process</span>
-              {isThoughtOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              {isThoughtOpen ? (
+                <ChevronDown size={14} />
+              ) : (
+                <ChevronRight size={14} />
+              )}
             </div>
             {isThoughtOpen && (
               <div
@@ -198,7 +218,11 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
                         PreTag="div"
                         language={match[1]}
                         style={vscDarkPlus}
-                        customStyle={{ borderRadius: "8px", fontSize: "0.85em", margin: 0 }}
+                        customStyle={{
+                          borderRadius: "8px",
+                          fontSize: "0.85em",
+                          margin: 0,
+                        }}
                       >
                         {String(children).replace(/\n$/, "")}
                       </SyntaxHighlighter>
@@ -227,7 +251,14 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
 
         {/* Tool Calls */}
         {msg.toolCalls && msg.toolCalls.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+              marginTop: "12px",
+            }}
+          >
             {msg.toolCalls.map((tool) => (
               <div
                 key={tool.id}
@@ -250,7 +281,9 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
                 ) : (
                   <XCircle size={14} color="#ef4444" />
                 )}
-                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{tool.name}</span>
+                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>
+                  {tool.name}
+                </span>
                 <span style={{ color: "#9ca3af" }}>— {tool.status}</span>
               </div>
             ))}
@@ -275,6 +308,7 @@ const App = () => {
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const autoConnectAttempted = useRef(false);
 
   // Ref to track current generating message ID for stream updates
   const currentAgentMsgId = useRef<string | null>(null);
@@ -282,19 +316,24 @@ const App = () => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: Setup once
   useEffect(() => {
     // Listen for agent messages
-    const removeListener = window.electron.on("agent:message", (msg: IncomingMessage | string) => {
-      // Normalize
-      const data: IncomingMessage =
-        typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
-      handleIncomingMessage(data);
-    });
+    const removeListener = window.electron.on(
+      "agent:message",
+      (msg: IncomingMessage | string) => {
+        // Normalize
+        const data: IncomingMessage =
+          typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
+        handleIncomingMessage(data);
+      },
+    );
 
     // Load last workspace
-    window.electron.invoke("db:get-last-workspace").then((lastWs: string | null) => {
-      if (lastWs) {
-        setCurrentWorkspace(lastWs);
-      }
-    });
+    window.electron
+      .invoke("db:get-last-workspace")
+      .then((lastWs: string | null) => {
+        if (lastWs) {
+          setCurrentWorkspace(lastWs);
+        }
+      });
 
     return () => {
       removeListener();
@@ -322,7 +361,11 @@ const App = () => {
     if (data.type === "system") {
       setMessages((prev) => [
         ...prev,
-        { id: Date.now().toString(), sender: "system", content: data.text || "" },
+        {
+          id: Date.now().toString(),
+          sender: "system",
+          content: data.text || "",
+        },
       ]);
       return;
     }
@@ -345,29 +388,46 @@ const App = () => {
     setMessages((prev) => {
       const lastMsg = prev[prev.length - 1];
       const isAgentGenerating =
-        lastMsg && lastMsg.sender === "agent" && currentAgentMsgId.current === lastMsg.id;
+        lastMsg &&
+        lastMsg.sender === "agent" &&
+        currentAgentMsgId.current === lastMsg.id;
 
       if (data.type === "agent_text") {
         if (isAgentGenerating) {
           return prev.map((m) =>
-            m.id === lastMsg.id ? { ...m, content: m.content + (data.text || "") } : m,
+            m.id === lastMsg.id
+              ? { ...m, content: m.content + (data.text || "") }
+              : m,
           );
         } else {
           const newId = Date.now().toString();
           currentAgentMsgId.current = newId;
-          return [...prev, { id: newId, sender: "agent", content: data.text || "" }];
+          return [
+            ...prev,
+            { id: newId, sender: "agent", content: data.text || "" },
+          ];
         }
       }
 
       if (data.type === "agent_thought") {
         if (isAgentGenerating) {
           return prev.map((m) =>
-            m.id === lastMsg.id ? { ...m, thought: (m.thought || "") + (data.text || "") } : m,
+            m.id === lastMsg.id
+              ? { ...m, thought: (m.thought || "") + (data.text || "") }
+              : m,
           );
         } else {
           const newId = Date.now().toString();
           currentAgentMsgId.current = newId;
-          return [...prev, { id: newId, sender: "agent", content: "", thought: data.text || "" }];
+          return [
+            ...prev,
+            {
+              id: newId,
+              sender: "agent",
+              content: "",
+              thought: data.text || "",
+            },
+          ];
         }
       }
 
@@ -380,7 +440,9 @@ const App = () => {
             status: (data.status as any) || "in_progress",
           };
           return prev.map((m) =>
-            m.id === lastMsg.id ? { ...m, toolCalls: [...(m.toolCalls || []), newTool] } : m,
+            m.id === lastMsg.id
+              ? { ...m, toolCalls: [...(m.toolCalls || []), newTool] }
+              : m,
           );
         }
       }
@@ -392,7 +454,9 @@ const App = () => {
             return {
               ...m,
               toolCalls: m.toolCalls?.map((t) =>
-                t.id === data.toolCallId ? { ...t, status: data.status as any } : t,
+                t.id === data.toolCallId
+                  ? { ...t, status: data.status as any }
+                  : t,
               ),
             };
           });
@@ -405,6 +469,61 @@ const App = () => {
     setTimeout(scrollToBottom, 100);
   };
 
+  useEffect(() => {
+    const tryAutoConnect = async () => {
+      if (!currentWorkspace || isConnected || autoConnectAttempted.current) {
+        return;
+      }
+
+      if (!agentCommand.includes("qwen")) {
+        return;
+      }
+
+      autoConnectAttempted.current = true;
+      handleIncomingMessage({
+        type: "system",
+        text: "Auto-connecting to Qwen...",
+      });
+
+      try {
+        const check = await window.electron.invoke(
+          "agent:check-command",
+          "qwen",
+        );
+        if (!check.installed) {
+          handleIncomingMessage({
+            type: "system",
+            text: "Qwen not installed. Please install it in Settings.",
+          });
+          return;
+        }
+
+        const result = await window.electron.invoke(
+          "agent:connect",
+          agentCommand,
+          currentWorkspace,
+          agentEnv,
+        );
+        if (result.success) {
+          setIsConnected(true);
+          handleIncomingMessage({ type: "system", text: "Connected!" });
+        } else {
+          handleIncomingMessage({
+            type: "system",
+            text: `Connection failed: ${result.error}`,
+          });
+        }
+      } catch (e: any) {
+        handleIncomingMessage({
+          type: "system",
+          text: `Connection failed: ${e.message}`,
+        });
+      }
+    };
+
+    tryAutoConnect();
+  }, [agentCommand, agentEnv, currentWorkspace, isConnected]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -416,7 +535,10 @@ const App = () => {
       handleIncomingMessage({ type: "system", text: "Disconnected." });
       currentAgentMsgId.current = null;
     } else {
-      handleIncomingMessage({ type: "system", text: `Connecting to: ${agentCommand}...` });
+      handleIncomingMessage({
+        type: "system",
+        text: `Connecting to: ${agentCommand}...`,
+      });
       const result = await window.electron.invoke(
         "agent:connect",
         agentCommand,
@@ -428,7 +550,10 @@ const App = () => {
         handleIncomingMessage({ type: "system", text: "Connected!" });
         setIsSettingsOpen(false); // Close settings on successful connection
       } else {
-        handleIncomingMessage({ type: "system", text: `Connection failed: ${result.error}` });
+        handleIncomingMessage({
+          type: "system",
+          text: `Connection failed: ${result.error}`,
+        });
       }
     }
   };
@@ -463,7 +588,10 @@ const App = () => {
   const handleSend = async () => {
     if (!inputText.trim()) return;
     if (!isConnected) {
-      handleIncomingMessage({ type: "system", text: "Error: Not connected to agent." });
+      handleIncomingMessage({
+        type: "system",
+        text: "Error: Not connected to agent.",
+      });
       return;
     }
 
@@ -472,13 +600,19 @@ const App = () => {
 
     currentAgentMsgId.current = null;
 
-    setMessages((prev) => [...prev, { id: Date.now().toString(), sender: "user", content: text }]);
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now().toString(), sender: "user", content: text },
+    ]);
     setTimeout(scrollToBottom, 100);
 
     try {
       await window.electron.invoke("agent:send", text);
     } catch (e: any) {
-      handleIncomingMessage({ type: "system", text: `Send error: ${e.message}` });
+      handleIncomingMessage({
+        type: "system",
+        text: `Send error: ${e.message}`,
+      });
     }
   };
 
@@ -569,7 +703,14 @@ const App = () => {
         <div className="chat-header">
           <div className="chat-title">
             {isConnected ? (
-              <span style={{ color: "#10b981", display: "flex", alignItems: "center", gap: "6px" }}>
+              <span
+                style={{
+                  color: "#10b981",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
                 <div
                   style={{
                     width: "8px",
@@ -589,8 +730,16 @@ const App = () => {
         <div className="messages-container">
           {/* Welcome / Empty State */}
           {messages.length === 0 && (
-            <div style={{ textAlign: "center", color: "#9ca3af", marginTop: "40px" }}>
-              <div style={{ marginBottom: "8px" }}>Beginning of conversation</div>
+            <div
+              style={{
+                textAlign: "center",
+                color: "#9ca3af",
+                marginTop: "40px",
+              }}
+            >
+              <div style={{ marginBottom: "8px" }}>
+                Beginning of conversation
+              </div>
               <div
                 style={{
                   width: "40px",
