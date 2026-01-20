@@ -4,13 +4,14 @@ Open Claude Cowork is a powerful desktop application built with Electron and Rea
 
 ## Features
 
-<div align="center">
-  <img src="https://github.com/user-attachments/assets/81414418-4a94-4d8e-9087-47125368a5c4" alt="Dark Mode" width="100%" />
-  <br/><br/>
-  <img src="https://github.com/user-attachments/assets/5c33a246-17b5-4b47-ad30-3164a2753a06" alt="Light Mode" width="100%" />
-  <br/><br/>
-  <img src="https://github.com/user-attachments/assets/19f07850-25e2-4752-b88a-d51e7047f3b6" alt="Model Selection" width="100%" />
-</div>
+
+
+
+
+<p align="center">
+  <img width="400" alt="image" src="https://github.com/user-attachments/assets/cb24746b-93c5-4523-9014-281eaf879a9b" />
+  <img width="400" alt="image" src="https://github.com/user-attachments/assets/4c965d7c-78c5-4d7b-a042-c88f12e763e7" />
+</p>
 
 - **🤖 AI Agent Integration**: Connect and interact with AI agents (e.g., Qwen) using the standardized Agent Client Protocol (ACP).
 - **📋 Task Management**: Organize your work into distinct tasks, each with its own workspace context and agent configuration.
