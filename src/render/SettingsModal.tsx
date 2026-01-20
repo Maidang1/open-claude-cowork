@@ -6,6 +6,7 @@ import {
   Trash2,
   Plus,
   RefreshCw,
+  ChevronDown,
 } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
@@ -233,229 +234,308 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const [activeTab, setActiveTab] = useState<"agents" | "general">("agents");
+  const [isAgentDropdownOpen, setIsAgentDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsAgentDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   if (!isOpen) return null;
 
   return (
     <div className="modal-overlay" onClick={handleBackdropClick}>
-      <div ref={modalRef} className="modal-content">
-        <div className="modal-header">
-          <h2 className="modal-title">Settings</h2>
-          <button type="button" onClick={onClose} className="modal-close-btn">
-            <X size={20} />
+      <div ref={modalRef} className="modal-content settings-modal">
+        {/* Sidebar */}
+        <div className="settings-sidebar">
+          <div style={{ padding: "8px 12px", marginBottom: "12px", fontWeight: 600, color: "var(--text-primary)" }}>
+            Settings
+          </div>
+          <button
+            type="button"
+            className={`settings-nav-item ${activeTab === "agents" ? "active" : ""}`}
+            onClick={() => setActiveTab("agents")}
+          >
+            <span>🤖</span> Agents
+          </button>
+           <button
+            type="button"
+            className={`settings-nav-item ${activeTab === "general" ? "active" : ""}`}
+            onClick={() => setActiveTab("general")}
+          >
+            <span>⚙️</span> General
           </button>
         </div>
 
-        {/* Node.js Warning */}
-        {nodeStatus === "not-installed" && (
-          <div className="node-warning">
-            <div style={{ marginTop: "2px" }}>⚠️</div>
-            <div>
-              <strong>Node.js Environment Missing</strong>
-              <div
-                style={{ marginTop: "4px", fontSize: "0.85rem", opacity: 0.9 }}
-              >
-                No system Node.js found. Some agents may fail to start. Please
-                install Node.js or ensure the bundled runtime is available.
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Agent Preset Selector */}
-        <div className="modal-section">
-          <label className="modal-label">Agent Type</label>
-          <div className="preset-buttons" style={{flexWrap: 'wrap'}}>
-             <button
-              type="button"
-              onClick={() => handlePluginChange("custom")}
-              className={`preset-button ${selectedPluginId === "custom" ? "active" : ""}`}
-            >
-              Custom
+        {/* Content Area */}
+        <div className="settings-content">
+          <div className="settings-content-header">
+            <h2 className="settings-title">
+              {activeTab === "agents" ? "Agents Configuration" : "General Settings"}
+            </h2>
+            <button type="button" onClick={onClose} className="modal-close-btn">
+              <X size={20} />
             </button>
-            {AGENT_PLUGINS.map((plugin) => (
-                <button
-                    key={plugin.id}
-                    type="button"
-                    onClick={() => handlePluginChange(plugin.id)}
-                    className={`preset-button ${selectedPluginId === plugin.id ? "active" : ""}`}
-                >
-                    {plugin.name}
-                </button>
-            ))}
           </div>
-        </div>
 
-        {/* Plugin Status & Install */}
-        {selectedPlugin && selectedPlugin.packageSpec && (
-          <div className="status-box">
-            <div className="status-info">
-              <span className="status-label">Status:</span>
-              {installStatus === "checking" && (
-                <span className="status-text checking">Checking...</span>
-              )}
-              {installStatus === "installed" && (
-                <span className="status-text installed">
-                  <Check size={16} /> Installed
-                  {installedVersion && (
-                    <span style={{ opacity: 0.7, fontSize: "0.85rem" }}>
-                      v{installedVersion}
-                    </span>
-                  )}
-                </span>
-              )}
-              {installStatus === "not-installed" && (
-                <span className="status-text not-installed">Not Installed</span>
-              )}
-              {installStatus === "installing" && (
-                <span className="status-text processing">
-                  <Loader2 size={16} className="animate-spin" /> Installing...
-                </span>
-              )}
-              {installStatus === "updating" && (
-                <span className="status-text processing">
-                  <Loader2 size={16} className="animate-spin" /> Updating...
-                </span>
-              )}
-              {installStatus === "uninstalling" && (
-                <span className="status-text processing">
-                  <Loader2 size={16} className="animate-spin" /> Uninstalling...
-                </span>
-              )}
+          {activeTab === "general" && (
+            <div style={{ padding: "20px", textAlign: "center", color: "var(--text-secondary)" }}>
+              General settings coming soon...
             </div>
+          )}
 
-            {installStatus === "not-installed" && (
-              <button
-                type="button"
-                onClick={handleInstall}
-                className="btn-primary btn-small"
-              >
-                <Download size={14} /> Install
-              </button>
-            )}
-            {installStatus === "installed" && (
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
-                  type="button"
-                  onClick={handleUpdate}
-                  className="btn-primary btn-small"
-                >
-                  <RefreshCw size={14} /> Update
-                </button>
-                <button
-                  type="button"
-                  onClick={handleUninstall}
-                  className="btn-danger-outline"
-                >
-                  <Trash2 size={14} /> Uninstall
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Command Input */}
-        <div className="modal-section">
-          <label htmlFor="agent-command" className="modal-label">
-            Agent Command
-          </label>
-          <input
-            id="agent-command"
-            type="text"
-            value={agentCommand}
-            onChange={(e) => onAgentCommandChange(e.target.value)}
-            placeholder="e.g. qwen --acp"
-            disabled={!!selectedPlugin}
-            className="modal-input"
-          />
-        </div>
-
-        {/* Environment Variables */}
-        <div className="modal-section">
-          <label className="modal-label">Environment Variables</label>
-          <div className="env-list">
-            {Object.entries(agentEnv).map(([key, val]) => (
-              <div key={key} className="env-row">
-                <input
-                  readOnly
-                  value={key}
-                  className="env-input key"
-                />
-                <input
-                  readOnly
-                  value={val}
-                  type="password"
-                  className="env-input val"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeEnvVar(key)}
-                  className="btn-icon danger"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
-            <div className="env-row">
-              <input
-                placeholder="KEY"
-                value={newEnvKey}
-                onChange={(e) => setNewEnvKey(e.target.value)}
-                className="env-input key"
-              />
-              <input
-                placeholder="VALUE"
-                value={newEnvVal}
-                onChange={(e) => setNewEnvVal(e.target.value)}
-                className="env-input val"
-              />
-              <button
-                type="button"
-                onClick={addEnvVar}
-                disabled={!newEnvKey.trim()}
-                className={`btn-icon ${newEnvKey.trim() ? "success" : ""}`}
-              >
-                <Plus size={18} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="modal-footer">
-          {selectedPlugin &&
-          selectedPlugin.packageSpec &&
-          installStatus === "installed" &&
-          !isConnected ? (
+          {activeTab === "agents" && (
             <>
-              <div style={{ marginRight: "auto" }}>
-                <button
-                  type="button"
-                  onClick={handleAuthTerminal}
-                  title="Open terminal to login manually (type '/auth')"
-                  className="btn-secondary"
-                >
-                  <span style={{ fontSize: "1.1em" }}>🔑</span> Authenticate in
-                  Terminal
-                </button>
+              {/* Node.js Warning */}
+              {nodeStatus === "not-installed" && (
+                <div className="node-warning">
+                  <div style={{ marginTop: "2px" }}>⚠️</div>
+                  <div>
+                    <strong>Node.js Environment Missing</strong>
+                    <div
+                      style={{ marginTop: "4px", fontSize: "0.85rem", opacity: 0.9 }}
+                    >
+                      No system Node.js found. Some agents may fail to start. Please
+                      install Node.js or ensure the bundled runtime is available.
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Agent Selector (Custom Dropdown) */}
+              <div className="settings-agent-selector">
+                <label className="modal-label">Select Agent to Configure</label>
+                <div className="custom-select-container" ref={dropdownRef}>
+                  <button
+                    type="button"
+                    className="custom-select-trigger"
+                    onClick={() => setIsAgentDropdownOpen(!isAgentDropdownOpen)}
+                  >
+                    <span>
+                      {selectedPlugin ? selectedPlugin.name : "Custom Agent"}
+                    </span>
+                    <ChevronDown size={16} className={`select-arrow ${isAgentDropdownOpen ? "open" : ""}`} />
+                  </button>
+                  
+                  {isAgentDropdownOpen && (
+                    <div className="custom-select-dropdown">
+                      <button
+                        type="button"
+                        className={`custom-select-option ${selectedPluginId === "custom" ? "selected" : ""}`}
+                        onClick={() => {
+                          handlePluginChange("custom");
+                          setIsAgentDropdownOpen(false);
+                        }}
+                      >
+                        Custom Agent
+                        {selectedPluginId === "custom" && <Check size={14} />}
+                      </button>
+                      {AGENT_PLUGINS.map((plugin) => (
+                        <button
+                          key={plugin.id}
+                          type="button"
+                          className={`custom-select-option ${selectedPluginId === plugin.id ? "selected" : ""}`}
+                          onClick={() => {
+                            handlePluginChange(plugin.id);
+                            setIsAgentDropdownOpen(false);
+                          }}
+                        >
+                          {plugin.name}
+                          {selectedPluginId === plugin.id && <Check size={14} />}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={onConnectToggle}
-                className="btn-primary"
-              >
-                Connect
-              </button>
+
+              {/* Plugin Status & Install */}
+              {selectedPlugin && selectedPlugin.packageSpec && (
+                <div className="status-box" style={{ marginTop: 0, marginBottom: "20px" }}>
+                  <div className="status-info">
+                    <span className="status-label">Status:</span>
+                    {installStatus === "checking" && (
+                      <span className="status-text checking">Checking...</span>
+                    )}
+                    {installStatus === "installed" && (
+                      <span className="status-text installed">
+                        <Check size={16} /> Installed
+                        {installedVersion && (
+                          <span style={{ opacity: 0.7, fontSize: "0.85rem" }}>
+                            v{installedVersion}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                    {installStatus === "not-installed" && (
+                      <span className="status-text not-installed">Not Installed</span>
+                    )}
+                    {installStatus === "installing" && (
+                      <span className="status-text processing">
+                        <Loader2 size={16} className="animate-spin" /> Installing...
+                      </span>
+                    )}
+                    {installStatus === "updating" && (
+                      <span className="status-text processing">
+                        <Loader2 size={16} className="animate-spin" /> Updating...
+                      </span>
+                    )}
+                    {installStatus === "uninstalling" && (
+                      <span className="status-text processing">
+                        <Loader2 size={16} className="animate-spin" /> Uninstalling...
+                      </span>
+                    )}
+                  </div>
+
+                  {installStatus === "not-installed" && (
+                    <button
+                      type="button"
+                      onClick={handleInstall}
+                      className="btn-primary btn-small"
+                    >
+                      <Download size={14} /> Install
+                    </button>
+                  )}
+                  {installStatus === "installed" && (
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button
+                        type="button"
+                        onClick={handleUpdate}
+                        className="btn-primary btn-small"
+                      >
+                        <RefreshCw size={14} /> Update
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleUninstall}
+                        className="btn-danger-outline"
+                      >
+                        <Trash2 size={14} /> Uninstall
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Command Input */}
+              <div className="modal-section">
+                <label htmlFor="agent-command" className="modal-label">
+                  Agent Command
+                </label>
+                <input
+                  id="agent-command"
+                  type="text"
+                  value={agentCommand}
+                  onChange={(e) => onAgentCommandChange(e.target.value)}
+                  placeholder="e.g. qwen --acp"
+                  disabled={!!selectedPlugin}
+                  className="modal-input"
+                />
+                <span className="modal-input-hint" style={{ marginTop: "6px" }}>
+                  The command used to launch the agent process.
+                </span>
+              </div>
+
+              {/* Environment Variables */}
+              <div className="modal-section">
+                <label className="modal-label">Environment Variables</label>
+                <div className="env-list">
+                  {Object.entries(agentEnv).map(([key, val]) => (
+                    <div key={key} className="env-row">
+                      <input
+                        readOnly
+                        value={key}
+                        className="env-input key"
+                      />
+                      <input
+                        readOnly
+                        value={val}
+                        type="password"
+                        className="env-input val"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeEnvVar(key)}
+                        className="btn-icon danger"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                  <div className="env-row">
+                    <input
+                      placeholder="KEY"
+                      value={newEnvKey}
+                      onChange={(e) => setNewEnvKey(e.target.value)}
+                      className="env-input key"
+                    />
+                    <input
+                      placeholder="VALUE"
+                      value={newEnvVal}
+                      onChange={(e) => setNewEnvVal(e.target.value)}
+                      className="env-input val"
+                    />
+                    <button
+                      type="button"
+                      onClick={addEnvVar}
+                      disabled={!newEnvKey.trim()}
+                      className={`btn-icon ${newEnvKey.trim() ? "success" : ""}`}
+                    >
+                      <Plus size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ marginTop: "auto" }}>
+                {selectedPlugin &&
+                selectedPlugin.packageSpec &&
+                installStatus === "installed" &&
+                !isConnected ? (
+                  <>
+                    <div style={{ marginRight: "auto" }}>
+                      <button
+                        type="button"
+                        onClick={handleAuthTerminal}
+                        title="Open terminal to login manually (type '/auth')"
+                        className="btn-secondary"
+                      >
+                        <span style={{ fontSize: "1.1em" }}>🔑</span> Authenticate in
+                        Terminal
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={onConnectToggle}
+                      className="btn-primary"
+                    >
+                      Connect
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onConnectToggle}
+                    className="btn-primary"
+                    style={
+                      isConnected ? { backgroundColor: "#ef4444" } : undefined
+                    }
+                  >
+                    {isConnected ? "Disconnect" : "Connect & Save"}
+                  </button>
+                )}
+              </div>
             </>
-          ) : (
-            <button
-              type="button"
-              onClick={onConnectToggle}
-              className="btn-primary"
-              style={
-                isConnected ? { backgroundColor: "#ef4444" } : undefined
-              }
-            >
-              {isConnected ? "Disconnect" : "Connect & Save"}
-            </button>
           )}
         </div>
       </div>
