@@ -153,11 +153,8 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
 
     return (
       <div className="message-wrapper" style={{ alignItems: "center" }}>
-        <div
-          className="system-init-block"
-          style={{ border: "1px solid #f97316" }}
-        >
-          <div style={{ fontWeight: 600, marginBottom: 8, color: "#ea580c" }}>
+        <div className="system-init-block permission-request-block">
+          <div className="permission-title">
             ⚠️ Permission Request
           </div>
           <div style={{ marginBottom: "12px" }}>{msg.content}</div>
@@ -208,16 +205,7 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
         {/* Thought Process (Collapsible) */}
         {msg.thought && (
           <div
-            style={{
-              backgroundColor: "#f9fafb",
-              borderRadius: "8px",
-              padding: "8px 12px",
-              fontSize: "0.9em",
-              color: "#6b7280",
-              border: "1px solid #e5e7eb",
-              cursor: "pointer",
-              marginBottom: "12px",
-            }}
+            className="thought-process-header"
             onClick={() => setIsThoughtOpen(!isThoughtOpen)}
           >
             <div
@@ -237,14 +225,7 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
               )}
             </div>
             {isThoughtOpen && (
-              <div
-                style={{
-                  marginTop: "8px",
-                  whiteSpace: "pre-wrap",
-                  fontStyle: "italic",
-                  paddingLeft: "20px",
-                }}
-              >
+              <div className="thought-process-content">
                 {msg.thought}
               </div>
             )}
@@ -313,14 +294,7 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
 
         {/* Tool Calls */}
         {msg.toolCalls && msg.toolCalls.length > 0 && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-              marginTop: "12px",
-            }}
-          >
+          <div className="tool-calls-container">
             {msg.toolCalls.map((tool) => (
               <div key={tool.id} className="tool-call-item">
                 {tool.status === "pending" || tool.status === "in_progress" ? (
@@ -1535,78 +1509,74 @@ const App = () => {
 
       {/* Main Chat Area */}
       <div className="chat-main">
-        {/* Connection Overlay (Top Right) - REMOVED */}
-
         <div className="chat-header">
-          <div className={`connection-status ${connectionStatus.state}`}>
-            <span className="connection-status-label">System</span>
-            <span className="connection-status-message">
-              {connectionStatus.message}
-            </span>
-          </div>
-          {currentWorkspace && (
-            <div className="workspace-path" title={currentWorkspace}>
-              {currentWorkspace}
+          <div className="header-left">
+            <div
+              className={`connection-status ${connectionStatus.state}`}
+              title={`Status: ${connectionStatus.state}`}
+            >
+              <div className="status-dot-container">
+                <div className={`status-dot ${connectionStatus.state}`} />
+                <div className="status-glow" />
+              </div>
+              <span className="status-label">
+                {connectionStatus.state === "connected"
+                  ? "System Connected"
+                  : connectionStatus.state === "connecting"
+                  ? "Connecting..."
+                  : "Disconnected"}
+              </span>
             </div>
-          )}
-          <div className="agent-info-bar">
-            <div className="agent-info-item">
-              {agentInfo.models.length === 0 ? (
-                <span className="agent-info-muted">
-                  {activeTask?.modelId || agentInfo.currentModelId || "Unknown"}
-                </span>
-              ) : (
-                <div className="model-selector">
-                  <button
-                    type="button"
-                    className="model-selector-trigger compact"
-                    onClick={() => setIsModelMenuOpen((prev) => !prev)}
-                  >
-                    <span>
-                      {currentModel?.name ||
-                        agentInfo.currentModelId ||
-                        "Unknown"}
-                    </span>
-                    <ChevronDown size={12} />
-                  </button>
-                  {isModelMenuOpen && (
-                    <div className="model-dropdown">
-                      {agentInfo.models.map((model) => (
-                        <button
-                          key={model.modelId}
-                          type="button"
-                          className={`model-item ${
-                            model.modelId === agentInfo.currentModelId
-                              ? "active"
-                              : ""
-                          }`}
-                          onClick={() => handleModelPick(model.modelId)}
-                        >
-                          <span className="model-name">{model.name}</span>
-                          <span className="model-desc">
-                            {model.description || model.modelId}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+            
+            {currentWorkspace && (
+              <>
+                <div className="header-divider" />
+                <div className="workspace-info">
+                  <span className="folder-icon">📂</span>
+                  <span className="workspace-path" title={currentWorkspace}>
+                    {currentWorkspace.split("/").pop()}
+                  </span>
                 </div>
-              )}
-            </div>
+              </>
+            )}
+          </div>
 
-            <div className="agent-info-item">
-              {isConnected ? (
-                <span
-                  className="agent-status connected"
-                  aria-label="Connected"
-                />
-              ) : (
-                <span
-                  className="agent-status disconnected"
-                  aria-label="Disconnected"
-                />
-              )}
-            </div>
+          <div className="header-right">
+            {agentInfo.models.length > 0 && (
+              <div className="model-selector">
+                <button
+                  type="button"
+                  className="model-selector-trigger"
+                  onClick={() => setIsModelMenuOpen((prev) => !prev)}
+                >
+                  <span className="model-current-name">
+                    {currentModel?.name || agentInfo.currentModelId || "Unknown"}
+                  </span>
+                  <ChevronDown size={14} className="model-arrow" />
+                </button>
+                {isModelMenuOpen && (
+                  <div className="model-dropdown">
+                    {agentInfo.models.map((model) => (
+                      <button
+                        key={model.modelId}
+                        type="button"
+                        className={`model-item ${
+                          model.modelId === agentInfo.currentModelId
+                            ? "active"
+                            : ""
+                        }`}
+                        onClick={() => handleModelPick(model.modelId)}
+                      >
+                        <span className="model-name">{model.name}</span>
+                        <span className="model-desc">
+                          {model.description || model.modelId}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
