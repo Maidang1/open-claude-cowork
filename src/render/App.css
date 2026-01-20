@@ -369,6 +369,65 @@ body,
     align-items: center;
 }
 
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--color-text-secondary);
+}
+
+.connection-status::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background-color: #9ca3af;
+    display: inline-block;
+}
+
+.connection-status-label {
+    font-weight: 600;
+    color: var(--color-text-secondary);
+}
+
+.connection-status-message {
+    color: var(--color-text-primary);
+}
+
+.connection-status.connecting::before {
+    background-color: var(--color-primary);
+    animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+.connection-status.connected::before {
+    background-color: #10b981;
+}
+
+.connection-status.error::before {
+    background-color: #ef4444;
+}
+
+.connection-status.disconnected::before {
+    background-color: #9ca3af;
+}
+
+.connection-status.error .connection-status-message {
+    color: #ef4444;
+}
+
+.connection-status.connected .connection-status-message {
+    color: #10b981;
+}
+
+.connection-status.connecting .connection-status-message {
+    color: #c2410c;
+}
+
+.connection-status.disconnected .connection-status-message {
+    color: #6b7280;
+}
+
 .agent-info-bar {
     display: flex;
     align-items: center;
@@ -418,6 +477,21 @@ body,
 
 .agent-status.disconnected::before {
     background-color: #9ca3af;
+}
+
+@keyframes status-pulse {
+    0% {
+        transform: scale(0.9);
+        opacity: 0.6;
+    }
+    50% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(0.9);
+        opacity: 0.6;
+    }
 }
 
 .messages-container {

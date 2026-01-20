@@ -142,7 +142,7 @@ export class ACPClient {
     env?: Record<string, string>,
   ) {
     if (this.process) {
-      this.disconnect();
+      await this.disconnect();
     }
 
     this.cwd = cwd || process.cwd();
@@ -414,7 +414,7 @@ export class ACPClient {
         type: "system",
         text: `System: Init failed: ${e.message}`,
       });
-      this.disconnect();
+      await this.disconnect();
       throw e;
     }
   }
@@ -467,9 +467,20 @@ export class ACPClient {
     }
   }
 
-  disconnect() {
-    if (this.process) {
-      this.process.kill();
+  async disconnect() {
+    const proc = this.process;
+    if (proc) {
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const finalize = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+        proc.once("exit", finalize);
+        proc.kill();
+        setTimeout(finalize, 2000);
+      });
       this.process = null;
     }
     this.connection = null;

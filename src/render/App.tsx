@@ -16,6 +16,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 import "./App.css";
+import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
 import WorkspaceWelcome from "./WorkspaceWelcome";
 
@@ -54,6 +55,8 @@ interface AgentInfoState {
 }
 
 const LOCAL_COMMANDS: AgentCommandInfo[] = [];
+const DEFAULT_QWEN_COMMAND =
+  "qwen --acp --allowed-tools run_shell_command --experimental-skills";
 
 const mergeCommands = (
   agentCommands: AgentCommandInfo[],
@@ -352,9 +355,7 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
 const App = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
-  const [agentCommand, setAgentCommand] = useState(
-    "qwen --acp --allowed-tools run_shell_command --experimental-skills",
-  );
+  const [agentCommand, setAgentCommand] = useState(DEFAULT_QWEN_COMMAND);
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
   const [agentInfo, setAgentInfo] = useState<AgentInfoState>({
     models: [],
@@ -367,10 +368,16 @@ const App = () => {
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<{
+    state: "connecting" | "connected" | "error" | "disconnected";
+    message: string;
+  }>({ state: "disconnected", message: "Disconnected" });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoConnectAttempted = useRef(false);
+  const connectInFlight = useRef(false);
 
   // Ref to track current generating message ID for stream updates
   const currentAgentMsgId = useRef<string | null>(null);
@@ -467,12 +474,24 @@ const App = () => {
 
     // System Messages
     if (data.type === "system") {
+      const content = data.text || "";
+      if (
+        content.includes("Agent disconnected") ||
+        content.includes("Agent process error")
+      ) {
+        setIsConnected(false);
+        setConnectionStatus({
+          state: "error",
+          message: content.replace(/^System:\s*/, ""),
+        });
+        return;
+      }
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now().toString(),
           sender: "system",
-          content: data.text || "",
+          content,
         },
       ]);
       return;
@@ -582,26 +601,30 @@ const App = () => {
       if (!currentWorkspace || isConnected || autoConnectAttempted.current) {
         return;
       }
+      if (connectInFlight.current) {
+        return;
+      }
 
       if (!agentCommand.includes("qwen")) {
         return;
       }
 
       autoConnectAttempted.current = true;
-      handleIncomingMessage({
-        type: "system",
-        text: "Auto-connecting to Qwen...",
+      setConnectionStatus({
+        state: "connecting",
+        message: "Auto-connecting to Qwen...",
       });
 
       try {
+        connectInFlight.current = true;
         const check = await window.electron.invoke(
           "agent:check-command",
           "qwen",
         );
         if (!check.installed) {
-          handleIncomingMessage({
-            type: "system",
-            text: "Qwen not installed. Please install it in Settings.",
+          setConnectionStatus({
+            state: "error",
+            message: "Qwen not installed. Please install it in Settings.",
           });
           return;
         }
@@ -614,18 +637,23 @@ const App = () => {
         );
         if (result.success) {
           setIsConnected(true);
-          handleIncomingMessage({ type: "system", text: "Connected!" });
+          setConnectionStatus({
+            state: "connected",
+            message: "Connected.",
+          });
         } else {
-          handleIncomingMessage({
-            type: "system",
-            text: `Connection failed: ${result.error}`,
+          setConnectionStatus({
+            state: "error",
+            message: `Connection failed: ${result.error}`,
           });
         }
       } catch (e: any) {
-        handleIncomingMessage({
-          type: "system",
-          text: `Connection failed: ${e.message}`,
+        setConnectionStatus({
+          state: "error",
+          message: `Connection failed: ${e.message}`,
         });
+      } finally {
+        connectInFlight.current = false;
       }
     };
 
@@ -637,6 +665,9 @@ const App = () => {
   };
 
   const handleConnect = async () => {
+    if (connectInFlight.current) {
+      return;
+    }
     if (isConnected) {
       await window.electron.invoke("agent:disconnect");
       setIsConnected(false);
@@ -646,60 +677,166 @@ const App = () => {
         commands: [],
         tokenUsage: null,
       });
-      handleIncomingMessage({ type: "system", text: "Disconnected." });
+      setConnectionStatus({
+        state: "disconnected",
+        message: "Disconnected.",
+      });
       currentAgentMsgId.current = null;
     } else {
-      handleIncomingMessage({
-        type: "system",
-        text: `Connecting to: ${agentCommand}...`,
-      });
-      const result = await window.electron.invoke(
-        "agent:connect",
-        agentCommand,
-        currentWorkspace,
-        agentEnv,
-      );
-      if (result.success) {
-        setIsConnected(true);
-        handleIncomingMessage({ type: "system", text: "Connected!" });
-        setIsSettingsOpen(false); // Close settings on successful connection
-      } else {
-        handleIncomingMessage({
-          type: "system",
-          text: `Connection failed: ${result.error}`,
+      if (!currentWorkspace) {
+        setConnectionStatus({
+          state: "error",
+          message: "No workspace selected.",
         });
+        return;
+      }
+      const commandName = agentCommand.trim().split(" ")[0];
+      if (!commandName) {
+        setConnectionStatus({
+          state: "error",
+          message: "Agent command is empty.",
+        });
+        return;
+      }
+      if (!commandName.includes("/") && !commandName.startsWith(".")) {
+        const check = await window.electron.invoke(
+          "agent:check-command",
+          commandName,
+        );
+        if (!check.installed) {
+          setConnectionStatus({
+            state: "error",
+            message: `${commandName} not installed. Please check settings.`,
+          });
+          return;
+        }
+      }
+      autoConnectAttempted.current = true;
+      setConnectionStatus({
+        state: "connecting",
+        message: `Connecting to: ${agentCommand}...`,
+      });
+      connectInFlight.current = true;
+      try {
+        const result = await window.electron.invoke(
+          "agent:connect",
+          agentCommand,
+          currentWorkspace,
+          agentEnv,
+        );
+        if (result.success) {
+          setIsConnected(true);
+          setConnectionStatus({
+            state: "connected",
+            message: "Connected.",
+          });
+          setIsSettingsOpen(false); // Close settings on successful connection
+        } else {
+          setConnectionStatus({
+            state: "error",
+            message: `Connection failed: ${result.error}`,
+          });
+        }
+      } catch (e: any) {
+        setConnectionStatus({
+          state: "error",
+          message: `Connection failed: ${e.message}`,
+        });
+      } finally {
+        connectInFlight.current = false;
       }
     }
   };
 
-  const handleNewTask = async () => {
-    // Clear messages
+  const handleNewTask = () => {
+    setIsNewTaskOpen(true);
+  };
+
+  const handleCreateTask = async (payload: {
+    workspace: string;
+    agentCommand: string;
+  }) => {
+    const nextWorkspace = payload.workspace;
+    const nextCommand = payload.agentCommand;
+
+    if (connectInFlight.current) {
+      return;
+    }
+    setIsNewTaskOpen(false);
+    autoConnectAttempted.current = true;
+    if (isConnected) {
+      try {
+        await window.electron.invoke("agent:disconnect");
+      } catch (e) {
+        console.warn("Failed to disconnect before new task:", e);
+      }
+    }
     setMessages([]);
     currentAgentMsgId.current = null;
     setAgentInfo((prev) => ({
       ...prev,
       tokenUsage: null,
     }));
+    setAgentCommand(nextCommand);
+    setCurrentWorkspace(nextWorkspace);
+    setIsConnected(false);
 
-    // Reset session if connected
-    if (isConnected && currentWorkspace) {
-      handleIncomingMessage({ type: "system", text: "Starting new task..." });
-      // We can reuse the connect logic to restart the agent process/session
+    const commandName = nextCommand.trim().split(" ")[0];
+    if (!commandName) {
+      setConnectionStatus({
+        state: "error",
+        message: "Agent command is empty.",
+      });
+      return;
+    }
+    if (!commandName.includes("/") && !commandName.startsWith(".")) {
+      const check = await window.electron.invoke(
+        "agent:check-command",
+        commandName,
+      );
+      if (!check.installed) {
+        setConnectionStatus({
+          state: "error",
+          message: `${commandName} not installed. Please check settings.`,
+        });
+        return;
+      }
+    }
+
+    setConnectionStatus({
+      state: "connecting",
+      message: `Connecting to: ${nextCommand}...`,
+    });
+
+    try {
+      connectInFlight.current = true;
       const result = await window.electron.invoke(
         "agent:connect",
-        agentCommand,
-        currentWorkspace,
+        nextCommand,
+        nextWorkspace,
         agentEnv,
       );
       if (result.success) {
-        handleIncomingMessage({ type: "system", text: "New session started." });
-      } else {
-        handleIncomingMessage({
-          type: "system",
-          text: `Failed to restart session: ${result.error}`,
+        setIsConnected(true);
+        setConnectionStatus({
+          state: "connected",
+          message: "Connected.",
         });
+      } else {
         setIsConnected(false);
+        setConnectionStatus({
+          state: "error",
+          message: `Connection failed: ${result.error}`,
+        });
       }
+    } catch (e: any) {
+      setIsConnected(false);
+      setConnectionStatus({
+        state: "error",
+        message: `Connection failed: ${e.message}`,
+      });
+    } finally {
+      connectInFlight.current = false;
     }
   };
 
@@ -833,6 +970,14 @@ const App = () => {
         onConnectToggle={handleConnect}
         currentWorkspace={currentWorkspace}
       />
+      <NewTaskModal
+        isOpen={isNewTaskOpen}
+        onClose={() => setIsNewTaskOpen(false)}
+        onCreate={handleCreateTask}
+        initialWorkspace={currentWorkspace}
+        initialAgentCommand={agentCommand}
+        defaultQwenCommand={DEFAULT_QWEN_COMMAND}
+      />
 
       {/* Sidebar */}
       <div className="sidebar">
@@ -873,6 +1018,12 @@ const App = () => {
         {/* Connection Overlay (Top Right) - REMOVED */}
 
         <div className="chat-header">
+          <div className={`connection-status ${connectionStatus.state}`}>
+            <span className="connection-status-label">System</span>
+            <span className="connection-status-message">
+              {connectionStatus.message}
+            </span>
+          </div>
           <div className="agent-info-bar">
             <div className="agent-info-item">
               {agentInfo.models.length === 0 ? (

@@ -368,9 +368,9 @@ const initIpc = () => {
     }
   });
 
-  ipcMain.handle("agent:disconnect", () => {
+  ipcMain.handle("agent:disconnect", async () => {
     if (acpClient) {
-      acpClient.disconnect();
+      await acpClient.disconnect();
       acpClient = null;
     }
     return { success: true };

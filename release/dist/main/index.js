@@ -1108,7 +1108,7 @@ class ACPClient {
     }
     async connect(command, args = [], cwd, env) {
         if (this.process) {
-            this.disconnect();
+            await this.disconnect();
         }
         this.cwd = cwd || process.cwd();
         console.log(`[Client] Spawning agent: ${command} ${args.join(" ")} in ${this.cwd}`);
@@ -1381,7 +1381,7 @@ class ACPClient {
                 type: "system",
                 text: `System: Init failed: ${e.message}`
             });
-            this.disconnect();
+            await this.disconnect();
             throw e;
         }
     }
@@ -1446,9 +1446,20 @@ class ACPClient {
             };
         }
     }
-    disconnect() {
-        if (this.process) {
-            this.process.kill();
+    async disconnect() {
+        const proc = this.process;
+        if (proc) {
+            await new Promise((resolve)=>{
+                let settled = false;
+                const finalize = ()=>{
+                    if (settled) return;
+                    settled = true;
+                    resolve();
+                };
+                proc.once("exit", finalize);
+                proc.kill();
+                setTimeout(finalize, 2000);
+            });
             this.process = null;
         }
         this.connection = null;
@@ -20929,9 +20940,9 @@ const initIpc = ()=>{
             };
         }
     });
-    electron__rspack_import_1.ipcMain.handle("agent:disconnect", ()=>{
+    electron__rspack_import_1.ipcMain.handle("agent:disconnect", async ()=>{
         if (acpClient) {
-            acpClient.disconnect();
+            await acpClient.disconnect();
             acpClient = null;
         }
         return {
