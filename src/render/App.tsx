@@ -1499,6 +1499,11 @@ const App = () => {
               {connectionStatus.message}
             </span>
           </div>
+          {currentWorkspace && (
+            <div className="workspace-path" title={currentWorkspace}>
+              {currentWorkspace}
+            </div>
+          )}
           <div className="agent-info-bar">
             <div className="agent-info-item">
               {agentInfo.models.length === 0 ? (

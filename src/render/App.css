@@ -481,6 +481,16 @@ body,
     margin-left: auto;
 }
 
+.workspace-path {
+    flex: 1;
+    margin-left: 16px;
+    font-size: 0.85em;
+    color: var(--color-text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .agent-info-item {
     display: flex;
     align-items: center;

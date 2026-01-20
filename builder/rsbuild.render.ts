@@ -46,8 +46,8 @@ const Config = defineConfig({
     },
   },
   html: {
-    title: "Electron Rsbuild template"
-  }
+    title: "open-claude-cowork",
+  },
 });
 
 module.exports = mergeRsbuildConfig(CommonConfig, Config);
