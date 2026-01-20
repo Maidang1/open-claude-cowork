@@ -21,6 +21,7 @@ import "./App.css";
 import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
 import WorkspaceWelcome from "./WorkspaceWelcome";
+import { getDefaultAgentPlugin } from "./agents/registry";
 
 // --- Types ---
 declare const DEBUG: string | undefined;
@@ -58,8 +59,6 @@ interface AgentInfoState {
 }
 
 const LOCAL_COMMANDS: AgentCommandInfo[] = [];
-const DEFAULT_QWEN_COMMAND =
-  "qwen --acp --allowed-tools all,run_shell_command --experimental-skills";
 
 const mergeCommands = (
   agentCommands: AgentCommandInfo[],
@@ -323,7 +322,7 @@ const App = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
-  const [agentCommand, setAgentCommand] = useState(DEFAULT_QWEN_COMMAND);
+  const [agentCommand, setAgentCommand] = useState(getDefaultAgentPlugin().defaultCommand);
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
   const [agentInfo, setAgentInfo] = useState<AgentInfoState>({
     models: [],
@@ -729,7 +728,7 @@ const App = () => {
                     messages: nextMessages,
                     updatedAt,
                     lastActiveAt: updatedAt,
-                  }
+                    }
                 : task,
             );
           } else {
@@ -1097,9 +1096,7 @@ const App = () => {
     if (!activeTask || isConnected || connectInFlight.current) {
       return;
     }
-    if (!activeTask.agentCommand.includes("qwen")) {
-      return;
-    }
+    // removed hardcoded qwen check
     ensureTaskSession(activeTask);
   }, [activeTask, isConnected]);
 
@@ -1427,7 +1424,6 @@ const App = () => {
         onCreate={handleCreateTask}
         initialWorkspace={currentWorkspace}
         initialAgentCommand={agentCommand}
-        defaultQwenCommand={DEFAULT_QWEN_COMMAND}
       />
 
       {/* Sidebar */}

@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { AGENT_PLUGINS, getAgentPlugin } from "./agents/registry";
+import { AgentPlugin } from "./agents/types";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -22,8 +24,6 @@ interface SettingsModalProps {
   currentWorkspace: string | null;
 }
 
-type AgentPreset = "custom" | "qwen";
-
 const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
@@ -36,7 +36,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   currentWorkspace,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
-  const [preset, setPreset] = useState<AgentPreset>("custom");
+  const [selectedPluginId, setSelectedPluginId] = useState<string>("custom");
   const [installStatus, setInstallStatus] = useState<
     | "checking"
     | "installed"
@@ -51,6 +51,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [installedVersion, setInstalledVersion] = useState<string | null>(null);
   const [newEnvKey, setNewEnvKey] = useState("");
   const [newEnvVal, setNewEnvVal] = useState("");
+
+  const selectedPlugin = getAgentPlugin(selectedPluginId);
 
   // Check Node.js availability on mount
   useEffect(() => {
@@ -70,29 +72,43 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Auto-detect preset based on command
   useEffect(() => {
-    if (agentCommand.includes("qwen")) {
-      setPreset("qwen");
-    } else {
-      setPreset("custom");
+    if (isOpen) {
+        let found = false;
+        // Simple heuristic: check if command contains any plugin's checkCommand or part of default command
+        for (const plugin of AGENT_PLUGINS) {
+            const heuristic = plugin.checkCommand || plugin.defaultCommand.split(" ")[0];
+            if (agentCommand.includes(heuristic)) {
+                 setSelectedPluginId(plugin.id);
+                 found = true;
+                 break;
+            }
+        }
+        if (!found) {
+            setSelectedPluginId("custom");
+        }
     }
-  }, [isOpen]);
+  }, [isOpen]); // Run when modal opens
 
   useEffect(() => {
-    if (preset === "qwen" && isOpen) {
-      checkInstall();
+    if (selectedPlugin && isOpen && selectedPlugin.packageSpec) {
+      checkInstall(selectedPlugin);
     }
-  }, [preset, isOpen]);
+  }, [selectedPluginId, isOpen]);
 
-  const checkInstall = async () => {
+  const checkInstall = async (plugin: AgentPlugin) => {
+    if (!plugin.checkCommand || !plugin.packageSpec) {
+        setInstallStatus("installed"); // Assume installed if no check
+        return;
+    }
+    
     setInstallStatus("checking");
     setInstalledVersion(null);
     try {
-      // Check for 'qwen' command (default bin for @qwen-code/qwen-code is 'qwen')
-      const res = await window.electron.invoke("agent:check-command", "qwen");
+      const res = await window.electron.invoke("agent:check-command", plugin.checkCommand);
       if (res.installed) {
         const versionRes = await window.electron.invoke(
           "agent:get-package-version",
-          "@qwen-code/qwen-code",
+          plugin.packageSpec,
         );
         if (versionRes.success && versionRes.version) {
           setInstalledVersion(versionRes.version);
@@ -108,21 +124,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const installLatest = async (mode: "install" | "update") => {
+    if (!selectedPlugin?.packageSpec) return;
+
     setInstallStatus(mode === "install" ? "installing" : "updating");
     try {
-      // Install '@qwen-code/qwen-code@latest'
       const res = await window.electron.invoke(
         "agent:install",
-        "@qwen-code/qwen-code@latest",
+        `${selectedPlugin.packageSpec}@latest`,
       );
       if (res.success) {
         setInstallStatus("installed");
         setInstalledVersion(null);
-        checkInstall();
+        if (selectedPlugin) checkInstall(selectedPlugin);
         // Ensure command is set correctly
-        onAgentCommandChange(
-          "qwen --acp --allowed-tools run_shell_command --experimental-skills",
-        );
+        onAgentCommandChange(selectedPlugin.defaultCommand);
       } else {
         alert(`Installation failed: ${res.error}`);
         setInstallStatus("not-installed");
@@ -141,11 +156,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   const handleUninstall = async () => {
+    if (!selectedPlugin?.packageSpec) return;
+
     setInstallStatus("uninstalling");
     try {
       const res = await window.electron.invoke(
         "agent:uninstall",
-        "@qwen-code/qwen-code",
+        selectedPlugin.packageSpec,
       );
       if (res.success) {
         setInstallStatus("not-installed");
@@ -188,8 +205,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleAuthTerminal = async () => {
     try {
-      // Use the raw command or "qwen"
-      const cmd = preset === "qwen" ? "qwen" : agentCommand.split(" ")[0];
+      // Use the raw command or plugin check command
+      const cmd = selectedPlugin?.checkCommand || agentCommand.split(" ")[0];
       await window.electron.invoke(
         "agent:auth-terminal",
         cmd,
@@ -206,12 +223,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     onAgentEnvChange(next);
   };
 
-  const handlePresetChange = (p: AgentPreset) => {
-    setPreset(p);
-    if (p === "qwen") {
-      onAgentCommandChange(
-        "qwen --acp --allowed-tools all,run_shell_command --experimental-skills",
-      );
+  const handlePluginChange = (pluginId: string) => {
+    setSelectedPluginId(pluginId);
+    const plugin = getAgentPlugin(pluginId);
+    if (plugin) {
+      onAgentCommandChange(plugin.defaultCommand);
     } else {
       onAgentCommandChange("");
     }
@@ -248,26 +264,29 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         {/* Agent Preset Selector */}
         <div className="modal-section">
           <label className="modal-label">Agent Type</label>
-          <div className="preset-buttons">
-            <button
+          <div className="preset-buttons" style={{flexWrap: 'wrap'}}>
+             <button
               type="button"
-              onClick={() => handlePresetChange("custom")}
-              className={`preset-button ${preset === "custom" ? "active" : ""}`}
+              onClick={() => handlePluginChange("custom")}
+              className={`preset-button ${selectedPluginId === "custom" ? "active" : ""}`}
             >
               Custom
             </button>
-            <button
-              type="button"
-              onClick={() => handlePresetChange("qwen")}
-              className={`preset-button ${preset === "qwen" ? "active" : ""}`}
-            >
-              Qwen Agent
-            </button>
+            {AGENT_PLUGINS.map((plugin) => (
+                <button
+                    key={plugin.id}
+                    type="button"
+                    onClick={() => handlePluginChange(plugin.id)}
+                    className={`preset-button ${selectedPluginId === plugin.id ? "active" : ""}`}
+                >
+                    {plugin.name}
+                </button>
+            ))}
           </div>
         </div>
 
-        {/* Qwen Status & Install */}
-        {preset === "qwen" && (
+        {/* Plugin Status & Install */}
+        {selectedPlugin && selectedPlugin.packageSpec && (
           <div className="status-box">
             <div className="status-info">
               <span className="status-label">Status:</span>
@@ -345,7 +364,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             value={agentCommand}
             onChange={(e) => onAgentCommandChange(e.target.value)}
             placeholder="e.g. qwen --acp"
-            disabled={preset === "qwen"}
+            disabled={!!selectedPlugin}
             className="modal-input"
           />
         </div>
@@ -402,7 +421,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         <div className="modal-footer">
-          {preset === "qwen" &&
+          {selectedPlugin &&
+          selectedPlugin.packageSpec &&
           installStatus === "installed" &&
           !isConnected ? (
             <>

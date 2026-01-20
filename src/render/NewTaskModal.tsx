@@ -1,5 +1,6 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { AGENT_PLUGINS, getAgentPlugin } from "./agents/registry";
 
 interface NewTaskModalProps {
   isOpen: boolean;
@@ -11,10 +12,8 @@ interface NewTaskModalProps {
   }) => void;
   initialWorkspace: string | null;
   initialAgentCommand: string;
-  defaultQwenCommand: string;
+  defaultQwenCommand?: string;
 }
-
-type AgentPreset = "custom" | "qwen";
 
 const NewTaskModal: React.FC<NewTaskModalProps> = ({
   isOpen,
@@ -22,21 +21,38 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   onCreate,
   initialWorkspace,
   initialAgentCommand,
-  defaultQwenCommand,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const [title, setTitle] = useState("New Task");
   const [workspacePath, setWorkspacePath] = useState(initialWorkspace || "");
-  const [preset, setPreset] = useState<AgentPreset>("custom");
+  const [selectedPluginId, setSelectedPluginId] = useState<string>("custom");
   const [customCommand, setCustomCommand] = useState(initialAgentCommand);
 
   useEffect(() => {
     if (!isOpen) return;
-    const isQwen = initialAgentCommand.includes("qwen");
     setTitle("New Task");
-    setPreset(isQwen ? "qwen" : "custom");
     setWorkspacePath(initialWorkspace || "");
-    setCustomCommand(initialAgentCommand);
+    
+    // Determine plugin from initial command
+    let found = false;
+    for (const plugin of AGENT_PLUGINS) {
+        const heuristic = plugin.checkCommand || plugin.defaultCommand.split(" ")[0];
+        if (initialAgentCommand.includes(heuristic)) {
+             setSelectedPluginId(plugin.id);
+             // If the command is exactly the default, we might just set it, but user might have modified arguments.
+             // We can store the custom command anyway, but UI will show the plugin's default if a plugin is selected.
+             // Wait, if I select a plugin, the input is disabled and shows the default command.
+             // If the user had a slightly modified Qwen command, and I select "Qwen Plugin", they lose their modification in the UI view.
+             // However, for "New Task", we usually start fresh or from previous settings.
+             // If the previous setting matches Qwen, we select Qwen.
+             found = true;
+             break;
+        }
+    }
+    if (!found) {
+        setSelectedPluginId("custom");
+        setCustomCommand(initialAgentCommand);
+    }
   }, [isOpen, initialWorkspace, initialAgentCommand]);
 
   useEffect(() => {
@@ -67,9 +83,22 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
     }
   };
 
-  const resolvedCommand =
-    preset === "qwen" ? defaultQwenCommand : customCommand.trim();
+  const selectedPlugin = getAgentPlugin(selectedPluginId);
+  const resolvedCommand = selectedPlugin
+    ? selectedPlugin.defaultCommand
+    : customCommand.trim();
+
   const canCreate = Boolean(workspacePath && resolvedCommand);
+
+  const handlePluginChange = (pluginId: string) => {
+    setSelectedPluginId(pluginId);
+    if (pluginId === "custom") {
+        // If switching to custom, maybe pre-fill with the last used command or empty
+        if (!customCommand) {
+             setCustomCommand(""); 
+        }
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -117,21 +146,24 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
 
         <div className="modal-section">
           <label className="modal-label">Agent</label>
-          <div className="preset-buttons" style={{ marginBottom: "12px" }}>
+          <div className="preset-buttons" style={{ marginBottom: "12px", flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={() => setPreset("qwen")}
-              className={`preset-button ${preset === "qwen" ? "active" : ""}`}
-            >
-              Qwen Agent
-            </button>
-            <button
-              type="button"
-              onClick={() => setPreset("custom")}
-              className={`preset-button ${preset === "custom" ? "active" : ""}`}
+              onClick={() => handlePluginChange("custom")}
+              className={`preset-button ${selectedPluginId === "custom" ? "active" : ""}`}
             >
               Custom
             </button>
+            {AGENT_PLUGINS.map((plugin) => (
+                <button
+                    key={plugin.id}
+                    type="button"
+                    onClick={() => handlePluginChange(plugin.id)}
+                    className={`preset-button ${selectedPluginId === plugin.id ? "active" : ""}`}
+                >
+                    {plugin.name}
+                </button>
+            ))}
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
@@ -141,9 +173,9 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
             <input
               id="new-task-agent-command"
               type="text"
-              value={preset === "qwen" ? defaultQwenCommand : customCommand}
+              value={selectedPlugin ? selectedPlugin.defaultCommand : customCommand}
               onChange={(e) => setCustomCommand(e.target.value)}
-              disabled={preset === "qwen"}
+              disabled={!!selectedPlugin}
               placeholder="Enter agent command"
               className="modal-input"
             />
@@ -185,7 +217,6 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
       </div>
     </div>
   );
-
 };
 
 export default NewTaskModal;
