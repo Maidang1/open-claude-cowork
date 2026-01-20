@@ -1019,6 +1019,73 @@ __webpack_require__.d(__webpack_exports__, {
 
 
 const execAsync = (0,node_util__rspack_import_4.promisify)(node_child_process__rspack_import_0.exec);
+const normalizeModelsFromConfigOptions = (configOptions)=>{
+    if (!Array.isArray(configOptions)) return null;
+    for (const option of configOptions){
+        if ((option === null || option === void 0 ? void 0 : option.category) !== "model" || (option === null || option === void 0 ? void 0 : option.type) !== "select") {
+            continue;
+        }
+        const groupsOrOptions = option === null || option === void 0 ? void 0 : option.options;
+        if (!Array.isArray(groupsOrOptions)) {
+            continue;
+        }
+        const models = [];
+        for (const entry of groupsOrOptions){
+            if (Array.isArray(entry === null || entry === void 0 ? void 0 : entry.options)) {
+                for (const opt of entry.options){
+                    if ((opt === null || opt === void 0 ? void 0 : opt.value) && (opt === null || opt === void 0 ? void 0 : opt.name)) {
+                        models.push({
+                            modelId: opt.value,
+                            name: opt.name,
+                            description: opt.description ?? null
+                        });
+                    }
+                }
+            } else if ((entry === null || entry === void 0 ? void 0 : entry.value) && (entry === null || entry === void 0 ? void 0 : entry.name)) {
+                models.push({
+                    modelId: entry.value,
+                    name: entry.name,
+                    description: entry.description ?? null
+                });
+            }
+        }
+        if (models.length > 0) {
+            return {
+                models,
+                currentModelId: option.currentValue ?? null
+            };
+        }
+    }
+    return null;
+};
+const extractTokenUsage = (payload)=>{
+    var _payload__meta, _payload__meta1, _payload__meta2;
+    const candidates = [
+        payload,
+        payload === null || payload === void 0 ? void 0 : payload.usage,
+        payload === null || payload === void 0 ? void 0 : payload.tokenUsage,
+        payload === null || payload === void 0 ? void 0 : payload.tokens,
+        payload === null || payload === void 0 ? void 0 : (_payload__meta = payload._meta) === null || _payload__meta === void 0 ? void 0 : _payload__meta.usage,
+        payload === null || payload === void 0 ? void 0 : (_payload__meta1 = payload._meta) === null || _payload__meta1 === void 0 ? void 0 : _payload__meta1.tokenUsage,
+        payload === null || payload === void 0 ? void 0 : (_payload__meta2 = payload._meta) === null || _payload__meta2 === void 0 ? void 0 : _payload__meta2.tokens
+    ];
+    for (const candidate of candidates){
+        if (!candidate || typeof candidate !== "object") {
+            continue;
+        }
+        const promptTokens = candidate.promptTokens ?? candidate.prompt_tokens ?? candidate.input_tokens;
+        const completionTokens = candidate.completionTokens ?? candidate.completion_tokens ?? candidate.output_tokens;
+        const totalTokens = candidate.totalTokens ?? candidate.total_tokens ?? candidate.total;
+        if (typeof promptTokens === "number" || typeof completionTokens === "number" || typeof totalTokens === "number") {
+            return {
+                promptTokens: typeof promptTokens === "number" ? promptTokens : undefined,
+                completionTokens: typeof completionTokens === "number" ? completionTokens : undefined,
+                totalTokens: typeof totalTokens === "number" ? totalTokens : undefined
+            };
+        }
+    }
+    return null;
+};
 class ACPClient {
     process = null;
     connection = null;
@@ -1149,6 +1216,23 @@ class ACPClient {
                             toolCallId: update.toolCallId,
                             status: update.status
                         });
+                    } else if (update.sessionUpdate === "available_commands_update") {
+                        var _this_onMessageCallback4, _this4;
+                        (_this_onMessageCallback4 = (_this4 = this).onMessageCallback) === null || _this_onMessageCallback4 === void 0 ? void 0 : _this_onMessageCallback4.call(_this4, {
+                            type: "agent_info",
+                            info: {
+                                commands: update.availableCommands
+                            }
+                        });
+                    } else if (update.sessionUpdate === "config_option_update") {
+                        const modelUpdate = normalizeModelsFromConfigOptions(update.configOptions);
+                        if (modelUpdate) {
+                            var _this_onMessageCallback5, _this5;
+                            (_this_onMessageCallback5 = (_this5 = this).onMessageCallback) === null || _this_onMessageCallback5 === void 0 ? void 0 : _this_onMessageCallback5.call(_this5, {
+                                type: "agent_info",
+                                info: modelUpdate
+                            });
+                        }
                     }
                 },
                 readTextFile: async (params)=>{
@@ -1201,7 +1285,7 @@ class ACPClient {
                                 {
                                     optionId: "deny",
                                     label: "Deny"
-                                } // Handled by null check in UI
+                                }
                             ]
                         });
                         const response = await new Promise((resolve)=>{
@@ -1238,7 +1322,7 @@ class ACPClient {
             }), stream);
         // Initialize Protocol
         try {
-            var _this_onMessageCallback, _this;
+            var _this_onMessageCallback, _this, _sessionResult_models_availableModels, _sessionResult_models, _sessionResult_configOptions;
             if (!this.connection) {
                 throw new Error("Connection closed before initialization");
             }
@@ -1271,10 +1355,29 @@ class ACPClient {
                 type: "system",
                 text: "System: Connected and Session Created."
             });
+            if ((_sessionResult_models = sessionResult.models) === null || _sessionResult_models === void 0 ? void 0 : (_sessionResult_models_availableModels = _sessionResult_models.availableModels) === null || _sessionResult_models_availableModels === void 0 ? void 0 : _sessionResult_models_availableModels.length) {
+                var _this_onMessageCallback1, _this1;
+                (_this_onMessageCallback1 = (_this1 = this).onMessageCallback) === null || _this_onMessageCallback1 === void 0 ? void 0 : _this_onMessageCallback1.call(_this1, {
+                    type: "agent_info",
+                    info: {
+                        models: sessionResult.models.availableModels,
+                        currentModelId: sessionResult.models.currentModelId
+                    }
+                });
+            } else if ((_sessionResult_configOptions = sessionResult.configOptions) === null || _sessionResult_configOptions === void 0 ? void 0 : _sessionResult_configOptions.length) {
+                const modelUpdate = normalizeModelsFromConfigOptions(sessionResult.configOptions);
+                if (modelUpdate) {
+                    var _this_onMessageCallback2, _this2;
+                    (_this_onMessageCallback2 = (_this2 = this).onMessageCallback) === null || _this_onMessageCallback2 === void 0 ? void 0 : _this_onMessageCallback2.call(_this2, {
+                        type: "agent_info",
+                        info: modelUpdate
+                    });
+                }
+            }
         } catch (e) {
-            var _this_onMessageCallback1, _this1;
+            var _this_onMessageCallback3, _this3;
             console.error("Init failed:", e);
-            (_this_onMessageCallback1 = (_this1 = this).onMessageCallback) === null || _this_onMessageCallback1 === void 0 ? void 0 : _this_onMessageCallback1.call(_this1, {
+            (_this_onMessageCallback3 = (_this3 = this).onMessageCallback) === null || _this_onMessageCallback3 === void 0 ? void 0 : _this_onMessageCallback3.call(_this3, {
                 type: "system",
                 text: `System: Init failed: ${e.message}`
             });
@@ -1288,7 +1391,7 @@ class ACPClient {
         }
         // Send Prompt
         try {
-            await this.connection.prompt({
+            const response = await this.connection.prompt({
                 sessionId: this.sessionId,
                 prompt: [
                     {
@@ -1297,14 +1400,50 @@ class ACPClient {
                     }
                 ]
             });
+            const usage = extractTokenUsage(response);
+            if (usage) {
+                var _this_onMessageCallback, _this;
+                (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                    type: "agent_info",
+                    info: {
+                        tokenUsage: usage
+                    }
+                });
+            }
         // Response is handled via sessionUpdate
         } catch (err) {
-            var _this_onMessageCallback, _this;
+            var _this_onMessageCallback1, _this1;
             console.error("Prompt error", err);
-            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+            (_this_onMessageCallback1 = (_this1 = this).onMessageCallback) === null || _this_onMessageCallback1 === void 0 ? void 0 : _this_onMessageCallback1.call(_this1, {
                 type: "system",
                 text: `System Error: ${err.message}`
             });
+        }
+    }
+    async setModel(modelId) {
+        if (!this.connection || !this.sessionId) {
+            throw new Error("Not connected");
+        }
+        try {
+            var _this_onMessageCallback, _this;
+            await this.connection.unstable_setSessionModel({
+                sessionId: this.sessionId,
+                modelId
+            });
+            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                type: "agent_info",
+                info: {
+                    currentModelId: modelId
+                }
+            });
+            return {
+                success: true
+            };
+        } catch (e) {
+            return {
+                success: false,
+                error: e.message
+            };
         }
     }
     disconnect() {
@@ -20774,6 +20913,20 @@ const initIpc = ()=>{
             await acpClient.sendMessage(message);
         } else {
             throw new Error("Agent not connected");
+        }
+    });
+    electron__rspack_import_1.ipcMain.handle("agent:set-model", async (_, modelId)=>{
+        try {
+            if (!acpClient) {
+                throw new Error("Agent not connected");
+            }
+            return await acpClient.setModel(modelId);
+        } catch (e) {
+            console.error("Set model error:", e);
+            return {
+                success: false,
+                error: e.message
+            };
         }
     });
     electron__rspack_import_1.ipcMain.handle("agent:disconnect", ()=>{

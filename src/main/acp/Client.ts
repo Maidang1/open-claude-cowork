@@ -7,6 +7,110 @@ import { ClientSideConnection, ndJsonStream } from "@agentclientprotocol/sdk";
 
 const execAsync = promisify(exec);
 
+type AgentModelInfo = {
+  modelId: string;
+  name: string;
+  description?: string | null;
+};
+
+type AgentCommandInfo = {
+  name: string;
+  description?: string | null;
+};
+
+type AgentTokenUsage = {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+};
+
+const normalizeModelsFromConfigOptions = (configOptions: any[]) => {
+  if (!Array.isArray(configOptions)) return null;
+
+  for (const option of configOptions) {
+    if (option?.category !== "model" || option?.type !== "select") {
+      continue;
+    }
+
+    const groupsOrOptions = option?.options;
+    if (!Array.isArray(groupsOrOptions)) {
+      continue;
+    }
+
+    const models: AgentModelInfo[] = [];
+    for (const entry of groupsOrOptions) {
+      if (Array.isArray(entry?.options)) {
+        for (const opt of entry.options) {
+          if (opt?.value && opt?.name) {
+            models.push({
+              modelId: opt.value,
+              name: opt.name,
+              description: opt.description ?? null,
+            });
+          }
+        }
+      } else if (entry?.value && entry?.name) {
+        models.push({
+          modelId: entry.value,
+          name: entry.name,
+          description: entry.description ?? null,
+        });
+      }
+    }
+
+    if (models.length > 0) {
+      return { models, currentModelId: option.currentValue ?? null };
+    }
+  }
+
+  return null;
+};
+
+const extractTokenUsage = (payload: any): AgentTokenUsage | null => {
+  const candidates = [
+    payload,
+    payload?.usage,
+    payload?.tokenUsage,
+    payload?.tokens,
+    payload?._meta?.usage,
+    payload?._meta?.tokenUsage,
+    payload?._meta?.tokens,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object") {
+      continue;
+    }
+
+    const promptTokens =
+      candidate.promptTokens ??
+      candidate.prompt_tokens ??
+      candidate.input_tokens;
+    const completionTokens =
+      candidate.completionTokens ??
+      candidate.completion_tokens ??
+      candidate.output_tokens;
+    const totalTokens =
+      candidate.totalTokens ?? candidate.total_tokens ?? candidate.total;
+
+    if (
+      typeof promptTokens === "number" ||
+      typeof completionTokens === "number" ||
+      typeof totalTokens === "number"
+    ) {
+      return {
+        promptTokens:
+          typeof promptTokens === "number" ? promptTokens : undefined,
+        completionTokens:
+          typeof completionTokens === "number" ? completionTokens : undefined,
+        totalTokens: typeof totalTokens === "number" ? totalTokens : undefined,
+      };
+    }
+  }
+
+  return null;
+};
+
 export class ACPClient {
   private process: ChildProcess | null = null;
   private connection: ClientSideConnection | null = null;
@@ -43,7 +147,9 @@ export class ACPClient {
 
     this.cwd = cwd || process.cwd();
 
-    console.log(`[Client] Spawning agent: ${command} ${args.join(" ")} in ${this.cwd}`);
+    console.log(
+      `[Client] Spawning agent: ${command} ${args.join(" ")} in ${this.cwd}`,
+    );
     this.process = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
       shell: true,
@@ -117,13 +223,19 @@ export class ACPClient {
           // Agent Text Message
           if (update.sessionUpdate === "agent_message_chunk") {
             if (update.content.type === "text") {
-              this.onMessageCallback?.({ type: "agent_text", text: update.content.text });
+              this.onMessageCallback?.({
+                type: "agent_text",
+                text: update.content.text,
+              });
             }
           }
           // Agent Thought
           else if (update.sessionUpdate === "agent_thought_chunk") {
             if (update.content.type === "text") {
-              this.onMessageCallback?.({ type: "agent_thought", text: update.content.text });
+              this.onMessageCallback?.({
+                type: "agent_thought",
+                text: update.content.text,
+              });
             }
           }
           // Tool Call
@@ -144,12 +256,39 @@ export class ACPClient {
               status: update.status,
             });
           }
+          // Available Commands Update
+          else if (update.sessionUpdate === "available_commands_update") {
+            this.onMessageCallback?.({
+              type: "agent_info",
+              info: {
+                commands: update.availableCommands as AgentCommandInfo[],
+              },
+            });
+          }
+          // Config Options Update (e.g., models)
+          else if (update.sessionUpdate === "config_option_update") {
+            const modelUpdate = normalizeModelsFromConfigOptions(
+              update.configOptions,
+            );
+            if (modelUpdate) {
+              this.onMessageCallback?.({
+                type: "agent_info",
+                info: modelUpdate,
+              });
+            }
+          }
         },
         readTextFile: async (params) => {
           console.log(`[Client] readTextFile: ${params.path}`);
-          this.onMessageCallback?.({ type: "tool_log", text: `Reading file: ${params.path}` });
+          this.onMessageCallback?.({
+            type: "tool_log",
+            text: `Reading file: ${params.path}`,
+          });
           try {
-            const content = await fs.readFile(path.resolve(this.cwd, params.path), "utf-8");
+            const content = await fs.readFile(
+              path.resolve(this.cwd, params.path),
+              "utf-8",
+            );
             return { content };
           } catch (e: any) {
             throw new Error(`Failed to read file: ${e.message}`);
@@ -157,9 +296,16 @@ export class ACPClient {
         },
         writeTextFile: async (params) => {
           console.log(`[Client] writeTextFile: ${params.path}`);
-          this.onMessageCallback?.({ type: "tool_log", text: `Writing file: ${params.path}` });
+          this.onMessageCallback?.({
+            type: "tool_log",
+            text: `Writing file: ${params.path}`,
+          });
           try {
-            await fs.writeFile(path.resolve(this.cwd, params.path), params.content, "utf-8");
+            await fs.writeFile(
+              path.resolve(this.cwd, params.path),
+              params.content,
+              "utf-8",
+            );
             return {};
           } catch (e: any) {
             throw new Error(`Failed to write file: ${e.message}`);
@@ -168,36 +314,44 @@ export class ACPClient {
         extMethod: async (method, params: any) => {
           console.log(`[Client] ExtMethod call: ${method}`, params);
           if (method === "runShellCommand") {
-             const command = params.command;
-             // Reuse the permission request flow
-             const permissionId = Math.random().toString(36).substring(7);
-             
-             this.onMessageCallback?.({
-                type: "permission_request",
-                id: permissionId,
-                tool: "runShellCommand",
-                content: `Request to run shell command:\n${command}`,
-                options: [
-                  { optionId: "allow", label: "Allow" },
-                  { optionId: "deny", label: "Deny" } // Handled by null check in UI
-                ]
-             });
+            const command = params.command;
+            // Reuse the permission request flow
+            const permissionId = Math.random().toString(36).substring(7);
 
-             const response: any = await new Promise((resolve) => {
-                this.pendingPermissions.set(permissionId, resolve);
-             });
+            this.onMessageCallback?.({
+              type: "permission_request",
+              id: permissionId,
+              tool: "runShellCommand",
+              content: `Request to run shell command:\n${command}`,
+              options: [
+                { optionId: "allow", label: "Allow" },
+                { optionId: "deny", label: "Deny" }, // Handled by null check in UI
+              ],
+            });
 
-             if (response?.outcome?.outcome === "selected" && response.outcome.optionId === "allow") {
-                this.onMessageCallback?.({ type: "tool_log", text: `Executing shell command: ${command}` });
-                try {
-                  const { stdout, stderr } = await execAsync(command, { cwd: this.cwd });
-                  return { stdout, stderr, exitCode: 0 };
-                } catch (e: any) {
-                   return { stdout: "", stderr: e.message, exitCode: e.code || 1 };
-                }
-             } else {
-                throw new Error("User denied shell command execution");
-             }
+            const response: any = await new Promise((resolve) => {
+              this.pendingPermissions.set(permissionId, resolve);
+            });
+
+            if (
+              response?.outcome?.outcome === "selected" &&
+              response.outcome.optionId === "allow"
+            ) {
+              this.onMessageCallback?.({
+                type: "tool_log",
+                text: `Executing shell command: ${command}`,
+              });
+              try {
+                const { stdout, stderr } = await execAsync(command, {
+                  cwd: this.cwd,
+                });
+                return { stdout, stderr, exitCode: 0 };
+              } catch (e: any) {
+                return { stdout: "", stderr: e.message, exitCode: e.code || 1 };
+              }
+            } else {
+              throw new Error("User denied shell command execution");
+            }
           }
           return {};
         },
@@ -218,7 +372,7 @@ export class ACPClient {
             writeTextFile: true,
           },
           // @ts-ignore - Assuming protocol extension allows this or custom handling
-          runShellCommand: true 
+          runShellCommand: true,
         },
         clientInfo: { name: "test-client", version: "1.0.0" },
       });
@@ -233,10 +387,33 @@ export class ACPClient {
         mcpServers: [],
       });
       this.sessionId = sessionResult.sessionId;
-      this.onMessageCallback?.({ type: "system", text: "System: Connected and Session Created." });
+      this.onMessageCallback?.({
+        type: "system",
+        text: "System: Connected and Session Created.",
+      });
+
+      if (sessionResult.models?.availableModels?.length) {
+        this.onMessageCallback?.({
+          type: "agent_info",
+          info: {
+            models: sessionResult.models.availableModels,
+            currentModelId: sessionResult.models.currentModelId,
+          },
+        });
+      } else if (sessionResult.configOptions?.length) {
+        const modelUpdate = normalizeModelsFromConfigOptions(
+          sessionResult.configOptions,
+        );
+        if (modelUpdate) {
+          this.onMessageCallback?.({ type: "agent_info", info: modelUpdate });
+        }
+      }
     } catch (e: any) {
       console.error("Init failed:", e);
-      this.onMessageCallback?.({ type: "system", text: `System: Init failed: ${e.message}` });
+      this.onMessageCallback?.({
+        type: "system",
+        text: `System: Init failed: ${e.message}`,
+      });
       this.disconnect();
       throw e;
     }
@@ -249,14 +426,44 @@ export class ACPClient {
 
     // Send Prompt
     try {
-      await this.connection.prompt({
+      const response = await this.connection.prompt({
         sessionId: this.sessionId,
         prompt: [{ type: "text", text: text }],
       });
+      const usage = extractTokenUsage(response);
+      if (usage) {
+        this.onMessageCallback?.({
+          type: "agent_info",
+          info: { tokenUsage: usage },
+        });
+      }
       // Response is handled via sessionUpdate
     } catch (err: any) {
       console.error("Prompt error", err);
-      this.onMessageCallback?.({ type: "system", text: `System Error: ${err.message}` });
+      this.onMessageCallback?.({
+        type: "system",
+        text: `System Error: ${err.message}`,
+      });
+    }
+  }
+
+  async setModel(modelId: string) {
+    if (!this.connection || !this.sessionId) {
+      throw new Error("Not connected");
+    }
+
+    try {
+      await this.connection.unstable_setSessionModel({
+        sessionId: this.sessionId,
+        modelId,
+      });
+      this.onMessageCallback?.({
+        type: "agent_info",
+        info: { currentModelId: modelId },
+      });
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e.message };
     }
   }
 

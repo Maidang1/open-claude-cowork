@@ -10,7 +10,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -29,12 +29,53 @@ interface ToolCall {
   result?: any;
 }
 
+interface AgentModelInfo {
+  modelId: string;
+  name: string;
+  description?: string | null;
+}
+
+interface AgentCommandInfo {
+  name: string;
+  description?: string | null;
+}
+
+interface TokenUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+}
+
+interface AgentInfoState {
+  models: AgentModelInfo[];
+  currentModelId: string | null;
+  commands: AgentCommandInfo[];
+  tokenUsage: TokenUsage | null;
+}
+
+const LOCAL_COMMANDS: AgentCommandInfo[] = [];
+
+const mergeCommands = (
+  agentCommands: AgentCommandInfo[],
+  localCommands: AgentCommandInfo[],
+) => {
+  const merged = new Map<string, AgentCommandInfo>();
+  for (const cmd of localCommands) {
+    merged.set(cmd.name, cmd);
+  }
+  for (const cmd of agentCommands) {
+    merged.set(cmd.name, cmd);
+  }
+  return [...merged.values()];
+};
+
 interface Message {
   id: string;
   sender: "user" | "agent" | "system";
   content: string; // Markdown text
   thought?: string; // Thought process
   toolCalls?: ToolCall[];
+  tokenUsage?: TokenUsage;
   // Permission Request Fields
   permissionId?: string;
   options?: any[];
@@ -44,6 +85,7 @@ interface IncomingMessage {
   type:
     | "agent_text"
     | "agent_thought"
+    | "agent_info"
     | "tool_call"
     | "tool_call_update"
     | "tool_log"
@@ -57,6 +99,7 @@ interface IncomingMessage {
   status?: string;
   options?: any[];
   tool?: string;
+  info?: Partial<AgentInfoState>;
 }
 
 // --- Components ---
@@ -249,6 +292,16 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
           </div>
         )}
 
+        {!isUser && msg.tokenUsage && (
+          <div className="message-usage">
+            Tokens: prompt {msg.tokenUsage.promptTokens ?? 0}, completion{" "}
+            {msg.tokenUsage.completionTokens ?? 0}, total{" "}
+            {msg.tokenUsage.totalTokens ??
+              (msg.tokenUsage.promptTokens ?? 0) +
+                (msg.tokenUsage.completionTokens ?? 0)}
+          </div>
+        )}
+
         {/* Tool Calls */}
         {msg.toolCalls && msg.toolCalls.length > 0 && (
           <div
@@ -303,6 +356,15 @@ const App = () => {
     "qwen --acp --allowed-tools run_shell_command --experimental-skills",
   );
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
+  const [agentInfo, setAgentInfo] = useState<AgentInfoState>({
+    models: [],
+    currentModelId: null,
+    commands: [],
+    tokenUsage: null,
+  });
+  const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
+  const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
@@ -356,7 +418,53 @@ const App = () => {
     }
   }, [inputText]);
 
+  useEffect(() => {
+    if (inputText.startsWith("/")) {
+      setIsCommandMenuOpen(true);
+      setCommandSelectedIndex(0);
+    } else {
+      setIsCommandMenuOpen(false);
+    }
+  }, [inputText]);
+
   const handleIncomingMessage = (data: IncomingMessage) => {
+    if (data.type === "agent_info") {
+      const nextUsage = data.info?.tokenUsage ?? null;
+      if (nextUsage) {
+        setMessages((prev) => {
+          const lastAgentIndex = [...prev]
+            .reverse()
+            .findIndex((msg) => msg.sender === "agent");
+          if (lastAgentIndex === -1) {
+            return prev;
+          }
+          const realIndex = prev.length - 1 - lastAgentIndex;
+          return prev.map((msg, idx) =>
+            idx === realIndex ? { ...msg, tokenUsage: nextUsage } : msg,
+          );
+        });
+      }
+      setAgentInfo((prev) => ({
+        models: data.info?.models ?? prev.models,
+        currentModelId: data.info?.currentModelId ?? prev.currentModelId,
+        commands: data.info?.commands ?? prev.commands,
+        tokenUsage: nextUsage
+          ? {
+              promptTokens:
+                (prev.tokenUsage?.promptTokens ?? 0) +
+                (nextUsage.promptTokens ?? 0),
+              completionTokens:
+                (prev.tokenUsage?.completionTokens ?? 0) +
+                (nextUsage.completionTokens ?? 0),
+              totalTokens:
+                (prev.tokenUsage?.totalTokens ?? 0) +
+                (nextUsage.totalTokens ?? 0),
+            }
+          : prev.tokenUsage,
+      }));
+      return;
+    }
+
     // System Messages
     if (data.type === "system") {
       setMessages((prev) => [
@@ -532,6 +640,12 @@ const App = () => {
     if (isConnected) {
       await window.electron.invoke("agent:disconnect");
       setIsConnected(false);
+      setAgentInfo({
+        models: [],
+        currentModelId: null,
+        commands: [],
+        tokenUsage: null,
+      });
       handleIncomingMessage({ type: "system", text: "Disconnected." });
       currentAgentMsgId.current = null;
     } else {
@@ -562,6 +676,10 @@ const App = () => {
     // Clear messages
     setMessages([]);
     currentAgentMsgId.current = null;
+    setAgentInfo((prev) => ({
+      ...prev,
+      tokenUsage: null,
+    }));
 
     // Reset session if connected
     if (isConnected && currentWorkspace) {
@@ -617,9 +735,84 @@ const App = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (isCommandMenuOpen) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        setCommandSelectedIndex((prev) => {
+          const max = filteredCommands.length;
+          if (max === 0) return 0;
+          if (e.key === "ArrowDown") {
+            return (prev + 1) % max;
+          }
+          return (prev - 1 + max) % max;
+        });
+        return;
+      }
+
+      if (e.key === "Enter") {
+        if (filteredCommands.length > 0) {
+          e.preventDefault();
+          handleCommandPick(filteredCommands[commandSelectedIndex]);
+          return;
+        }
+      }
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setIsCommandMenuOpen(false);
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const currentModel = agentInfo.models.find(
+    (model) => model.modelId === agentInfo.currentModelId,
+  );
+  const mergedCommands = useMemo(
+    () => mergeCommands(agentInfo.commands, LOCAL_COMMANDS),
+    [agentInfo.commands],
+  );
+  const commandQuery = inputText.startsWith("/")
+    ? inputText.slice(1).trim().toLowerCase()
+    : "";
+  const filteredCommands = mergedCommands.filter((cmd) =>
+    commandQuery ? cmd.name.toLowerCase().includes(commandQuery) : true,
+  );
+
+  useEffect(() => {
+    if (commandSelectedIndex >= filteredCommands.length) {
+      setCommandSelectedIndex(0);
+    }
+  }, [commandSelectedIndex, filteredCommands.length]);
+
+  const handleCommandPick = (cmd: AgentCommandInfo) => {
+    setInputText(`/${cmd.name} `);
+    setIsCommandMenuOpen(false);
+    textareaRef.current?.focus();
+  };
+
+  const handleModelPick = async (modelId: string) => {
+    try {
+      const res = await window.electron.invoke("agent:set-model", modelId);
+      if (!res.success) {
+        handleIncomingMessage({
+          type: "system",
+          text: `Model switch failed: ${res.error || "unknown error"}`,
+        });
+        return;
+      }
+      setAgentInfo((prev) => ({ ...prev, currentModelId: modelId }));
+      setIsModelMenuOpen(false);
+    } catch (e: any) {
+      handleIncomingMessage({
+        type: "system",
+        text: `Model switch failed: ${e.message}`,
+      });
     }
   };
 
@@ -662,37 +855,16 @@ const App = () => {
               </div> */}
         </div>
 
-        <div
-          style={{
-            marginTop: "auto",
-            borderTop: "1px solid #e5e7eb",
-            paddingTop: "16px",
-            display: "flex",
-            gap: "8px",
-            alignItems: "center",
-          }}
-        >
-          <div
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: "50%",
-              backgroundColor: "#f97316",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "white",
-              fontWeight: 600,
-            }}
-          >
-            U
-          </div>
-          <div style={{ fontSize: "0.9em", fontWeight: 500 }}>User</div>
-          <Settings
-            size={16}
-            style={{ marginLeft: "auto", color: "#9ca3af", cursor: "pointer" }}
+        <div className="sidebar-settings">
+          <button
+            type="button"
+            className="sidebar-settings-button"
             onClick={() => setIsSettingsOpen(true)}
-          />
+            aria-label="Open settings"
+          >
+            <Settings size={16} />
+            <span>Settings</span>
+          </button>
         </div>
       </div>
 
@@ -701,29 +873,62 @@ const App = () => {
         {/* Connection Overlay (Top Right) - REMOVED */}
 
         <div className="chat-header">
-          <div className="chat-title">
-            {isConnected ? (
-              <span
-                style={{
-                  color: "#10b981",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <div
-                  style={{
-                    width: "8px",
-                    height: "8px",
-                    borderRadius: "50%",
-                    backgroundColor: "#10b981",
-                  }}
-                ></div>
-                Connected
-              </span>
-            ) : (
-              <span style={{ color: "#9ca3af" }}>Disconnected</span>
-            )}
+          <div className="agent-info-bar">
+            <div className="agent-info-item">
+              {agentInfo.models.length === 0 ? (
+                <span className="agent-info-muted">Unknown</span>
+              ) : (
+                <div className="model-selector">
+                  <button
+                    type="button"
+                    className="model-selector-trigger compact"
+                    onClick={() => setIsModelMenuOpen((prev) => !prev)}
+                  >
+                    <span>
+                      {currentModel?.name ||
+                        agentInfo.currentModelId ||
+                        "Unknown"}
+                    </span>
+                    <ChevronDown size={12} />
+                  </button>
+                  {isModelMenuOpen && (
+                    <div className="model-dropdown">
+                      {agentInfo.models.map((model) => (
+                        <button
+                          key={model.modelId}
+                          type="button"
+                          className={`model-item ${
+                            model.modelId === agentInfo.currentModelId
+                              ? "active"
+                              : ""
+                          }`}
+                          onClick={() => handleModelPick(model.modelId)}
+                        >
+                          <span className="model-name">{model.name}</span>
+                          <span className="model-desc">
+                            {model.description || model.modelId}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="agent-info-item">
+              {isConnected ? (
+                <span
+                  className="agent-status connected"
+                  aria-label="Connected"
+                />
+              ) : (
+                <span
+                  className="agent-status disconnected"
+                  aria-label="Disconnected"
+                />
+              )}
+            </div>
           </div>
         </div>
 
@@ -777,6 +982,29 @@ const App = () => {
             >
               <Send size={16} />
             </button>
+            {isCommandMenuOpen && (
+              <div className="command-dropdown">
+                {filteredCommands.length === 0 ? (
+                  <div className="command-empty">No commands available.</div>
+                ) : (
+                  filteredCommands.map((cmd, index) => (
+                    <button
+                      key={cmd.name}
+                      type="button"
+                      className={`command-item ${
+                        index === commandSelectedIndex ? "active" : ""
+                      }`}
+                      onClick={() => handleCommandPick(cmd)}
+                    >
+                      <span className="command-name">/{cmd.name}</span>
+                      <span className="command-desc">
+                        {cmd.description || "No description"}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

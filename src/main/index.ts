@@ -356,6 +356,18 @@ const initIpc = () => {
     }
   });
 
+  ipcMain.handle("agent:set-model", async (_, modelId: string) => {
+    try {
+      if (!acpClient) {
+        throw new Error("Agent not connected");
+      }
+      return await acpClient.setModel(modelId);
+    } catch (e: any) {
+      console.error("Set model error:", e);
+      return { success: false, error: e.message };
+    }
+  });
+
   ipcMain.handle("agent:disconnect", () => {
     if (acpClient) {
       acpClient.disconnect();
