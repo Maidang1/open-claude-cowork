@@ -119,6 +119,44 @@ body,
     gap: 2px;
 }
 
+.history-item-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.task-context-menu {
+    position: fixed;
+    z-index: 100;
+    min-width: 140px;
+    background: #ffffff;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+    padding: 6px;
+}
+
+.task-context-menu-item {
+    width: 100%;
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 0.9em;
+    color: var(--color-text-primary);
+    cursor: pointer;
+}
+
+.task-context-menu-item:hover {
+    background-color: var(--color-surface-muted);
+}
+
+.task-context-menu-item.danger {
+    color: #ef4444;
+}
+
 .history-item:hover,
 .history-item.active {
     background-color: var(--color-surface-muted);
@@ -129,6 +167,12 @@ body,
 }
 
 .history-item-subtitle {
+    font-size: 0.85em;
+    color: var(--color-text-secondary);
+}
+
+.history-empty {
+    padding: 10px 12px;
     font-size: 0.85em;
     color: var(--color-text-secondary);
 }

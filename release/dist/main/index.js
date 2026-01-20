@@ -1,1002 +1,7 @@
 (() => {
+"use strict";
 var __webpack_modules__ = ({
-"./node_modules/better-sqlite3/lib/database.js"(module, __unused_rspack_exports, __webpack_require__) {
-"use strict";
-
-const fs = __webpack_require__("fs");
-const path = __webpack_require__("path");
-const util = __webpack_require__("./node_modules/better-sqlite3/lib/util.js");
-const SqliteError = __webpack_require__("./node_modules/better-sqlite3/lib/sqlite-error.js");
-
-let DEFAULT_ADDON;
-
-function Database(filenameGiven, options) {
-	if (new.target == null) {
-		return new Database(filenameGiven, options);
-	}
-
-	// Apply defaults
-	let buffer;
-	if (Buffer.isBuffer(filenameGiven)) {
-		buffer = filenameGiven;
-		filenameGiven = ':memory:';
-	}
-	if (filenameGiven == null) filenameGiven = '';
-	if (options == null) options = {};
-
-	// Validate arguments
-	if (typeof filenameGiven !== 'string') throw new TypeError('Expected first argument to be a string');
-	if (typeof options !== 'object') throw new TypeError('Expected second argument to be an options object');
-	if ('readOnly' in options) throw new TypeError('Misspelled option "readOnly" should be "readonly"');
-	if ('memory' in options) throw new TypeError('Option "memory" was removed in v7.0.0 (use ":memory:" filename instead)');
-
-	// Interpret options
-	const filename = filenameGiven.trim();
-	const anonymous = filename === '' || filename === ':memory:';
-	const readonly = util.getBooleanOption(options, 'readonly');
-	const fileMustExist = util.getBooleanOption(options, 'fileMustExist');
-	const timeout = 'timeout' in options ? options.timeout : 5000;
-	const verbose = 'verbose' in options ? options.verbose : null;
-	const nativeBinding = 'nativeBinding' in options ? options.nativeBinding : null;
-
-	// Validate interpreted options
-	if (readonly && anonymous && !buffer) throw new TypeError('In-memory/temporary databases cannot be readonly');
-	if (!Number.isInteger(timeout) || timeout < 0) throw new TypeError('Expected the "timeout" option to be a positive integer');
-	if (timeout > 0x7fffffff) throw new RangeError('Option "timeout" cannot be greater than 2147483647');
-	if (verbose != null && typeof verbose !== 'function') throw new TypeError('Expected the "verbose" option to be a function');
-	if (nativeBinding != null && typeof nativeBinding !== 'string' && typeof nativeBinding !== 'object') throw new TypeError('Expected the "nativeBinding" option to be a string or addon object');
-
-	// Load the native addon
-	let addon;
-	if (nativeBinding == null) {
-		addon = DEFAULT_ADDON || (DEFAULT_ADDON = __webpack_require__("./node_modules/bindings/bindings.js")('better_sqlite3.node'));
-	} else if (typeof nativeBinding === 'string') {
-		// See <https://webpack.js.org/api/module-variables/#__non_webpack_require__-webpack-specific>
-		const requireFunc = typeof require === 'function' ? require : __webpack_require__("./node_modules/better-sqlite3/lib sync recursive");
-		addon = requireFunc(path.resolve(nativeBinding).replace(/(\.node)?$/, '.node'));
-	} else {
-		// See <https://github.com/WiseLibs/better-sqlite3/issues/972>
-		addon = nativeBinding;
-	}
-
-	if (!addon.isInitialized) {
-		addon.setErrorConstructor(SqliteError);
-		addon.isInitialized = true;
-	}
-
-	// Make sure the specified directory exists
-	if (!anonymous && !filename.startsWith('file:') && !fs.existsSync(path.dirname(filename))) {
-		throw new TypeError('Cannot open database because the directory does not exist');
-	}
-
-	Object.defineProperties(this, {
-		[util.cppdb]: { value: new addon.Database(filename, filenameGiven, anonymous, readonly, fileMustExist, timeout, verbose || null, buffer || null) },
-		...wrappers.getters,
-	});
-}
-
-const wrappers = __webpack_require__("./node_modules/better-sqlite3/lib/methods/wrappers.js");
-Database.prototype.prepare = wrappers.prepare;
-Database.prototype.transaction = __webpack_require__("./node_modules/better-sqlite3/lib/methods/transaction.js");
-Database.prototype.pragma = __webpack_require__("./node_modules/better-sqlite3/lib/methods/pragma.js");
-Database.prototype.backup = __webpack_require__("./node_modules/better-sqlite3/lib/methods/backup.js");
-Database.prototype.serialize = __webpack_require__("./node_modules/better-sqlite3/lib/methods/serialize.js");
-Database.prototype.function = __webpack_require__("./node_modules/better-sqlite3/lib/methods/function.js");
-Database.prototype.aggregate = __webpack_require__("./node_modules/better-sqlite3/lib/methods/aggregate.js");
-Database.prototype.table = __webpack_require__("./node_modules/better-sqlite3/lib/methods/table.js");
-Database.prototype.loadExtension = wrappers.loadExtension;
-Database.prototype.exec = wrappers.exec;
-Database.prototype.close = wrappers.close;
-Database.prototype.defaultSafeIntegers = wrappers.defaultSafeIntegers;
-Database.prototype.unsafeMode = wrappers.unsafeMode;
-Database.prototype[util.inspect] = __webpack_require__("./node_modules/better-sqlite3/lib/methods/inspect.js");
-
-module.exports = Database;
-
-
-},
-"./node_modules/better-sqlite3/lib/index.js"(module, __unused_rspack_exports, __webpack_require__) {
-"use strict";
-
-module.exports = __webpack_require__("./node_modules/better-sqlite3/lib/database.js");
-module.exports.SqliteError = __webpack_require__("./node_modules/better-sqlite3/lib/sqlite-error.js");
-
-
-},
-"./node_modules/better-sqlite3/lib/methods/aggregate.js"(module, __unused_rspack_exports, __webpack_require__) {
-"use strict";
-
-const { getBooleanOption, cppdb } = __webpack_require__("./node_modules/better-sqlite3/lib/util.js");
-
-module.exports = function defineAggregate(name, options) {
-	// Validate arguments
-	if (typeof name !== 'string') throw new TypeError('Expected first argument to be a string');
-	if (typeof options !== 'object' || options === null) throw new TypeError('Expected second argument to be an options object');
-	if (!name) throw new TypeError('User-defined function name cannot be an empty string');
-
-	// Interpret options
-	const start = 'start' in options ? options.start : null;
-	const step = getFunctionOption(options, 'step', true);
-	const inverse = getFunctionOption(options, 'inverse', false);
-	const result = getFunctionOption(options, 'result', false);
-	const safeIntegers = 'safeIntegers' in options ? +getBooleanOption(options, 'safeIntegers') : 2;
-	const deterministic = getBooleanOption(options, 'deterministic');
-	const directOnly = getBooleanOption(options, 'directOnly');
-	const varargs = getBooleanOption(options, 'varargs');
-	let argCount = -1;
-
-	// Determine argument count
-	if (!varargs) {
-		argCount = Math.max(getLength(step), inverse ? getLength(inverse) : 0);
-		if (argCount > 0) argCount -= 1;
-		if (argCount > 100) throw new RangeError('User-defined functions cannot have more than 100 arguments');
-	}
-
-	this[cppdb].aggregate(start, step, inverse, result, name, argCount, safeIntegers, deterministic, directOnly);
-	return this;
-};
-
-const getFunctionOption = (options, key, required) => {
-	const value = key in options ? options[key] : null;
-	if (typeof value === 'function') return value;
-	if (value != null) throw new TypeError(`Expected the "${key}" option to be a function`);
-	if (required) throw new TypeError(`Missing required option "${key}"`);
-	return null;
-};
-
-const getLength = ({ length }) => {
-	if (Number.isInteger(length) && length >= 0) return length;
-	throw new TypeError('Expected function.length to be a positive integer');
-};
-
-
-},
-"./node_modules/better-sqlite3/lib/methods/backup.js"(module, __unused_rspack_exports, __webpack_require__) {
-"use strict";
-
-const fs = __webpack_require__("fs");
-const path = __webpack_require__("path");
-const { promisify } = __webpack_require__("util");
-const { cppdb } = __webpack_require__("./node_modules/better-sqlite3/lib/util.js");
-const fsAccess = promisify(fs.access);
-
-module.exports = async function backup(filename, options) {
-	if (options == null) options = {};
-
-	// Validate arguments
-	if (typeof filename !== 'string') throw new TypeError('Expected first argument to be a string');
-	if (typeof options !== 'object') throw new TypeError('Expected second argument to be an options object');
-
-	// Interpret options
-	filename = filename.trim();
-	const attachedName = 'attached' in options ? options.attached : 'main';
-	const handler = 'progress' in options ? options.progress : null;
-
-	// Validate interpreted options
-	if (!filename) throw new TypeError('Backup filename cannot be an empty string');
-	if (filename === ':memory:') throw new TypeError('Invalid backup filename ":memory:"');
-	if (typeof attachedName !== 'string') throw new TypeError('Expected the "attached" option to be a string');
-	if (!attachedName) throw new TypeError('The "attached" option cannot be an empty string');
-	if (handler != null && typeof handler !== 'function') throw new TypeError('Expected the "progress" option to be a function');
-
-	// Make sure the specified directory exists
-	await fsAccess(path.dirname(filename)).catch(() => {
-		throw new TypeError('Cannot save backup because the directory does not exist');
-	});
-
-	const isNewFile = await fsAccess(filename).then(() => false, () => true);
-	return runBackup(this[cppdb].backup(this, attachedName, filename, isNewFile), handler || null);
-};
-
-const runBackup = (backup, handler) => {
-	let rate = 0;
-	let useDefault = true;
-
-	return new Promise((resolve, reject) => {
-		setImmediate(function step() {
-			try {
-				const progress = backup.transfer(rate);
-				if (!progress.remainingPages) {
-					backup.close();
-					resolve(progress);
-					return;
-				}
-				if (useDefault) {
-					useDefault = false;
-					rate = 100;
-				}
-				if (handler) {
-					const ret = handler(progress);
-					if (ret !== undefined) {
-						if (typeof ret === 'number' && ret === ret) rate = Math.max(0, Math.min(0x7fffffff, Math.round(ret)));
-						else throw new TypeError('Expected progress callback to return a number or undefined');
-					}
-				}
-				setImmediate(step);
-			} catch (err) {
-				backup.close();
-				reject(err);
-			}
-		});
-	});
-};
-
-
-},
-"./node_modules/better-sqlite3/lib/methods/function.js"(module, __unused_rspack_exports, __webpack_require__) {
-"use strict";
-
-const { getBooleanOption, cppdb } = __webpack_require__("./node_modules/better-sqlite3/lib/util.js");
-
-module.exports = function defineFunction(name, options, fn) {
-	// Apply defaults
-	if (options == null) options = {};
-	if (typeof options === 'function') { fn = options; options = {}; }
-
-	// Validate arguments
-	if (typeof name !== 'string') throw new TypeError('Expected first argument to be a string');
-	if (typeof fn !== 'function') throw new TypeError('Expected last argument to be a function');
-	if (typeof options !== 'object') throw new TypeError('Expected second argument to be an options object');
-	if (!name) throw new TypeError('User-defined function name cannot be an empty string');
-
-	// Interpret options
-	const safeIntegers = 'safeIntegers' in options ? +getBooleanOption(options, 'safeIntegers') : 2;
-	const deterministic = getBooleanOption(options, 'deterministic');
-	const directOnly = getBooleanOption(options, 'directOnly');
-	const varargs = getBooleanOption(options, 'varargs');
-	let argCount = -1;
-
-	// Determine argument count
-	if (!varargs) {
-		argCount = fn.length;
-		if (!Number.isInteger(argCount) || argCount < 0) throw new TypeError('Expected function.length to be a positive integer');
-		if (argCount > 100) throw new RangeError('User-defined functions cannot have more than 100 arguments');
-	}
-
-	this[cppdb].function(fn, name, argCount, safeIntegers, deterministic, directOnly);
-	return this;
-};
-
-
-},
-"./node_modules/better-sqlite3/lib/methods/inspect.js"(module) {
-"use strict";
-
-const DatabaseInspection = function Database() {};
-
-module.exports = function inspect(depth, opts) {
-	return Object.assign(new DatabaseInspection(), this);
-};
-
-
-
-},
-"./node_modules/better-sqlite3/lib/methods/pragma.js"(module, __unused_rspack_exports, __webpack_require__) {
-"use strict";
-
-const { getBooleanOption, cppdb } = __webpack_require__("./node_modules/better-sqlite3/lib/util.js");
-
-module.exports = function pragma(source, options) {
-	if (options == null) options = {};
-	if (typeof source !== 'string') throw new TypeError('Expected first argument to be a string');
-	if (typeof options !== 'object') throw new TypeError('Expected second argument to be an options object');
-	const simple = getBooleanOption(options, 'simple');
-
-	const stmt = this[cppdb].prepare(`PRAGMA ${source}`, this, true);
-	return simple ? stmt.pluck().get() : stmt.all();
-};
-
-
-},
-"./node_modules/better-sqlite3/lib/methods/serialize.js"(module, __unused_rspack_exports, __webpack_require__) {
-"use strict";
-
-const { cppdb } = __webpack_require__("./node_modules/better-sqlite3/lib/util.js");
-
-module.exports = function serialize(options) {
-	if (options == null) options = {};
-
-	// Validate arguments
-	if (typeof options !== 'object') throw new TypeError('Expected first argument to be an options object');
-
-	// Interpret and validate options
-	const attachedName = 'attached' in options ? options.attached : 'main';
-	if (typeof attachedName !== 'string') throw new TypeError('Expected the "attached" option to be a string');
-	if (!attachedName) throw new TypeError('The "attached" option cannot be an empty string');
-
-	return this[cppdb].serialize(attachedName);
-};
-
-
-},
-"./node_modules/better-sqlite3/lib/methods/table.js"(module, __unused_rspack_exports, __webpack_require__) {
-"use strict";
-
-const { cppdb } = __webpack_require__("./node_modules/better-sqlite3/lib/util.js");
-
-module.exports = function defineTable(name, factory) {
-	// Validate arguments
-	if (typeof name !== 'string') throw new TypeError('Expected first argument to be a string');
-	if (!name) throw new TypeError('Virtual table module name cannot be an empty string');
-
-	// Determine whether the module is eponymous-only or not
-	let eponymous = false;
-	if (typeof factory === 'object' && factory !== null) {
-		eponymous = true;
-		factory = defer(parseTableDefinition(factory, 'used', name));
-	} else {
-		if (typeof factory !== 'function') throw new TypeError('Expected second argument to be a function or a table definition object');
-		factory = wrapFactory(factory);
-	}
-
-	this[cppdb].table(factory, name, eponymous);
-	return this;
-};
-
-function wrapFactory(factory) {
-	return function virtualTableFactory(moduleName, databaseName, tableName, ...args) {
-		const thisObject = {
-			module: moduleName,
-			database: databaseName,
-			table: tableName,
-		};
-
-		// Generate a new table definition by invoking the factory
-		const def = apply.call(factory, thisObject, args);
-		if (typeof def !== 'object' || def === null) {
-			throw new TypeError(`Virtual table module "${moduleName}" did not return a table definition object`);
-		}
-
-		return parseTableDefinition(def, 'returned', moduleName);
-	};
-}
-
-function parseTableDefinition(def, verb, moduleName) {
-	// Validate required properties
-	if (!hasOwnProperty.call(def, 'rows')) {
-		throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition without a "rows" property`);
-	}
-	if (!hasOwnProperty.call(def, 'columns')) {
-		throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition without a "columns" property`);
-	}
-
-	// Validate "rows" property
-	const rows = def.rows;
-	if (typeof rows !== 'function' || Object.getPrototypeOf(rows) !== GeneratorFunctionPrototype) {
-		throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with an invalid "rows" property (should be a generator function)`);
-	}
-
-	// Validate "columns" property
-	let columns = def.columns;
-	if (!Array.isArray(columns) || !(columns = [...columns]).every(x => typeof x === 'string')) {
-		throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with an invalid "columns" property (should be an array of strings)`);
-	}
-	if (columns.length !== new Set(columns).size) {
-		throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with duplicate column names`);
-	}
-	if (!columns.length) {
-		throw new RangeError(`Virtual table module "${moduleName}" ${verb} a table definition with zero columns`);
-	}
-
-	// Validate "parameters" property
-	let parameters;
-	if (hasOwnProperty.call(def, 'parameters')) {
-		parameters = def.parameters;
-		if (!Array.isArray(parameters) || !(parameters = [...parameters]).every(x => typeof x === 'string')) {
-			throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with an invalid "parameters" property (should be an array of strings)`);
-		}
-	} else {
-		parameters = inferParameters(rows);
-	}
-	if (parameters.length !== new Set(parameters).size) {
-		throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with duplicate parameter names`);
-	}
-	if (parameters.length > 32) {
-		throw new RangeError(`Virtual table module "${moduleName}" ${verb} a table definition with more than the maximum number of 32 parameters`);
-	}
-	for (const parameter of parameters) {
-		if (columns.includes(parameter)) {
-			throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with column "${parameter}" which was ambiguously defined as both a column and parameter`);
-		}
-	}
-
-	// Validate "safeIntegers" option
-	let safeIntegers = 2;
-	if (hasOwnProperty.call(def, 'safeIntegers')) {
-		const bool = def.safeIntegers;
-		if (typeof bool !== 'boolean') {
-			throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with an invalid "safeIntegers" property (should be a boolean)`);
-		}
-		safeIntegers = +bool;
-	}
-
-	// Validate "directOnly" option
-	let directOnly = false;
-	if (hasOwnProperty.call(def, 'directOnly')) {
-		directOnly = def.directOnly;
-		if (typeof directOnly !== 'boolean') {
-			throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with an invalid "directOnly" property (should be a boolean)`);
-		}
-	}
-
-	// Generate SQL for the virtual table definition
-	const columnDefinitions = [
-		...parameters.map(identifier).map(str => `${str} HIDDEN`),
-		...columns.map(identifier),
-	];
-	return [
-		`CREATE TABLE x(${columnDefinitions.join(', ')});`,
-		wrapGenerator(rows, new Map(columns.map((x, i) => [x, parameters.length + i])), moduleName),
-		parameters,
-		safeIntegers,
-		directOnly,
-	];
-}
-
-function wrapGenerator(generator, columnMap, moduleName) {
-	return function* virtualTable(...args) {
-		/*
-			We must defensively clone any buffers in the arguments, because
-			otherwise the generator could mutate one of them, which would cause
-			us to return incorrect values for hidden columns, potentially
-			corrupting the database.
-		 */
-		const output = args.map(x => Buffer.isBuffer(x) ? Buffer.from(x) : x);
-		for (let i = 0; i < columnMap.size; ++i) {
-			output.push(null); // Fill with nulls to prevent gaps in array (v8 optimization)
-		}
-		for (const row of generator(...args)) {
-			if (Array.isArray(row)) {
-				extractRowArray(row, output, columnMap.size, moduleName);
-				yield output;
-			} else if (typeof row === 'object' && row !== null) {
-				extractRowObject(row, output, columnMap, moduleName);
-				yield output;
-			} else {
-				throw new TypeError(`Virtual table module "${moduleName}" yielded something that isn't a valid row object`);
-			}
-		}
-	};
-}
-
-function extractRowArray(row, output, columnCount, moduleName) {
-	if (row.length !== columnCount) {
-		throw new TypeError(`Virtual table module "${moduleName}" yielded a row with an incorrect number of columns`);
-	}
-	const offset = output.length - columnCount;
-	for (let i = 0; i < columnCount; ++i) {
-		output[i + offset] = row[i];
-	}
-}
-
-function extractRowObject(row, output, columnMap, moduleName) {
-	let count = 0;
-	for (const key of Object.keys(row)) {
-		const index = columnMap.get(key);
-		if (index === undefined) {
-			throw new TypeError(`Virtual table module "${moduleName}" yielded a row with an undeclared column "${key}"`);
-		}
-		output[index] = row[key];
-		count += 1;
-	}
-	if (count !== columnMap.size) {
-		throw new TypeError(`Virtual table module "${moduleName}" yielded a row with missing columns`);
-	}
-}
-
-function inferParameters({ length }) {
-	if (!Number.isInteger(length) || length < 0) {
-		throw new TypeError('Expected function.length to be a positive integer');
-	}
-	const params = [];
-	for (let i = 0; i < length; ++i) {
-		params.push(`$${i + 1}`);
-	}
-	return params;
-}
-
-const { hasOwnProperty } = Object.prototype;
-const { apply } = Function.prototype;
-const GeneratorFunctionPrototype = Object.getPrototypeOf(function*(){});
-const identifier = str => `"${str.replace(/"/g, '""')}"`;
-const defer = x => () => x;
-
-
-},
-"./node_modules/better-sqlite3/lib/methods/transaction.js"(module, __unused_rspack_exports, __webpack_require__) {
-"use strict";
-
-const { cppdb } = __webpack_require__("./node_modules/better-sqlite3/lib/util.js");
-const controllers = new WeakMap();
-
-module.exports = function transaction(fn) {
-	if (typeof fn !== 'function') throw new TypeError('Expected first argument to be a function');
-
-	const db = this[cppdb];
-	const controller = getController(db, this);
-	const { apply } = Function.prototype;
-
-	// Each version of the transaction function has these same properties
-	const properties = {
-		default: { value: wrapTransaction(apply, fn, db, controller.default) },
-		deferred: { value: wrapTransaction(apply, fn, db, controller.deferred) },
-		immediate: { value: wrapTransaction(apply, fn, db, controller.immediate) },
-		exclusive: { value: wrapTransaction(apply, fn, db, controller.exclusive) },
-		database: { value: this, enumerable: true },
-	};
-
-	Object.defineProperties(properties.default.value, properties);
-	Object.defineProperties(properties.deferred.value, properties);
-	Object.defineProperties(properties.immediate.value, properties);
-	Object.defineProperties(properties.exclusive.value, properties);
-
-	// Return the default version of the transaction function
-	return properties.default.value;
-};
-
-// Return the database's cached transaction controller, or create a new one
-const getController = (db, self) => {
-	let controller = controllers.get(db);
-	if (!controller) {
-		const shared = {
-			commit: db.prepare('COMMIT', self, false),
-			rollback: db.prepare('ROLLBACK', self, false),
-			savepoint: db.prepare('SAVEPOINT `\t_bs3.\t`', self, false),
-			release: db.prepare('RELEASE `\t_bs3.\t`', self, false),
-			rollbackTo: db.prepare('ROLLBACK TO `\t_bs3.\t`', self, false),
-		};
-		controllers.set(db, controller = {
-			default: Object.assign({ begin: db.prepare('BEGIN', self, false) }, shared),
-			deferred: Object.assign({ begin: db.prepare('BEGIN DEFERRED', self, false) }, shared),
-			immediate: Object.assign({ begin: db.prepare('BEGIN IMMEDIATE', self, false) }, shared),
-			exclusive: Object.assign({ begin: db.prepare('BEGIN EXCLUSIVE', self, false) }, shared),
-		});
-	}
-	return controller;
-};
-
-// Return a new transaction function by wrapping the given function
-const wrapTransaction = (apply, fn, db, { begin, commit, rollback, savepoint, release, rollbackTo }) => function sqliteTransaction() {
-	let before, after, undo;
-	if (db.inTransaction) {
-		before = savepoint;
-		after = release;
-		undo = rollbackTo;
-	} else {
-		before = begin;
-		after = commit;
-		undo = rollback;
-	}
-	before.run();
-	try {
-		const result = apply.call(fn, this, arguments);
-		if (result && typeof result.then === 'function') {
-			throw new TypeError('Transaction function cannot return a promise');
-		}
-		after.run();
-		return result;
-	} catch (ex) {
-		if (db.inTransaction) {
-			undo.run();
-			if (undo !== rollback) after.run();
-		}
-		throw ex;
-	}
-};
-
-
-},
-"./node_modules/better-sqlite3/lib/methods/wrappers.js"(__unused_rspack_module, exports, __webpack_require__) {
-"use strict";
-
-const { cppdb } = __webpack_require__("./node_modules/better-sqlite3/lib/util.js");
-
-exports.prepare = function prepare(sql) {
-	return this[cppdb].prepare(sql, this, false);
-};
-
-exports.exec = function exec(sql) {
-	this[cppdb].exec(sql);
-	return this;
-};
-
-exports.close = function close() {
-	this[cppdb].close();
-	return this;
-};
-
-exports.loadExtension = function loadExtension(...args) {
-	this[cppdb].loadExtension(...args);
-	return this;
-};
-
-exports.defaultSafeIntegers = function defaultSafeIntegers(...args) {
-	this[cppdb].defaultSafeIntegers(...args);
-	return this;
-};
-
-exports.unsafeMode = function unsafeMode(...args) {
-	this[cppdb].unsafeMode(...args);
-	return this;
-};
-
-exports.getters = {
-	name: {
-		get: function name() { return this[cppdb].name; },
-		enumerable: true,
-	},
-	open: {
-		get: function open() { return this[cppdb].open; },
-		enumerable: true,
-	},
-	inTransaction: {
-		get: function inTransaction() { return this[cppdb].inTransaction; },
-		enumerable: true,
-	},
-	readonly: {
-		get: function readonly() { return this[cppdb].readonly; },
-		enumerable: true,
-	},
-	memory: {
-		get: function memory() { return this[cppdb].memory; },
-		enumerable: true,
-	},
-};
-
-
-},
-"./node_modules/better-sqlite3/lib/sqlite-error.js"(module) {
-"use strict";
-
-const descriptor = { value: 'SqliteError', writable: true, enumerable: false, configurable: true };
-
-function SqliteError(message, code) {
-	if (new.target !== SqliteError) {
-		return new SqliteError(message, code);
-	}
-	if (typeof code !== 'string') {
-		throw new TypeError('Expected second argument to be a string');
-	}
-	Error.call(this, message);
-	descriptor.value = '' + message;
-	Object.defineProperty(this, 'message', descriptor);
-	Error.captureStackTrace(this, SqliteError);
-	this.code = code;
-}
-Object.setPrototypeOf(SqliteError, Error);
-Object.setPrototypeOf(SqliteError.prototype, Error.prototype);
-Object.defineProperty(SqliteError.prototype, 'name', descriptor);
-module.exports = SqliteError;
-
-
-},
-"./node_modules/better-sqlite3/lib/util.js"(__unused_rspack_module, exports) {
-"use strict";
-
-
-exports.getBooleanOption = (options, key) => {
-	let value = false;
-	if (key in options && typeof (value = options[key]) !== 'boolean') {
-		throw new TypeError(`Expected the "${key}" option to be a boolean`);
-	}
-	return value;
-};
-
-exports.cppdb = Symbol();
-exports.inspect = Symbol.for('nodejs.util.inspect.custom');
-
-
-},
-"./node_modules/better-sqlite3/lib sync recursive"(module) {
-function webpackEmptyContext(req) {
-  var e = new Error("Cannot find module '" + req + "'");
-  e.code = 'MODULE_NOT_FOUND';
-  throw e;
-}
-webpackEmptyContext.keys = () => ([]);
-webpackEmptyContext.resolve = webpackEmptyContext;
-webpackEmptyContext.id = "./node_modules/better-sqlite3/lib sync recursive";
-module.exports = webpackEmptyContext;
-
-
-},
-"./node_modules/bindings/bindings.js"(module, exports, __webpack_require__) {
-/**
- * Module dependencies.
- */
-
-var fs = __webpack_require__("fs"),
-  path = __webpack_require__("path"),
-  fileURLToPath = __webpack_require__("./node_modules/file-uri-to-path/index.js"),
-  join = path.join,
-  dirname = path.dirname,
-  exists =
-    (fs.accessSync &&
-      function(path) {
-        try {
-          fs.accessSync(path);
-        } catch (e) {
-          return false;
-        }
-        return true;
-      }) ||
-    fs.existsSync ||
-    path.existsSync,
-  defaults = {
-    arrow: process.env.NODE_BINDINGS_ARROW || ' → ',
-    compiled: process.env.NODE_BINDINGS_COMPILED_DIR || 'compiled',
-    platform: process.platform,
-    arch: process.arch,
-    nodePreGyp:
-      'node-v' +
-      process.versions.modules +
-      '-' +
-      process.platform +
-      '-' +
-      process.arch,
-    version: process.versions.node,
-    bindings: 'bindings.node',
-    try: [
-      // node-gyp's linked version in the "build" dir
-      ['module_root', 'build', 'bindings'],
-      // node-waf and gyp_addon (a.k.a node-gyp)
-      ['module_root', 'build', 'Debug', 'bindings'],
-      ['module_root', 'build', 'Release', 'bindings'],
-      // Debug files, for development (legacy behavior, remove for node v0.9)
-      ['module_root', 'out', 'Debug', 'bindings'],
-      ['module_root', 'Debug', 'bindings'],
-      // Release files, but manually compiled (legacy behavior, remove for node v0.9)
-      ['module_root', 'out', 'Release', 'bindings'],
-      ['module_root', 'Release', 'bindings'],
-      // Legacy from node-waf, node <= 0.4.x
-      ['module_root', 'build', 'default', 'bindings'],
-      // Production "Release" buildtype binary (meh...)
-      ['module_root', 'compiled', 'version', 'platform', 'arch', 'bindings'],
-      // node-qbs builds
-      ['module_root', 'addon-build', 'release', 'install-root', 'bindings'],
-      ['module_root', 'addon-build', 'debug', 'install-root', 'bindings'],
-      ['module_root', 'addon-build', 'default', 'install-root', 'bindings'],
-      // node-pre-gyp path ./lib/binding/{node_abi}-{platform}-{arch}
-      ['module_root', 'lib', 'binding', 'nodePreGyp', 'bindings']
-    ]
-  };
-
-/**
- * The main `bindings()` function loads the compiled bindings for a given module.
- * It uses V8's Error API to determine the parent filename that this function is
- * being invoked from, which is then used to find the root directory.
- */
-
-function bindings(opts) {
-  // Argument surgery
-  if (typeof opts == 'string') {
-    opts = { bindings: opts };
-  } else if (!opts) {
-    opts = {};
-  }
-
-  // maps `defaults` onto `opts` object
-  Object.keys(defaults).map(function(i) {
-    if (!(i in opts)) opts[i] = defaults[i];
-  });
-
-  // Get the module root
-  if (!opts.module_root) {
-    opts.module_root = exports.getRoot(exports.getFileName());
-  }
-
-  // Ensure the given bindings name ends with .node
-  if (path.extname(opts.bindings) != '.node') {
-    opts.bindings += '.node';
-  }
-
-  // https://github.com/webpack/webpack/issues/4175#issuecomment-342931035
-  var requireFunc =
-     true
-      ? require
-      : 0;
-
-  var tries = [],
-    i = 0,
-    l = opts.try.length,
-    n,
-    b,
-    err;
-
-  for (; i < l; i++) {
-    n = join.apply(
-      null,
-      opts.try[i].map(function(p) {
-        return opts[p] || p;
-      })
-    );
-    tries.push(n);
-    try {
-      b = opts.path ? requireFunc.resolve(n) : requireFunc(n);
-      if (!opts.path) {
-        b.path = n;
-      }
-      return b;
-    } catch (e) {
-      if (e.code !== 'MODULE_NOT_FOUND' &&
-          e.code !== 'QUALIFIED_PATH_RESOLUTION_FAILED' &&
-          !/not find/i.test(e.message)) {
-        throw e;
-      }
-    }
-  }
-
-  err = new Error(
-    'Could not locate the bindings file. Tried:\n' +
-      tries
-        .map(function(a) {
-          return opts.arrow + a;
-        })
-        .join('\n')
-  );
-  err.tries = tries;
-  throw err;
-}
-module.exports = exports = bindings;
-
-/**
- * Gets the filename of the JavaScript file that invokes this function.
- * Used to help find the root directory of a module.
- * Optionally accepts an filename argument to skip when searching for the invoking filename
- */
-
-exports.getFileName = function getFileName(calling_file) {
-  var origPST = Error.prepareStackTrace,
-    origSTL = Error.stackTraceLimit,
-    dummy = {},
-    fileName;
-
-  Error.stackTraceLimit = 10;
-
-  Error.prepareStackTrace = function(e, st) {
-    for (var i = 0, l = st.length; i < l; i++) {
-      fileName = st[i].getFileName();
-      if (fileName !== __filename) {
-        if (calling_file) {
-          if (fileName !== calling_file) {
-            return;
-          }
-        } else {
-          return;
-        }
-      }
-    }
-  };
-
-  // run the 'prepareStackTrace' function above
-  Error.captureStackTrace(dummy);
-  dummy.stack;
-
-  // cleanup
-  Error.prepareStackTrace = origPST;
-  Error.stackTraceLimit = origSTL;
-
-  // handle filename that starts with "file://"
-  var fileSchema = 'file://';
-  if (fileName.indexOf(fileSchema) === 0) {
-    fileName = fileURLToPath(fileName);
-  }
-
-  return fileName;
-};
-
-/**
- * Gets the root directory of a module, given an arbitrary filename
- * somewhere in the module tree. The "root directory" is the directory
- * containing the `package.json` file.
- *
- *   In:  /home/nate/node-native-module/lib/index.js
- *   Out: /home/nate/node-native-module
- */
-
-exports.getRoot = function getRoot(file) {
-  var dir = dirname(file),
-    prev;
-  while (true) {
-    if (dir === '.') {
-      // Avoids an infinite loop in rare cases, like the REPL
-      dir = process.cwd();
-    }
-    if (
-      exists(join(dir, 'package.json')) ||
-      exists(join(dir, 'node_modules'))
-    ) {
-      // Found the 'package.json' file or 'node_modules' dir; we're done
-      return dir;
-    }
-    if (prev === dir) {
-      // Got to the top
-      throw new Error(
-        'Could not find module root given file: "' +
-          file +
-          '". Do you have a `package.json` file? '
-      );
-    }
-    // Try the parent dir next
-    prev = dir;
-    dir = join(dir, '..');
-  }
-};
-
-
-},
-"./node_modules/file-uri-to-path/index.js"(module, __unused_rspack_exports, __webpack_require__) {
-
-/**
- * Module dependencies.
- */
-
-var sep = (__webpack_require__("path")/* .sep */.sep) || '/';
-
-/**
- * Module exports.
- */
-
-module.exports = fileUriToPath;
-
-/**
- * File URI to Path function.
- *
- * @param {String} uri
- * @return {String} path
- * @api public
- */
-
-function fileUriToPath (uri) {
-  if ('string' != typeof uri ||
-      uri.length <= 7 ||
-      'file://' != uri.substring(0, 7)) {
-    throw new TypeError('must pass in a file:// URI to convert to a file path');
-  }
-
-  var rest = decodeURI(uri.substring(7));
-  var firstSlash = rest.indexOf('/');
-  var host = rest.substring(0, firstSlash);
-  var path = rest.substring(firstSlash + 1);
-
-  // 2.  Scheme Definition
-  // As a special case, <host> can be the string "localhost" or the empty
-  // string; this is interpreted as "the machine from which the URL is
-  // being interpreted".
-  if ('localhost' == host) host = '';
-
-  if (host) {
-    host = sep + sep + host;
-  }
-
-  // 3.2  Drives, drive letters, mount points, file system root
-  // Drive letters are mapped into the top of a file URI in various ways,
-  // depending on the implementation; some applications substitute
-  // vertical bar ("|") for the colon after the drive letter, yielding
-  // "file:///c|/tmp/test.txt".  In some cases, the colon is left
-  // unchanged, as in "file:///c:/tmp/test.txt".  In other cases, the
-  // colon is simply omitted, as in "file:///c/tmp/test.txt".
-  path = path.replace(/^(.+)\|/, '$1:');
-
-  // for Windows, we need to invert the path separators from what a URI uses
-  if (sep == '\\') {
-    path = path.replace(/\//g, '\\');
-  }
-
-  if (/^.+\:/.test(path)) {
-    // has Windows drive at beginning of path
-  } else {
-    // unix path…
-    path = sep + path;
-  }
-
-  return host + path;
-}
-
-
-},
 "./src/main/acp/Client.ts"(__unused_rspack_module, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   ACPClient: () => (ACPClient)
@@ -1091,8 +96,10 @@ class ACPClient {
     connection = null;
     // Callback now sends structured objects instead of strings
     onMessageCallback = null;
-    sessionId = null;
+    activeSessionId = null;
     cwd = process.cwd();
+    connected = false;
+    agentCapabilities = null;
     pendingPermissions = new Map();
     constructor(onMessage){
         this.onMessageCallback = onMessage;
@@ -1106,7 +113,7 @@ class ACPClient {
             console.warn(`[Client] No pending permission found for id: ${id}`);
         }
     }
-    async connect(command, args = [], cwd, env) {
+    async connect(command, args = [], cwd, env, options) {
         if (this.process) {
             await this.disconnect();
         }
@@ -1144,6 +151,7 @@ class ACPClient {
                 type: "system",
                 text: `System: Agent process error: ${err.message}`
             });
+            this.connected = false;
         });
         this.process.on("exit", (code)=>{
             var _this_onMessageCallback, _this;
@@ -1154,7 +162,9 @@ class ACPClient {
             });
             this.process = null;
             this.connection = null;
-            this.sessionId = null;
+            this.activeSessionId = null;
+            this.connected = false;
+            this.agentCapabilities = null;
         });
         // Create Stream (Node -> Web Stream adapter)
         if (!this.process.stdout || !this.process.stdin) {
@@ -1183,12 +193,14 @@ class ACPClient {
                 },
                 sessionUpdate: async (params)=>{
                     const update = params.update;
+                    const sessionId = params.sessionId;
                     // Agent Text Message
                     if (update.sessionUpdate === "agent_message_chunk") {
                         if (update.content.type === "text") {
                             var _this_onMessageCallback, _this;
                             (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
                                 type: "agent_text",
+                                sessionId,
                                 text: update.content.text
                             });
                         }
@@ -1197,6 +209,7 @@ class ACPClient {
                             var _this_onMessageCallback1, _this1;
                             (_this_onMessageCallback1 = (_this1 = this).onMessageCallback) === null || _this_onMessageCallback1 === void 0 ? void 0 : _this_onMessageCallback1.call(_this1, {
                                 type: "agent_thought",
+                                sessionId,
                                 text: update.content.text
                             });
                         }
@@ -1204,6 +217,7 @@ class ACPClient {
                         var _this_onMessageCallback2, _this2;
                         (_this_onMessageCallback2 = (_this2 = this).onMessageCallback) === null || _this_onMessageCallback2 === void 0 ? void 0 : _this_onMessageCallback2.call(_this2, {
                             type: "tool_call",
+                            sessionId,
                             toolCallId: update.toolCallId,
                             name: update.title,
                             kind: update.kind,
@@ -1213,6 +227,7 @@ class ACPClient {
                         var _this_onMessageCallback3, _this3;
                         (_this_onMessageCallback3 = (_this3 = this).onMessageCallback) === null || _this_onMessageCallback3 === void 0 ? void 0 : _this_onMessageCallback3.call(_this3, {
                             type: "tool_call_update",
+                            sessionId,
                             toolCallId: update.toolCallId,
                             status: update.status
                         });
@@ -1220,6 +235,7 @@ class ACPClient {
                         var _this_onMessageCallback4, _this4;
                         (_this_onMessageCallback4 = (_this4 = this).onMessageCallback) === null || _this_onMessageCallback4 === void 0 ? void 0 : _this_onMessageCallback4.call(_this4, {
                             type: "agent_info",
+                            sessionId,
                             info: {
                                 commands: update.availableCommands
                             }
@@ -1230,6 +246,7 @@ class ACPClient {
                             var _this_onMessageCallback5, _this5;
                             (_this_onMessageCallback5 = (_this5 = this).onMessageCallback) === null || _this_onMessageCallback5 === void 0 ? void 0 : _this_onMessageCallback5.call(_this5, {
                                 type: "agent_info",
+                                sessionId,
                                 info: modelUpdate
                             });
                         }
@@ -1322,7 +339,6 @@ class ACPClient {
             }), stream);
         // Initialize Protocol
         try {
-            var _this_onMessageCallback, _this, _sessionResult_models_availableModels, _sessionResult_models, _sessionResult_configOptions;
             if (!this.connection) {
                 throw new Error("Connection closed before initialization");
             }
@@ -1342,42 +358,27 @@ class ACPClient {
                 }
             });
             console.log("Initialized:", initResult);
-            // New Session
-            if (!this.connection) {
-                throw new Error("Connection closed before session creation");
-            }
-            const sessionResult = await this.connection.newSession({
-                cwd: this.cwd,
-                mcpServers: []
-            });
-            this.sessionId = sessionResult.sessionId;
-            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
-                type: "system",
-                text: "System: Connected and Session Created."
-            });
-            if ((_sessionResult_models = sessionResult.models) === null || _sessionResult_models === void 0 ? void 0 : (_sessionResult_models_availableModels = _sessionResult_models.availableModels) === null || _sessionResult_models_availableModels === void 0 ? void 0 : _sessionResult_models_availableModels.length) {
-                var _this_onMessageCallback1, _this1;
-                (_this_onMessageCallback1 = (_this1 = this).onMessageCallback) === null || _this_onMessageCallback1 === void 0 ? void 0 : _this_onMessageCallback1.call(_this1, {
-                    type: "agent_info",
-                    info: {
-                        models: sessionResult.models.availableModels,
-                        currentModelId: sessionResult.models.currentModelId
-                    }
+            this.agentCapabilities = (initResult === null || initResult === void 0 ? void 0 : initResult.agentCapabilities) ?? null;
+            this.connected = true;
+            if ((options === null || options === void 0 ? void 0 : options.createSession) !== false) {
+                const sessionId = await this.createSession(this.cwd, true);
+                return {
+                    sessionId
+                };
+            } else {
+                var _this_onMessageCallback, _this;
+                (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                    type: "system",
+                    text: "System: Connected."
                 });
-            } else if ((_sessionResult_configOptions = sessionResult.configOptions) === null || _sessionResult_configOptions === void 0 ? void 0 : _sessionResult_configOptions.length) {
-                const modelUpdate = normalizeModelsFromConfigOptions(sessionResult.configOptions);
-                if (modelUpdate) {
-                    var _this_onMessageCallback2, _this2;
-                    (_this_onMessageCallback2 = (_this2 = this).onMessageCallback) === null || _this_onMessageCallback2 === void 0 ? void 0 : _this_onMessageCallback2.call(_this2, {
-                        type: "agent_info",
-                        info: modelUpdate
-                    });
-                }
+                return {
+                    sessionId: null
+                };
             }
         } catch (e) {
-            var _this_onMessageCallback3, _this3;
+            var _this_onMessageCallback1, _this1;
             console.error("Init failed:", e);
-            (_this_onMessageCallback3 = (_this3 = this).onMessageCallback) === null || _this_onMessageCallback3 === void 0 ? void 0 : _this_onMessageCallback3.call(_this3, {
+            (_this_onMessageCallback1 = (_this1 = this).onMessageCallback) === null || _this_onMessageCallback1 === void 0 ? void 0 : _this_onMessageCallback1.call(_this1, {
                 type: "system",
                 text: `System: Init failed: ${e.message}`
             });
@@ -1385,14 +386,96 @@ class ACPClient {
             throw e;
         }
     }
+    handleSessionInitUpdate(sessionResult) {
+        var _sessionResult_models_availableModels, _sessionResult_models, _sessionResult_configOptions;
+        if (sessionResult === null || sessionResult === void 0 ? void 0 : (_sessionResult_models = sessionResult.models) === null || _sessionResult_models === void 0 ? void 0 : (_sessionResult_models_availableModels = _sessionResult_models.availableModels) === null || _sessionResult_models_availableModels === void 0 ? void 0 : _sessionResult_models_availableModels.length) {
+            var _this_onMessageCallback, _this;
+            (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+                type: "agent_info",
+                info: {
+                    models: sessionResult.models.availableModels,
+                    currentModelId: sessionResult.models.currentModelId
+                }
+            });
+        } else if (sessionResult === null || sessionResult === void 0 ? void 0 : (_sessionResult_configOptions = sessionResult.configOptions) === null || _sessionResult_configOptions === void 0 ? void 0 : _sessionResult_configOptions.length) {
+            const modelUpdate = normalizeModelsFromConfigOptions(sessionResult.configOptions);
+            if (modelUpdate) {
+                var _this_onMessageCallback1, _this1;
+                (_this_onMessageCallback1 = (_this1 = this).onMessageCallback) === null || _this_onMessageCallback1 === void 0 ? void 0 : _this_onMessageCallback1.call(_this1, {
+                    type: "agent_info",
+                    info: modelUpdate
+                });
+            }
+        }
+    }
+    async createSession(cwd, isInitial = false) {
+        var _this_onMessageCallback, _this;
+        if (!this.connection) {
+            throw new Error("Connection closed before session creation");
+        }
+        const sessionResult = await this.connection.newSession({
+            cwd: cwd || this.cwd,
+            mcpServers: []
+        });
+        this.activeSessionId = sessionResult.sessionId;
+        (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+            type: "system",
+            text: isInitial ? "System: Connected and Session Created." : "System: Session Created."
+        });
+        this.handleSessionInitUpdate(sessionResult);
+        return sessionResult.sessionId;
+    }
+    async loadSession(sessionId, cwd) {
+        var _this_onMessageCallback, _this;
+        if (!this.connection || !this.connection.loadSession) {
+            throw new Error("Agent does not support session/load");
+        }
+        const result = await this.connection.loadSession({
+            sessionId,
+            cwd: cwd || this.cwd,
+            mcpServers: []
+        });
+        this.activeSessionId = sessionId;
+        (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+            type: "system",
+            text: "System: Session Loaded."
+        });
+        this.handleSessionInitUpdate(result);
+    }
+    async resumeSession(sessionId, cwd) {
+        var _this_onMessageCallback, _this;
+        if (!this.connection || !this.connection.unstable_resumeSession) {
+            throw new Error("Agent does not support session/resume");
+        }
+        const result = await this.connection.unstable_resumeSession({
+            sessionId,
+            cwd: cwd || this.cwd,
+            mcpServers: []
+        });
+        this.activeSessionId = sessionId;
+        (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
+            type: "system",
+            text: "System: Session Resumed."
+        });
+        this.handleSessionInitUpdate(result);
+    }
+    setActiveSession(sessionId) {
+        this.activeSessionId = sessionId;
+    }
+    isConnected() {
+        return this.connected && !!this.connection;
+    }
+    getCapabilities() {
+        return this.agentCapabilities;
+    }
     async sendMessage(text) {
-        if (!this.connection || !this.sessionId) {
+        if (!this.connection || !this.activeSessionId) {
             throw new Error("Not connected");
         }
         // Send Prompt
         try {
             const response = await this.connection.prompt({
-                sessionId: this.sessionId,
+                sessionId: this.activeSessionId,
                 prompt: [
                     {
                         type: "text",
@@ -1421,13 +504,13 @@ class ACPClient {
         }
     }
     async setModel(modelId) {
-        if (!this.connection || !this.sessionId) {
+        if (!this.connection || !this.activeSessionId) {
             throw new Error("Not connected");
         }
         try {
             var _this_onMessageCallback, _this;
             await this.connection.unstable_setSessionModel({
-                sessionId: this.sessionId,
+                sessionId: this.activeSessionId,
                 modelId
             });
             (_this_onMessageCallback = (_this = this).onMessageCallback) === null || _this_onMessageCallback === void 0 ? void 0 : _this_onMessageCallback.call(_this, {
@@ -1463,25 +546,31 @@ class ACPClient {
             this.process = null;
         }
         this.connection = null;
-        this.sessionId = null;
+        this.activeSessionId = null;
+        this.connected = false;
+        this.agentCapabilities = null;
     }
 }
 
 
 },
 "./src/main/db/store.ts"(__unused_rspack_module, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
+  createTask: () => (createTask),
+  deleteTask: () => (deleteTask),
   getSetting: () => (getSetting),
+  getTask: () => (getTask),
   initDB: () => (initDB),
-  setSetting: () => (setSetting)
+  listTasks: () => (listTasks),
+  setSetting: () => (setSetting),
+  updateTask: () => (updateTask)
 });
 /* import */ var node_path__rspack_import_0 = __webpack_require__("node:path");
 /* import */ var node_path__rspack_import_0_default = /*#__PURE__*/__webpack_require__.n(node_path__rspack_import_0);
 /* import */ var electron__rspack_import_1 = __webpack_require__("electron");
 /* import */ var electron__rspack_import_1_default = /*#__PURE__*/__webpack_require__.n(electron__rspack_import_1);
-/* import */ var better_sqlite3__rspack_import_2 = __webpack_require__("./node_modules/better-sqlite3/lib/index.js");
+/* import */ var better_sqlite3__rspack_import_2 = __webpack_require__("better-sqlite3");
 /* import */ var better_sqlite3__rspack_import_2_default = /*#__PURE__*/__webpack_require__.n(better_sqlite3__rspack_import_2);
 
 
@@ -1498,6 +587,22 @@ const initDB = ()=>{
       CREATE TABLE IF NOT EXISTS settings (
         key TEXT PRIMARY KEY,
         value TEXT
+      )
+    `);
+        db.exec(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        workspace TEXT NOT NULL,
+        agent_command TEXT NOT NULL,
+        agent_env TEXT,
+        messages TEXT,
+        session_id TEXT,
+        model_id TEXT,
+        token_usage TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        last_active_at INTEGER NOT NULL
       )
     `);
     } catch (e) {
@@ -1524,61 +629,136 @@ const getSetting = (key)=>{
         return null;
     }
 };
+const parseJson = (value, fallback)=>{
+    if (!value) return fallback;
+    try {
+        return JSON.parse(value);
+    } catch  {
+        return fallback;
+    }
+};
+const normalizeTaskRow = (row)=>({
+        id: row.id,
+        title: row.title,
+        workspace: row.workspace,
+        agentCommand: row.agent_command,
+        agentEnv: parseJson(row.agent_env, {}),
+        messages: parseJson(row.messages, []),
+        sessionId: row.session_id ?? null,
+        modelId: row.model_id ?? null,
+        tokenUsage: parseJson(row.token_usage, null),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        lastActiveAt: row.last_active_at
+    });
+const listTasks = ()=>{
+    if (!db) return [];
+    try {
+        const stmt = db.prepare("SELECT * FROM tasks ORDER BY last_active_at DESC, created_at DESC");
+        const rows = stmt.all();
+        return rows.map(normalizeTaskRow);
+    } catch (e) {
+        console.error("[DB] Failed to list tasks:", e);
+        return [];
+    }
+};
+const getTask = (id)=>{
+    if (!db) return null;
+    try {
+        const stmt = db.prepare("SELECT * FROM tasks WHERE id = ?");
+        const row = stmt.get(id);
+        return row ? normalizeTaskRow(row) : null;
+    } catch (e) {
+        console.error(`[DB] Failed to get task ${id}:`, e);
+        return null;
+    }
+};
+const createTask = (task)=>{
+    if (!db) return;
+    try {
+        const stmt = db.prepare(`
+      INSERT INTO tasks (
+        id, title, workspace, agent_command, agent_env, messages,
+        session_id, model_id, token_usage, created_at, updated_at, last_active_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+        stmt.run(task.id, task.title, task.workspace, task.agentCommand, JSON.stringify(task.agentEnv ?? {}), JSON.stringify(task.messages ?? []), task.sessionId, task.modelId, JSON.stringify(task.tokenUsage ?? null), task.createdAt, task.updatedAt, task.lastActiveAt);
+    } catch (e) {
+        console.error(`[DB] Failed to create task ${task.id}:`, e);
+    }
+};
+const updateTask = (id, updates)=>{
+    if (!db) return;
+    const fields = [];
+    const values = [];
+    const setField = (field, value)=>{
+        fields.push(`${field} = ?`);
+        values.push(value);
+    };
+    if (updates.title !== undefined) setField("title", updates.title);
+    if (updates.workspace !== undefined) setField("workspace", updates.workspace);
+    if (updates.agentCommand !== undefined) setField("agent_command", updates.agentCommand);
+    if (updates.agentEnv !== undefined) setField("agent_env", JSON.stringify(updates.agentEnv ?? {}));
+    if (updates.messages !== undefined) setField("messages", JSON.stringify(updates.messages ?? []));
+    if (updates.sessionId !== undefined) setField("session_id", updates.sessionId);
+    if (updates.modelId !== undefined) setField("model_id", updates.modelId);
+    if (updates.tokenUsage !== undefined) setField("token_usage", JSON.stringify(updates.tokenUsage ?? null));
+    if (updates.createdAt !== undefined) setField("created_at", updates.createdAt);
+    if (updates.updatedAt !== undefined) setField("updated_at", updates.updatedAt);
+    if (updates.lastActiveAt !== undefined) setField("last_active_at", updates.lastActiveAt);
+    if (fields.length === 0) return;
+    try {
+        const stmt = db.prepare(`UPDATE tasks SET ${fields.join(", ")} WHERE id = ?`);
+        stmt.run(...values, id);
+    } catch (e) {
+        console.error(`[DB] Failed to update task ${id}:`, e);
+    }
+};
+const deleteTask = (id)=>{
+    if (!db) return;
+    try {
+        const stmt = db.prepare("DELETE FROM tasks WHERE id = ?");
+        stmt.run(id);
+    } catch (e) {
+        console.error(`[DB] Failed to delete task ${id}:`, e);
+    }
+};
 
+
+},
+"better-sqlite3"(module) {
+module.exports = require("better-sqlite3");
 
 },
 "electron"(module) {
-"use strict";
 module.exports = require("electron");
 
 },
-"fs"(module) {
-"use strict";
-module.exports = require("fs");
-
-},
 "node:child_process"(module) {
-"use strict";
 module.exports = require("node:child_process");
 
 },
 "node:fs"(module) {
-"use strict";
 module.exports = require("node:fs");
 
 },
 "node:fs/promises"(module) {
-"use strict";
 module.exports = require("node:fs/promises");
 
 },
 "node:path"(module) {
-"use strict";
 module.exports = require("node:path");
 
 },
 "node:stream"(module) {
-"use strict";
 module.exports = require("node:stream");
 
 },
 "node:util"(module) {
-"use strict";
 module.exports = require("node:util");
 
 },
-"path"(module) {
-"use strict";
-module.exports = require("path");
-
-},
-"util"(module) {
-"use strict";
-module.exports = require("util");
-
-},
 "./node_modules/@agentclientprotocol/sdk/dist/acp.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   AGENT_METHODS: () => (/* reexport safe */ _schema_index_js__rspack_import_0.AGENT_METHODS),
@@ -2568,7 +1748,6 @@ class RequestError extends Error {
 
 },
 "./node_modules/@agentclientprotocol/sdk/dist/schema/index.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   AGENT_METHODS: () => (AGENT_METHODS),
@@ -2606,7 +1785,6 @@ const PROTOCOL_VERSION = 1;
 
 },
 "./node_modules/@agentclientprotocol/sdk/dist/schema/zod.gen.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   zAgentCapabilities: () => (zAgentCapabilities),
@@ -4325,7 +3503,6 @@ const zClientResponse = zod_v4__rspack_import_0.z.union([
 
 },
 "./node_modules/@agentclientprotocol/sdk/dist/stream.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   ndJsonStream: () => (ndJsonStream)
@@ -4397,7 +3574,6 @@ function ndJsonStream(output, input) {
 
 },
 "./node_modules/zod/v4/classic/checks.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   endsWith: () => (/* reexport safe */ _core_index_js__rspack_import_0._endsWith),
@@ -4436,7 +3612,6 @@ __webpack_require__.d(__webpack_exports__, {
 
 },
 "./node_modules/zod/v4/classic/coerce.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   bigint: () => (bigint),
@@ -4468,7 +3643,6 @@ function date(params) {
 
 },
 "./node_modules/zod/v4/classic/compat.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   $brand: () => (/* reexport safe */ _core_index_js__rspack_import_0.$brand),
@@ -4514,7 +3688,6 @@ var ZodFirstPartyTypeKind;
 
 },
 "./node_modules/zod/v4/classic/errors.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   ZodError: () => (ZodError),
@@ -4574,7 +3747,6 @@ const ZodRealError = _core_index_js__rspack_import_0.$constructor("ZodError", in
 
 },
 "./node_modules/zod/v4/classic/external.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   $brand: () => (/* reexport safe */ _core_index_js__rspack_import_0.$brand),
@@ -4850,7 +4022,6 @@ __webpack_require__.d(__webpack_exports__, {
 
 },
 "./node_modules/zod/v4/classic/from-json-schema.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   fromJSONSchema: () => (fromJSONSchema)
@@ -5447,7 +4618,6 @@ function fromJSONSchema(schema, params) {
 
 },
 "./node_modules/zod/v4/classic/index.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   $brand: () => (/* reexport safe */ _external_js__rspack_import_0.$brand),
@@ -5698,7 +4868,6 @@ __webpack_require__.d(__webpack_exports__, {
 
 },
 "./node_modules/zod/v4/classic/iso.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   ZodISODate: () => (ZodISODate),
@@ -5746,7 +4915,6 @@ function duration(params) {
 
 },
 "./node_modules/zod/v4/classic/parse.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   decode: () => (decode),
@@ -5783,7 +4951,6 @@ const safeDecodeAsync = /* @__PURE__ */ _core_index_js__rspack_import_0._safeDec
 
 },
 "./node_modules/zod/v4/classic/schemas.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   ZodAny: () => (ZodAny),
@@ -7118,7 +6285,6 @@ function preprocess(fn, schema) {
 
 },
 "./node_modules/zod/v4/core/api.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   TimePrecision: () => (TimePrecision),
@@ -8325,7 +7491,6 @@ function _stringFormat(Class, format, fnOrRegex, _params = {}) {
 
 },
 "./node_modules/zod/v4/core/checks.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   $ZodCheck: () => ($ZodCheck),
@@ -8933,7 +8098,6 @@ const $ZodCheckOverwrite = /*@__PURE__*/ _core_js__rspack_import_0.$constructor(
 
 },
 "./node_modules/zod/v4/core/core.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   $ZodAsyncError: () => ($ZodAsyncError),
@@ -9024,7 +8188,6 @@ function config(newConfig) {
 
 },
 "./node_modules/zod/v4/core/doc.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   Doc: () => (Doc)
@@ -9068,7 +8231,6 @@ class Doc {
 
 },
 "./node_modules/zod/v4/core/errors.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   $ZodError: () => ($ZodError),
@@ -9267,7 +8429,6 @@ function prettifyError(error) {
 
 },
 "./node_modules/zod/v4/core/index.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   $ZodAny: () => (/* reexport safe */ _schemas_js__rspack_import_3.$ZodAny),
@@ -9580,7 +8741,6 @@ __webpack_require__.d(__webpack_exports__, {
 
 },
 "./node_modules/zod/v4/core/json-schema-generator.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   JSONSchemaGenerator: () => (JSONSchemaGenerator)
@@ -9686,7 +8846,6 @@ class JSONSchemaGenerator {
 
 },
 "./node_modules/zod/v4/core/json-schema-processors.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   allProcessors: () => (allProcessors),
@@ -10342,14 +9501,12 @@ function toJSONSchema(input, params) {
 
 },
 "./node_modules/zod/v4/core/json-schema.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 
 
 
 },
 "./node_modules/zod/v4/core/parse.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   _decode: () => (_decode),
@@ -10477,7 +9634,6 @@ const safeDecodeAsync = /* @__PURE__*/ _safeDecodeAsync(_errors_js__rspack_impor
 
 },
 "./node_modules/zod/v4/core/regexes.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   base64: () => (base64),
@@ -10677,7 +9833,6 @@ const sha512_base64url = /*@__PURE__*/ fixedBase64url(86);
 
 },
 "./node_modules/zod/v4/core/registries.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   $ZodRegistry: () => ($ZodRegistry),
@@ -10741,7 +9896,6 @@ const globalRegistry = globalThis.__zod_globalRegistry;
 
 },
 "./node_modules/zod/v4/core/schemas.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   $ZodAny: () => ($ZodAny),
@@ -12928,7 +12082,6 @@ function handleRefineResult(result, payload, input, inst) {
 
 },
 "./node_modules/zod/v4/core/to-json-schema.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   createStandardJSONSchemaMethod: () => (createStandardJSONSchemaMethod),
@@ -13380,7 +12533,6 @@ const createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params)
 
 },
 "./node_modules/zod/v4/core/util.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   BIGINT_FORMAT_RANGES: () => (BIGINT_FORMAT_RANGES),
@@ -14101,7 +13253,6 @@ class Class {
 
 },
 "./node_modules/zod/v4/core/versions.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   version: () => (version)
@@ -14115,7 +13266,6 @@ const version = {
 
 },
 "./node_modules/zod/v4/index.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   $brand: () => (/* reexport safe */ _classic_index_js__rspack_import_0.$brand),
@@ -14365,7 +13515,6 @@ __webpack_require__.d(__webpack_exports__, {
 
 },
 "./node_modules/zod/v4/locales/ar.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -14481,7 +13630,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/az.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -14596,7 +13744,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/be.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -14762,7 +13909,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/bg.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -14892,7 +14038,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/ca.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -15009,7 +14154,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/cs.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -15130,7 +14274,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/da.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -15255,7 +14398,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/de.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -15373,7 +14515,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/en.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -15492,7 +14633,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/eo.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -15611,7 +14751,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/es.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -15753,7 +14892,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/fa.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -15877,7 +15015,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/fi.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -15999,7 +15136,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/fr-CA.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -16116,7 +15252,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/fr.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -16234,7 +15369,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/he.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -16458,7 +15592,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/hu.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -16576,7 +15709,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/hy.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -16733,7 +15865,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/id.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -16849,7 +15980,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/index.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   ar: () => (/* reexport safe */ _ar_js__rspack_import_0["default"]),
@@ -17004,7 +16134,6 @@ __webpack_require__.d(__webpack_exports__, {
 
 },
 "./node_modules/zod/v4/locales/is.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -17123,7 +16252,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/it.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -17241,7 +16369,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/ja.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -17358,7 +16485,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/ka.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -17480,7 +16606,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/kh.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -17495,7 +16620,6 @@ __webpack_require__.d(__webpack_exports__, {
 
 },
 "./node_modules/zod/v4/locales/km.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -17615,7 +16739,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/ko.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -17736,7 +16859,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/lt.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -17949,7 +17071,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/mk.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -18068,7 +17189,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/ms.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -18185,7 +17305,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/nl.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -18305,7 +17424,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/no.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -18423,7 +17541,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/ota.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -18542,7 +17659,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/pl.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -18661,7 +17777,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/ps.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -18785,7 +17900,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/pt.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -18903,7 +18017,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/ru.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -19069,7 +18182,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/sl.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -19188,7 +18300,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/sv.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -19308,7 +18419,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/ta.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -19428,7 +18538,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/th.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -19548,7 +18657,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/tr.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -19663,7 +18771,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/ua.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -19678,7 +18785,6 @@ __webpack_require__.d(__webpack_exports__, {
 
 },
 "./node_modules/zod/v4/locales/uk.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -19796,7 +18902,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/ur.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -19916,7 +19021,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/uz.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -20035,7 +19139,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/vi.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -20153,7 +19256,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/yo.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -20270,7 +19372,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/zh-CN.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -20389,7 +19490,6 @@ const error = () => {
 
 },
 "./node_modules/zod/v4/locales/zh-TW.js"(__unused_rspack___webpack_module__, __webpack_exports__, __webpack_require__) {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   "default": () => (/* export default binding */ __rspack_default_export)
@@ -20567,9 +19667,8 @@ __webpack_require__.r = (exports) => {
 };
 })();
 var __webpack_exports__ = {};
-// This entry needs to be wrapped in an IIFE because it needs to be in strict mode.
+// This entry needs to be wrapped in an IIFE because it needs to be isolated against other modules in the chunk.
 (() => {
-"use strict";
 __webpack_require__.r(__webpack_exports__);
 __webpack_require__.d(__webpack_exports__, {
   isDev: () => (isDev),
@@ -20600,6 +19699,7 @@ __webpack_require__.d(__webpack_exports__, {
 const execAsync = (0,node_util__rspack_import_4.promisify)(node_child_process__rspack_import_3.exec);
 let mainWindow = null;
 let acpClient = null;
+let activeConnectionKey = null;
 const isDev = !electron__rspack_import_1.app.isPackaged;
 const loadUrl = isDev ? `http://localhost:${"8088"}` : `file://${node_path__rspack_import_0_default().resolve(__dirname, "../render/index.html")}`;
 const getAgentsDir = ()=>node_path__rspack_import_0_default().join(electron__rspack_import_1.app.getPath("userData"), "agents");
@@ -20660,8 +19760,42 @@ const initIpc = ()=>{
     electron__rspack_import_1.ipcMain.handle("db:set-last-workspace", (_, workspace)=>{
         (0,_db_store__rspack_import_7.setSetting)("last_workspace", workspace);
     });
+    electron__rspack_import_1.ipcMain.handle("db:get-active-task", ()=>{
+        return (0,_db_store__rspack_import_7.getSetting)("active_task_id");
+    });
+    electron__rspack_import_1.ipcMain.handle("db:set-active-task", (_, taskId)=>{
+        if (taskId) {
+            (0,_db_store__rspack_import_7.setSetting)("active_task_id", taskId);
+        } else {
+            (0,_db_store__rspack_import_7.setSetting)("active_task_id", "");
+        }
+    });
+    electron__rspack_import_1.ipcMain.handle("db:list-tasks", ()=>{
+        return (0,_db_store__rspack_import_7.listTasks)();
+    });
+    electron__rspack_import_1.ipcMain.handle("db:get-task", (_, taskId)=>{
+        return (0,_db_store__rspack_import_7.getTask)(taskId);
+    });
+    electron__rspack_import_1.ipcMain.handle("db:create-task", (_, task)=>{
+        (0,_db_store__rspack_import_7.createTask)(task);
+        return {
+            success: true
+        };
+    });
+    electron__rspack_import_1.ipcMain.handle("db:update-task", (_, taskId, updates)=>{
+        (0,_db_store__rspack_import_7.updateTask)(taskId, updates);
+        return {
+            success: true
+        };
+    });
+    electron__rspack_import_1.ipcMain.handle("db:delete-task", (_, taskId)=>{
+        (0,_db_store__rspack_import_7.deleteTask)(taskId);
+        return {
+            success: true
+        };
+    });
     // ACP IPC Handlers
-    electron__rspack_import_1.ipcMain.handle("agent:connect", async (_, command, cwd, env)=>{
+    electron__rspack_import_1.ipcMain.handle("agent:connect", async (_, command, cwd, env, options)=>{
         if (!acpClient) {
             acpClient = new _acp_Client__rspack_import_2.ACPClient((msg)=>{
                 // Forward agent messages to renderer
@@ -20710,10 +19844,28 @@ const initIpc = ()=>{
                 cmd = localBin;
             }
         }
+        const connectionKey = JSON.stringify({
+            cmd,
+            args,
+            cwd: cwd || process.cwd(),
+            env: env || null
+        });
         try {
-            await acpClient.connect(cmd, args, cwd, env);
+            if ((options === null || options === void 0 ? void 0 : options.reuseIfSame) && acpClient.isConnected() && activeConnectionKey === connectionKey) {
+                return {
+                    success: true,
+                    reused: true,
+                    sessionId: null
+                };
+            }
+            const result = await acpClient.connect(cmd, args, cwd, env, {
+                createSession: (options === null || options === void 0 ? void 0 : options.createSession) ?? true
+            });
+            activeConnectionKey = connectionKey;
             return {
-                success: true
+                success: true,
+                reused: false,
+                sessionId: (result === null || result === void 0 ? void 0 : result.sessionId) ?? null
             };
         } catch (e) {
             console.error("Connect error:", e);
@@ -20926,6 +20078,49 @@ const initIpc = ()=>{
             throw new Error("Agent not connected");
         }
     });
+    electron__rspack_import_1.ipcMain.handle("agent:get-capabilities", async ()=>{
+        if (!acpClient) {
+            return null;
+        }
+        return acpClient.getCapabilities();
+    });
+    electron__rspack_import_1.ipcMain.handle("agent:new-session", async (_, cwd)=>{
+        if (!acpClient) {
+            throw new Error("Agent not connected");
+        }
+        const sessionId = await acpClient.createSession(cwd);
+        return {
+            success: true,
+            sessionId
+        };
+    });
+    electron__rspack_import_1.ipcMain.handle("agent:load-session", async (_, sessionId, cwd)=>{
+        if (!acpClient) {
+            throw new Error("Agent not connected");
+        }
+        await acpClient.loadSession(sessionId, cwd);
+        return {
+            success: true
+        };
+    });
+    electron__rspack_import_1.ipcMain.handle("agent:resume-session", async (_, sessionId, cwd)=>{
+        if (!acpClient) {
+            throw new Error("Agent not connected");
+        }
+        await acpClient.resumeSession(sessionId, cwd);
+        return {
+            success: true
+        };
+    });
+    electron__rspack_import_1.ipcMain.handle("agent:set-active-session", async (_, sessionId)=>{
+        if (!acpClient) {
+            throw new Error("Agent not connected");
+        }
+        acpClient.setActiveSession(sessionId);
+        return {
+            success: true
+        };
+    });
     electron__rspack_import_1.ipcMain.handle("agent:set-model", async (_, modelId)=>{
         try {
             if (!acpClient) {
@@ -20944,6 +20139,7 @@ const initIpc = ()=>{
         if (acpClient) {
             await acpClient.disconnect();
             acpClient = null;
+            activeConnectionKey = null;
         }
         return {
             success: true

@@ -21,6 +21,7 @@ import SettingsModal from "./SettingsModal";
 import WorkspaceWelcome from "./WorkspaceWelcome";
 
 // --- Types ---
+declare const DEBUG: string | undefined;
 
 interface ToolCall {
   id: string;
@@ -103,6 +104,22 @@ interface IncomingMessage {
   options?: any[];
   tool?: string;
   info?: Partial<AgentInfoState>;
+  sessionId?: string;
+}
+
+interface Task {
+  id: string;
+  title: string;
+  workspace: string;
+  agentCommand: string;
+  agentEnv: Record<string, string>;
+  messages: Message[];
+  sessionId: string | null;
+  modelId: string | null;
+  tokenUsage: TokenUsage | null;
+  createdAt: number;
+  updatedAt: number;
+  lastActiveAt: number;
 }
 
 // --- Components ---
@@ -353,7 +370,8 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
 // --- Main App ---
 
 const App = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
   const [agentCommand, setAgentCommand] = useState(DEFAULT_QWEN_COMMAND);
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
@@ -370,6 +388,15 @@ const App = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
+  const [agentCapabilities, setAgentCapabilities] = useState<any | null>(null);
+  const [agentMessageLog, setAgentMessageLog] = useState<string[]>([]);
+  const showDebug =
+    String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
+  const [taskMenu, setTaskMenu] = useState<{
+    taskId: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<{
     state: "connecting" | "connected" | "error" | "disconnected";
     message: string;
@@ -378,9 +405,51 @@ const App = () => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoConnectAttempted = useRef(false);
   const connectInFlight = useRef(false);
+  const sessionLoadInFlight = useRef(false);
 
   // Ref to track current generating message ID for stream updates
   const currentAgentMsgId = useRef<string | null>(null);
+  const activeTask = tasks.find((task) => task.id === activeTaskId) || null;
+  const messages = activeTask?.messages ?? [];
+
+  const persistTaskUpdates = (taskId: string, updates: Partial<Task>) => {
+    window.electron.invoke("db:update-task", taskId, updates);
+  };
+
+  const applyTaskUpdates = (taskId: string, updates: Partial<Task>) => {
+    setTasks((prev) => {
+      const next = prev.map((task) =>
+        task.id === taskId ? { ...task, ...updates } : task,
+      );
+      if (updates.lastActiveAt !== undefined) {
+        return [...next].sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+      }
+      return next;
+    });
+    persistTaskUpdates(taskId, updates);
+  };
+
+  const clearAllSessionIds = () => {
+    setTasks((prev) => {
+      const next = prev.map((task) => ({ ...task, sessionId: null }));
+      next.forEach((task) => {
+        persistTaskUpdates(task.id, { sessionId: null });
+      });
+      return next;
+    });
+  };
+
+  const syncActiveTaskState = (task: Task | null) => {
+    if (!task) return;
+    setCurrentWorkspace(task.workspace);
+    setAgentCommand(task.agentCommand);
+    setAgentEnv(task.agentEnv || {});
+    setAgentInfo((prev) => ({
+      ...prev,
+      currentModelId: task.modelId ?? prev.currentModelId,
+      tokenUsage: task.tokenUsage ?? null,
+    }));
+  };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Setup once
   useEffect(() => {
@@ -388,21 +457,59 @@ const App = () => {
     const removeListener = window.electron.on(
       "agent:message",
       (msg: IncomingMessage | string) => {
-        // Normalize
         const data: IncomingMessage =
           typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
+        console.log("[agent:message]", data);
+        setAgentMessageLog((prev) => {
+          const next = [
+            `[${new Date().toISOString()}] ${JSON.stringify(data)}`,
+            ...prev,
+          ];
+          return next.slice(0, 50);
+        });
         handleIncomingMessage(data);
       },
     );
 
-    // Load last workspace
-    window.electron
-      .invoke("db:get-last-workspace")
-      .then((lastWs: string | null) => {
-        if (lastWs) {
-          setCurrentWorkspace(lastWs);
+    const loadInitialState = async () => {
+      const [storedTasks, storedActiveTaskId, lastWs] = await Promise.all([
+        window.electron.invoke("db:list-tasks"),
+        window.electron.invoke("db:get-active-task"),
+        window.electron.invoke("db:get-last-workspace"),
+      ]);
+
+      const loadedTasks = Array.isArray(storedTasks)
+        ? storedTasks.map((task) => ({
+            ...task,
+            agentEnv: task.agentEnv || {},
+            messages: Array.isArray(task.messages) ? task.messages : [],
+            sessionId: task.sessionId ?? null,
+            modelId: task.modelId ?? null,
+            tokenUsage: task.tokenUsage ?? null,
+          }))
+        : [];
+      setTasks(loadedTasks);
+
+      const resolvedActiveId = loadedTasks.find(
+        (task) => task.id === storedActiveTaskId,
+      )
+        ? storedActiveTaskId
+        : (loadedTasks[0]?.id ?? null);
+
+      if (resolvedActiveId) {
+        setActiveTaskId(resolvedActiveId);
+        const nextTask = loadedTasks.find(
+          (task) => task.id === resolvedActiveId,
+        );
+        if (nextTask) {
+          syncActiveTaskState(nextTask);
         }
-      });
+      } else if (lastWs) {
+        setCurrentWorkspace(lastWs);
+      }
+    };
+
+    loadInitialState();
 
     return () => {
       removeListener();
@@ -415,6 +522,55 @@ const App = () => {
       window.electron.invoke("db:set-last-workspace", currentWorkspace);
     }
   }, [currentWorkspace]);
+
+  useEffect(() => {
+    window.electron.invoke("db:set-active-task", activeTaskId);
+  }, [activeTaskId]);
+
+  useEffect(() => {
+    if (!activeTaskId) {
+      return;
+    }
+    const task = tasks.find((entry) => entry.id === activeTaskId);
+    if (!task?.modelId && agentInfo.currentModelId) {
+      applyTaskUpdates(activeTaskId, {
+        modelId: agentInfo.currentModelId,
+        updatedAt: Date.now(),
+      });
+    }
+  }, [activeTaskId, agentInfo.currentModelId, tasks]);
+
+  useEffect(() => {
+    if (!isConnected) {
+      setAgentCapabilities(null);
+      return;
+    }
+    window.electron
+      .invoke("agent:get-capabilities")
+      .then((caps) => setAgentCapabilities(caps))
+      .catch(() => setAgentCapabilities(null));
+  }, [isConnected]);
+
+  useEffect(() => {
+    if (!activeTaskId && agentMessageLog.length > 0) {
+      setAgentMessageLog([]);
+    }
+  }, [activeTaskId, agentMessageLog.length]);
+
+  useEffect(() => {
+    const handleClick = () => setTaskMenu(null);
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setTaskMenu(null);
+      }
+    };
+    window.addEventListener("click", handleClick);
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      window.removeEventListener("click", handleClick);
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, []);
 
   // Auto-resize textarea
   // biome-ignore lint/correctness/useExhaustiveDependencies: Logic requires this
@@ -435,40 +591,88 @@ const App = () => {
   }, [inputText]);
 
   const handleIncomingMessage = (data: IncomingMessage) => {
+    if (
+      !activeTaskId &&
+      !data.sessionId &&
+      data.type !== "system" &&
+      data.type !== "agent_info"
+    ) {
+      return;
+    }
+    const resolveTaskId = (list: Task[]) => {
+      if (data.sessionId) {
+        const match = list.find((task) => task.sessionId === data.sessionId);
+        return match?.id ?? activeTaskId;
+      }
+      return activeTaskId;
+    };
     if (data.type === "agent_info") {
+      const resolvedTaskId = data.sessionId
+        ? (tasks.find((task) => task.sessionId === data.sessionId)?.id ??
+          activeTaskId)
+        : activeTaskId;
       const nextUsage = data.info?.tokenUsage ?? null;
-      if (nextUsage) {
-        setMessages((prev) => {
-          const lastAgentIndex = [...prev]
-            .reverse()
-            .findIndex((msg) => msg.sender === "agent");
-          if (lastAgentIndex === -1) {
-            return prev;
+      const baseUsage = activeTask?.tokenUsage ?? null;
+      const mergedUsage = nextUsage
+        ? {
+            promptTokens:
+              (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
+            completionTokens:
+              (baseUsage?.completionTokens ?? 0) +
+              (nextUsage.completionTokens ?? 0),
+            totalTokens:
+              (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
           }
-          const realIndex = prev.length - 1 - lastAgentIndex;
-          return prev.map((msg, idx) =>
-            idx === realIndex ? { ...msg, tokenUsage: nextUsage } : msg,
-          );
-        });
+        : baseUsage;
+      if (nextUsage) {
+        setTasks((prev) =>
+          prev.map((task) => {
+            if (!resolvedTaskId || task.id !== resolvedTaskId) return task;
+            const lastAgentIndex = [...task.messages]
+              .reverse()
+              .findIndex((msg) => msg.sender === "agent");
+            if (lastAgentIndex === -1) {
+              return task;
+            }
+            const realIndex = task.messages.length - 1 - lastAgentIndex;
+            const nextMessages = task.messages.map((msg, idx) =>
+              idx === realIndex ? { ...msg, tokenUsage: nextUsage } : msg,
+            );
+            const updatedAt = Date.now();
+            persistTaskUpdates(task.id, {
+              messages: nextMessages,
+              updatedAt,
+              lastActiveAt: updatedAt,
+            });
+            return {
+              ...task,
+              messages: nextMessages,
+              updatedAt,
+              lastActiveAt: updatedAt,
+            };
+          }),
+        );
       }
       setAgentInfo((prev) => ({
         models: data.info?.models ?? prev.models,
         currentModelId: data.info?.currentModelId ?? prev.currentModelId,
         commands: data.info?.commands ?? prev.commands,
-        tokenUsage: nextUsage
-          ? {
-              promptTokens:
-                (prev.tokenUsage?.promptTokens ?? 0) +
-                (nextUsage.promptTokens ?? 0),
-              completionTokens:
-                (prev.tokenUsage?.completionTokens ?? 0) +
-                (nextUsage.completionTokens ?? 0),
-              totalTokens:
-                (prev.tokenUsage?.totalTokens ?? 0) +
-                (nextUsage.totalTokens ?? 0),
-            }
-          : prev.tokenUsage,
+        tokenUsage: mergedUsage,
       }));
+      if (data.info?.currentModelId && resolvedTaskId) {
+        applyTaskUpdates(resolvedTaskId, {
+          modelId: data.info.currentModelId,
+          updatedAt: Date.now(),
+          lastActiveAt: Date.now(),
+        });
+      }
+      if (mergedUsage && resolvedTaskId) {
+        applyTaskUpdates(resolvedTaskId, {
+          tokenUsage: mergedUsage,
+          updatedAt: Date.now(),
+          lastActiveAt: Date.now(),
+        });
+      }
       return;
     }
 
@@ -480,40 +684,81 @@ const App = () => {
         content.includes("Agent process error")
       ) {
         setIsConnected(false);
+        clearAllSessionIds();
+        sessionLoadInFlight.current = false;
         setConnectionStatus({
           state: "error",
           message: content.replace(/^System:\s*/, ""),
         });
         return;
       }
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          sender: "system",
-          content,
-        },
-      ]);
+      const resolvedTaskId = resolveTaskId(tasks);
+      const targetTask = resolvedTaskId
+        ? tasks.find((task) => task.id === resolvedTaskId)
+        : null;
+      const baseMessages = targetTask?.messages ?? messages;
+      if (resolvedTaskId) {
+        const updatedAt = Date.now();
+        applyTaskUpdates(resolvedTaskId, {
+          messages: [
+            ...baseMessages,
+            {
+              id: Date.now().toString(),
+              sender: "system",
+              content,
+            },
+          ],
+          updatedAt,
+          lastActiveAt: updatedAt,
+        });
+      }
       return;
     }
 
     if (data.type === "permission_request") {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          sender: "system",
-          content: `Requesting permission to run tool: ${data.tool}`,
-          permissionId: data.id,
-          options: data.options,
-        },
-      ]);
+      const updatedAt = Date.now();
+      const resolvedTaskId = resolveTaskId(tasks);
+      const targetTask = resolvedTaskId
+        ? tasks.find((task) => task.id === resolvedTaskId)
+        : null;
+      const baseMessages = targetTask?.messages ?? messages;
+      if (resolvedTaskId) {
+        applyTaskUpdates(resolvedTaskId, {
+          messages: [
+            ...baseMessages,
+            {
+              id: Date.now().toString(),
+              sender: "system",
+              content: `Requesting permission to run tool: ${data.tool}`,
+              permissionId: data.id,
+              options: data.options,
+            },
+          ],
+          updatedAt,
+          lastActiveAt: updatedAt,
+        });
+      }
+      return;
+    }
+
+    if (
+      sessionLoadInFlight.current &&
+      (data.type === "agent_text" ||
+        data.type === "agent_thought" ||
+        data.type === "tool_call" ||
+        data.type === "tool_call_update")
+    ) {
       return;
     }
 
     // Agent Messages
-    setMessages((prev) => {
-      const lastMsg = prev[prev.length - 1];
+    setTasks((prev) => {
+      const resolvedTaskId = resolveTaskId(prev);
+      const targetTask = resolvedTaskId
+        ? prev.find((task) => task.id === resolvedTaskId)
+        : null;
+      if (!targetTask) return prev;
+      const lastMsg = targetTask.messages[targetTask.messages.length - 1];
       const isAgentGenerating =
         lastMsg &&
         lastMsg.sender === "agent" &&
@@ -521,33 +766,87 @@ const App = () => {
 
       if (data.type === "agent_text") {
         if (isAgentGenerating) {
-          return prev.map((m) =>
+          const nextMessages = targetTask.messages.map((m) =>
             m.id === lastMsg.id
               ? { ...m, content: m.content + (data.text || "") }
               : m,
           );
+          const updatedAt = Date.now();
+          if (resolvedTaskId) {
+            persistTaskUpdates(resolvedTaskId, {
+              messages: nextMessages,
+              updatedAt,
+              lastActiveAt: updatedAt,
+            });
+          }
+          return prev.map((task) =>
+            task.id === resolvedTaskId
+              ? {
+                  ...task,
+                  messages: nextMessages,
+                  updatedAt,
+                  lastActiveAt: updatedAt,
+                }
+              : task,
+          );
         } else {
           const newId = Date.now().toString();
           currentAgentMsgId.current = newId;
-          return [
-            ...prev,
+          const nextMessages = [
+            ...targetTask.messages,
             { id: newId, sender: "agent", content: data.text || "" },
           ];
+          const updatedAt = Date.now();
+          if (resolvedTaskId) {
+            persistTaskUpdates(resolvedTaskId, {
+              messages: nextMessages,
+              updatedAt,
+              lastActiveAt: updatedAt,
+            });
+          }
+          return prev.map((task) =>
+            task.id === resolvedTaskId
+              ? {
+                  ...task,
+                  messages: nextMessages,
+                  updatedAt,
+                  lastActiveAt: updatedAt,
+                }
+              : task,
+          );
         }
       }
 
       if (data.type === "agent_thought") {
         if (isAgentGenerating) {
-          return prev.map((m) =>
+          const nextMessages = targetTask.messages.map((m) =>
             m.id === lastMsg.id
               ? { ...m, thought: (m.thought || "") + (data.text || "") }
               : m,
           );
+          const updatedAt = Date.now();
+          if (resolvedTaskId) {
+            persistTaskUpdates(resolvedTaskId, {
+              messages: nextMessages,
+              updatedAt,
+              lastActiveAt: updatedAt,
+            });
+          }
+          return prev.map((task) =>
+            task.id === resolvedTaskId
+              ? {
+                  ...task,
+                  messages: nextMessages,
+                  updatedAt,
+                  lastActiveAt: updatedAt,
+                }
+              : task,
+          );
         } else {
           const newId = Date.now().toString();
           currentAgentMsgId.current = newId;
-          return [
-            ...prev,
+          const nextMessages = [
+            ...targetTask.messages,
             {
               id: newId,
               sender: "agent",
@@ -555,6 +854,24 @@ const App = () => {
               thought: data.text || "",
             },
           ];
+          const updatedAt = Date.now();
+          if (resolvedTaskId) {
+            persistTaskUpdates(resolvedTaskId, {
+              messages: nextMessages,
+              updatedAt,
+              lastActiveAt: updatedAt,
+            });
+          }
+          return prev.map((task) =>
+            task.id === resolvedTaskId
+              ? {
+                  ...task,
+                  messages: nextMessages,
+                  updatedAt,
+                  lastActiveAt: updatedAt,
+                }
+              : task,
+          );
         }
       }
 
@@ -566,17 +883,35 @@ const App = () => {
             kind: data.kind,
             status: (data.status as any) || "in_progress",
           };
-          return prev.map((m) =>
+          const nextMessages = targetTask.messages.map((m) =>
             m.id === lastMsg.id
               ? { ...m, toolCalls: [...(m.toolCalls || []), newTool] }
               : m,
+          );
+          const updatedAt = Date.now();
+          if (resolvedTaskId) {
+            persistTaskUpdates(resolvedTaskId, {
+              messages: nextMessages,
+              updatedAt,
+              lastActiveAt: updatedAt,
+            });
+          }
+          return prev.map((task) =>
+            task.id === resolvedTaskId
+              ? {
+                  ...task,
+                  messages: nextMessages,
+                  updatedAt,
+                  lastActiveAt: updatedAt,
+                }
+              : task,
           );
         }
       }
 
       if (data.type === "tool_call_update") {
         if (isAgentGenerating) {
-          return prev.map((m) => {
+          const nextMessages = targetTask.messages.map((m) => {
             if (m.id !== lastMsg.id) return m;
             return {
               ...m,
@@ -587,6 +922,24 @@ const App = () => {
               ),
             };
           });
+          const updatedAt = Date.now();
+          if (resolvedTaskId) {
+            persistTaskUpdates(resolvedTaskId, {
+              messages: nextMessages,
+              updatedAt,
+              lastActiveAt: updatedAt,
+            });
+          }
+          return prev.map((task) =>
+            task.id === resolvedTaskId
+              ? {
+                  ...task,
+                  messages: nextMessages,
+                  updatedAt,
+                  lastActiveAt: updatedAt,
+                }
+              : task,
+          );
         }
       }
 
@@ -596,69 +949,150 @@ const App = () => {
     setTimeout(scrollToBottom, 100);
   };
 
-  useEffect(() => {
-    const tryAutoConnect = async () => {
-      if (!currentWorkspace || isConnected || autoConnectAttempted.current) {
-        return;
-      }
-      if (connectInFlight.current) {
-        return;
-      }
+  const ensureTaskSession = async (task: Task) => {
+    if (connectInFlight.current) {
+      return null;
+    }
+    autoConnectAttempted.current = true;
+    sessionLoadInFlight.current = false;
+    setIsConnected(false);
+    setConnectionStatus({
+      state: "connecting",
+      message: `Connecting to: ${task.agentCommand}...`,
+    });
 
-      if (!agentCommand.includes("qwen")) {
-        return;
+    connectInFlight.current = true;
+    try {
+      const commandName = task.agentCommand.trim().split(" ")[0];
+      if (!commandName) {
+        setConnectionStatus({
+          state: "error",
+          message: "Agent command is empty.",
+        });
+        return null;
       }
-
-      autoConnectAttempted.current = true;
-      setConnectionStatus({
-        state: "connecting",
-        message: "Auto-connecting to Qwen...",
-      });
-
-      try {
-        connectInFlight.current = true;
+      if (!commandName.includes("/") && !commandName.startsWith(".")) {
         const check = await window.electron.invoke(
           "agent:check-command",
-          "qwen",
+          commandName,
         );
         if (!check.installed) {
           setConnectionStatus({
             state: "error",
-            message: "Qwen not installed. Please install it in Settings.",
+            message: `${commandName} not installed. Please check settings.`,
           });
-          return;
+          return null;
         }
+      }
 
-        const result = await window.electron.invoke(
-          "agent:connect",
-          agentCommand,
-          currentWorkspace,
-          agentEnv,
-        );
-        if (result.success) {
-          setIsConnected(true);
-          setConnectionStatus({
-            state: "connected",
-            message: "Connected.",
-          });
-        } else {
-          setConnectionStatus({
-            state: "error",
-            message: `Connection failed: ${result.error}`,
-          });
-        }
-      } catch (e: any) {
+      const connectResult = await window.electron.invoke(
+        "agent:connect",
+        task.agentCommand,
+        task.workspace,
+        task.agentEnv,
+        { reuseIfSame: true, createSession: false },
+      );
+      if (!connectResult.success) {
         setConnectionStatus({
           state: "error",
-          message: `Connection failed: ${e.message}`,
+          message: `Connection failed: ${connectResult.error}`,
         });
-      } finally {
-        connectInFlight.current = false;
+        return null;
       }
-    };
 
-    tryAutoConnect();
-  }, [agentCommand, agentEnv, currentWorkspace, isConnected]);
+      if (!connectResult.reused) {
+        clearAllSessionIds();
+      }
+
+      let sessionId = connectResult.reused ? task.sessionId : null;
+      const caps = await window.electron.invoke("agent:get-capabilities");
+      const canResume = Boolean(caps?.sessionCapabilities?.resume);
+      const canLoad = Boolean(caps?.loadSession);
+
+      if (connectResult.reused && sessionId) {
+        try {
+          await window.electron.invoke("agent:set-active-session", sessionId);
+        } catch {
+          sessionId = null;
+        }
+      } else if (task.sessionId && (canResume || canLoad)) {
+        try {
+          if (canResume) {
+            await window.electron.invoke(
+              "agent:resume-session",
+              task.sessionId,
+              task.workspace,
+            );
+            sessionId = task.sessionId;
+            applyTaskUpdates(task.id, {
+              updatedAt: Date.now(),
+              lastActiveAt: Date.now(),
+            });
+          } else if (canLoad) {
+            sessionLoadInFlight.current = true;
+            await window.electron.invoke(
+              "agent:load-session",
+              task.sessionId,
+              task.workspace,
+            );
+            sessionId = task.sessionId;
+            applyTaskUpdates(task.id, {
+              updatedAt: Date.now(),
+              lastActiveAt: Date.now(),
+            });
+            sessionLoadInFlight.current = false;
+          }
+        } catch {
+          sessionId = null;
+          sessionLoadInFlight.current = false;
+        }
+      }
+
+      if (!sessionId) {
+        const sessionResult = await window.electron.invoke(
+          "agent:new-session",
+          task.workspace,
+        );
+        sessionId = sessionResult.sessionId;
+        applyTaskUpdates(task.id, {
+          sessionId,
+          updatedAt: Date.now(),
+          lastActiveAt: Date.now(),
+        });
+      }
+
+      setIsConnected(true);
+      setConnectionStatus({
+        state: "connected",
+        message: "Connected.",
+      });
+
+      if (task.modelId) {
+        await window.electron.invoke("agent:set-model", task.modelId);
+      }
+
+      return sessionId;
+    } catch (e: any) {
+      setIsConnected(false);
+      setConnectionStatus({
+        state: "error",
+        message: `Connection failed: ${e.message}`,
+      });
+      return null;
+    } finally {
+      connectInFlight.current = false;
+    }
+  };
+
+  useEffect(() => {
+    if (!activeTask || isConnected || connectInFlight.current) {
+      return;
+    }
+    if (!activeTask.agentCommand.includes("qwen")) {
+      return;
+    }
+    ensureTaskSession(activeTask);
+  }, [activeTask, isConnected]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -671,6 +1105,8 @@ const App = () => {
     if (isConnected) {
       await window.electron.invoke("agent:disconnect");
       setIsConnected(false);
+      clearAllSessionIds();
+      sessionLoadInFlight.current = false;
       setAgentInfo({
         models: [],
         currentModelId: null,
@@ -683,69 +1119,23 @@ const App = () => {
       });
       currentAgentMsgId.current = null;
     } else {
-      if (!currentWorkspace) {
+      if (!activeTask) {
         setConnectionStatus({
           state: "error",
-          message: "No workspace selected.",
+          message: "No active task selected.",
         });
         return;
       }
-      const commandName = agentCommand.trim().split(" ")[0];
-      if (!commandName) {
-        setConnectionStatus({
-          state: "error",
-          message: "Agent command is empty.",
-        });
-        return;
-      }
-      if (!commandName.includes("/") && !commandName.startsWith(".")) {
-        const check = await window.electron.invoke(
-          "agent:check-command",
-          commandName,
-        );
-        if (!check.installed) {
-          setConnectionStatus({
-            state: "error",
-            message: `${commandName} not installed. Please check settings.`,
-          });
-          return;
-        }
-      }
-      autoConnectAttempted.current = true;
-      setConnectionStatus({
-        state: "connecting",
-        message: `Connecting to: ${agentCommand}...`,
-      });
-      connectInFlight.current = true;
-      try {
-        const result = await window.electron.invoke(
-          "agent:connect",
-          agentCommand,
-          currentWorkspace,
-          agentEnv,
-        );
-        if (result.success) {
-          setIsConnected(true);
-          setConnectionStatus({
-            state: "connected",
-            message: "Connected.",
-          });
-          setIsSettingsOpen(false); // Close settings on successful connection
-        } else {
-          setConnectionStatus({
-            state: "error",
-            message: `Connection failed: ${result.error}`,
-          });
-        }
-      } catch (e: any) {
-        setConnectionStatus({
-          state: "error",
-          message: `Connection failed: ${e.message}`,
-        });
-      } finally {
-        connectInFlight.current = false;
-      }
+      await ensureTaskSession(activeTask);
+      setIsSettingsOpen(false);
     }
+  };
+
+  const createTaskId = () => {
+    if (crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   };
 
   const handleNewTask = () => {
@@ -753,90 +1143,92 @@ const App = () => {
   };
 
   const handleCreateTask = async (payload: {
+    title: string;
     workspace: string;
     agentCommand: string;
   }) => {
     const nextWorkspace = payload.workspace;
     const nextCommand = payload.agentCommand;
-
-    if (connectInFlight.current) {
-      return;
-    }
-    setIsNewTaskOpen(false);
-    autoConnectAttempted.current = true;
-    if (isConnected) {
-      try {
-        await window.electron.invoke("agent:disconnect");
-      } catch (e) {
-        console.warn("Failed to disconnect before new task:", e);
-      }
-    }
-    setMessages([]);
-    currentAgentMsgId.current = null;
-    setAgentInfo((prev) => ({
-      ...prev,
+    const now = Date.now();
+    const newTask: Task = {
+      id: createTaskId(),
+      title: payload.title,
+      workspace: nextWorkspace,
+      agentCommand: nextCommand,
+      agentEnv: agentEnv || {},
+      messages: [],
+      sessionId: null,
+      modelId: null,
       tokenUsage: null,
-    }));
-    setAgentCommand(nextCommand);
-    setCurrentWorkspace(nextWorkspace);
-    setIsConnected(false);
+      createdAt: now,
+      updatedAt: now,
+      lastActiveAt: now,
+    };
 
-    const commandName = nextCommand.trim().split(" ")[0];
-    if (!commandName) {
-      setConnectionStatus({
-        state: "error",
-        message: "Agent command is empty.",
-      });
+    setIsNewTaskOpen(false);
+    setTasks((prev) => [newTask, ...prev]);
+    window.electron.invoke("db:create-task", newTask);
+    setActiveTaskId(newTask.id);
+    syncActiveTaskState(newTask);
+    await ensureTaskSession(newTask);
+  };
+
+  const handleSelectTask = async (taskId: string) => {
+    if (activeTaskId === taskId) {
       return;
     }
-    if (!commandName.includes("/") && !commandName.startsWith(".")) {
-      const check = await window.electron.invoke(
-        "agent:check-command",
-        commandName,
-      );
-      if (!check.installed) {
-        setConnectionStatus({
-          state: "error",
-          message: `${commandName} not installed. Please check settings.`,
-        });
-        return;
-      }
+    const task = tasks.find((entry) => entry.id === taskId);
+    if (!task) {
+      return;
+    }
+    const now = Date.now();
+    applyTaskUpdates(task.id, { lastActiveAt: now, updatedAt: now });
+    currentAgentMsgId.current = null;
+    setActiveTaskId(taskId);
+    syncActiveTaskState(task);
+    await ensureTaskSession(task);
+  };
+
+  const handleTaskContextMenu = (taskId: string, event: React.MouseEvent) => {
+    event.preventDefault();
+    setTaskMenu({
+      taskId,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    const confirmed = window.confirm(
+      "Delete this task? This cannot be undone.",
+    );
+    if (!confirmed) {
+      return;
     }
 
-    setConnectionStatus({
-      state: "connecting",
-      message: `Connecting to: ${nextCommand}...`,
-    });
+    const nextTasks = tasks.filter((task) => task.id !== taskId);
+    setTasks(nextTasks);
+    await window.electron.invoke("db:delete-task", taskId);
 
-    try {
-      connectInFlight.current = true;
-      const result = await window.electron.invoke(
-        "agent:connect",
-        nextCommand,
-        nextWorkspace,
-        agentEnv,
-      );
-      if (result.success) {
-        setIsConnected(true);
-        setConnectionStatus({
-          state: "connected",
-          message: "Connected.",
-        });
-      } else {
-        setIsConnected(false);
-        setConnectionStatus({
-          state: "error",
-          message: `Connection failed: ${result.error}`,
-        });
-      }
-    } catch (e: any) {
+    if (activeTaskId !== taskId) {
+      return;
+    }
+
+    const nextActive = nextTasks[0] || null;
+    if (nextActive) {
+      setActiveTaskId(nextActive.id);
+      syncActiveTaskState(nextActive);
+      await ensureTaskSession(nextActive);
+    } else {
+      setActiveTaskId(null);
       setIsConnected(false);
+      clearAllSessionIds();
+      sessionLoadInFlight.current = false;
+      await window.electron.invoke("agent:disconnect");
       setConnectionStatus({
-        state: "error",
-        message: `Connection failed: ${e.message}`,
+        state: "disconnected",
+        message: "Disconnected.",
       });
-    } finally {
-      connectInFlight.current = false;
     }
   };
 
@@ -849,16 +1241,33 @@ const App = () => {
       });
       return;
     }
+    if (!activeTaskId) {
+      handleIncomingMessage({
+        type: "system",
+        text: "Error: No active task selected.",
+      });
+      return;
+    }
+
+    sessionLoadInFlight.current = false;
 
     const text = inputText;
     setInputText("");
 
     currentAgentMsgId.current = null;
 
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now().toString(), sender: "user", content: text },
-    ]);
+    if (activeTaskId) {
+      const nextMessages = [
+        ...messages,
+        { id: Date.now().toString(), sender: "user", content: text },
+      ];
+      const updatedAt = Date.now();
+      applyTaskUpdates(activeTaskId, {
+        messages: nextMessages,
+        updatedAt,
+        lastActiveAt: updatedAt,
+      });
+    }
     setTimeout(scrollToBottom, 100);
 
     try {
@@ -944,6 +1353,13 @@ const App = () => {
         return;
       }
       setAgentInfo((prev) => ({ ...prev, currentModelId: modelId }));
+      if (activeTaskId) {
+        applyTaskUpdates(activeTaskId, {
+          modelId,
+          updatedAt: Date.now(),
+          lastActiveAt: Date.now(),
+        });
+      }
       setIsModelMenuOpen(false);
     } catch (e: any) {
       handleIncomingMessage({
@@ -953,8 +1369,37 @@ const App = () => {
     }
   };
 
-  if (!currentWorkspace) {
-    return <WorkspaceWelcome onSelect={setCurrentWorkspace} />;
+  const handleAgentCommandChange = (value: string) => {
+    setAgentCommand(value);
+    if (activeTaskId) {
+      applyTaskUpdates(activeTaskId, {
+        agentCommand: value,
+        updatedAt: Date.now(),
+        lastActiveAt: Date.now(),
+      });
+    }
+  };
+
+  const handleAgentEnvChange = (env: Record<string, string>) => {
+    setAgentEnv(env);
+    if (activeTaskId) {
+      applyTaskUpdates(activeTaskId, {
+        agentEnv: env,
+        updatedAt: Date.now(),
+        lastActiveAt: Date.now(),
+      });
+    }
+  };
+
+  if (!currentWorkspace && tasks.length === 0) {
+    return (
+      <WorkspaceWelcome
+        onSelect={(path) => {
+          setCurrentWorkspace(path);
+          setIsNewTaskOpen(true);
+        }}
+      />
+    );
   }
 
   return (
@@ -963,9 +1408,9 @@ const App = () => {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         agentCommand={agentCommand}
-        onAgentCommandChange={setAgentCommand}
+        onAgentCommandChange={handleAgentCommandChange}
         agentEnv={agentEnv}
-        onAgentEnvChange={setAgentEnv}
+        onAgentEnvChange={handleAgentEnvChange}
         isConnected={isConnected}
         onConnectToggle={handleConnect}
         currentWorkspace={currentWorkspace}
@@ -987,18 +1432,48 @@ const App = () => {
         </button>
 
         <div className="history-list">
-          <div className="history-item active">
-            <div className="history-item-title">Current Workspace</div>
-            <div className="history-item-subtitle" title={currentWorkspace}>
-              {currentWorkspace.split("/").pop()}
-            </div>
-          </div>
-          {/* Mock items */}
-          {/* <div className="history-item">
-                  <div className="history-item-title">Refactor Auth</div>
-                  <div className="history-item-subtitle">2 hours ago</div>
-              </div> */}
+          {tasks.length === 0 ? (
+            <div className="history-empty">No tasks yet.</div>
+          ) : (
+            tasks.map((task) => (
+              <div
+                key={task.id}
+                className={`history-item ${
+                  task.id === activeTaskId ? "active" : ""
+                }`}
+                onClick={() => handleSelectTask(task.id)}
+                onContextMenu={(event) => handleTaskContextMenu(task.id, event)}
+              >
+                <div className="history-item-row">
+                  <div className="history-item-title">{task.title}</div>
+                </div>
+                <div className="history-item-subtitle" title={task.workspace}>
+                  {task.workspace.split("/").pop() || task.workspace}
+                </div>
+              </div>
+            ))
+          )}
         </div>
+
+        {taskMenu && (
+          <div
+            className="task-context-menu"
+            style={{ top: taskMenu.y, left: taskMenu.x }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="task-context-menu-item danger"
+              onClick={() => {
+                const taskId = taskMenu.taskId;
+                setTaskMenu(null);
+                handleDeleteTask(taskId);
+              }}
+            >
+              Delete Task
+            </button>
+          </div>
+        )}
 
         <div className="sidebar-settings">
           <button
@@ -1027,7 +1502,9 @@ const App = () => {
           <div className="agent-info-bar">
             <div className="agent-info-item">
               {agentInfo.models.length === 0 ? (
-                <span className="agent-info-muted">Unknown</span>
+                <span className="agent-info-muted">
+                  {activeTask?.modelId || agentInfo.currentModelId || "Unknown"}
+                </span>
               ) : (
                 <div className="model-selector">
                   <button
@@ -1084,6 +1561,28 @@ const App = () => {
         </div>
 
         <div className="messages-container">
+          {showDebug && (
+            <div
+              style={{
+                fontSize: "0.75rem",
+                color: "#9ca3af",
+                backgroundColor: "#f8fafc",
+                border: "1px solid #e5e7eb",
+                borderRadius: "8px",
+                padding: "8px 10px",
+                marginBottom: "12px",
+                fontFamily: "monospace",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+            >
+              {`agentInfo=${JSON.stringify(agentInfo, null, 2)}\nagentCapabilities=${JSON.stringify(
+                agentCapabilities,
+                null,
+                2,
+              )}\nagentMessageLog=${JSON.stringify(agentMessageLog, null, 2)}`}
+            </div>
+          )}
           {/* Welcome / Empty State */}
           {messages.length === 0 && (
             <div

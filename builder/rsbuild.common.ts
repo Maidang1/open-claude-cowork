@@ -3,8 +3,13 @@ import { defineConfig, loadEnv } from "@rsbuild/core";
 const { publicVars } = loadEnv({
   prefixes: [""],
   cwd: `${process.cwd()}/env`,
-  mode: process.env.ENV_FILE
+  mode: process.env.ENV_FILE,
 });
+
+const defineVars = {
+  ...publicVars,
+  DEBUG: publicVars.DEBUG ?? "false",
+};
 
 const CommonConfig = defineConfig({
   tools: {
@@ -16,7 +21,7 @@ const CommonConfig = defineConfig({
     buildCache: false,
   },
   source: {
-    define: publicVars,
+    define: defineVars,
   },
 });
 

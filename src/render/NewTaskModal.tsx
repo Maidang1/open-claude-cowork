@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from "react";
 interface NewTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (payload: { workspace: string; agentCommand: string }) => void;
+  onCreate: (payload: {
+    title: string;
+    workspace: string;
+    agentCommand: string;
+  }) => void;
   initialWorkspace: string | null;
   initialAgentCommand: string;
   defaultQwenCommand: string;
@@ -21,6 +25,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   defaultQwenCommand,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const [title, setTitle] = useState("New Task");
   const [workspacePath, setWorkspacePath] = useState(initialWorkspace || "");
   const [preset, setPreset] = useState<AgentPreset>("custom");
   const [customCommand, setCustomCommand] = useState(initialAgentCommand);
@@ -28,6 +33,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const isQwen = initialAgentCommand.includes("qwen");
+    setTitle("New Task");
     setPreset(isQwen ? "qwen" : "custom");
     setWorkspacePath(initialWorkspace || "");
     setCustomCommand(initialAgentCommand);
@@ -99,6 +105,35 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
           <div style={{ fontSize: "0.9rem", color: "#6b7280" }}>
             Choose a workspace folder and agent to start.
           </div>
+        </div>
+
+        <div style={{ marginBottom: "18px" }}>
+          <label
+            style={{
+              display: "block",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              color: "#374151",
+              marginBottom: "8px",
+            }}
+          >
+            Task Title
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Enter task title"
+            style={{
+              width: "100%",
+              padding: "10px 12px",
+              borderRadius: "8px",
+              border: "1px solid #e5e7eb",
+              fontSize: "0.9rem",
+              backgroundColor: "#ffffff",
+              color: "#111827",
+            }}
+          />
         </div>
 
         <div style={{ marginBottom: "18px" }}>
@@ -250,7 +285,11 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
           <button
             type="button"
             onClick={() =>
-              onCreate({ workspace: workspacePath, agentCommand: resolvedCommand })
+              onCreate({
+                title: title.trim() || "New Task",
+                workspace: workspacePath,
+                agentCommand: resolvedCommand,
+              })
             }
             disabled={!canCreate}
             style={{

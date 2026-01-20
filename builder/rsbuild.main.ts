@@ -3,22 +3,29 @@ import { defineConfig, mergeRsbuildConfig, logger } from "@rsbuild/core";
 import { releaseMainPath, srcMainPath } from "./paths";
 import CommonConfig from "./rsbuild.common";
 
-
 logger.info(
   `Self Environment`,
-  Object.fromEntries(Object.entries(process.env || {}).filter(([key]) => key.startsWith("_"))),
+  Object.fromEntries(
+    Object.entries(process.env || {}).filter(([key]) => key.startsWith("_")),
+  ),
 );
 
 const Config = defineConfig({
   tools: {
     rspack: {
       target: "electron-main",
+      externals: {
+        "better-sqlite3": "commonjs better-sqlite3",
+      },
     },
   },
   source: {
     entry: {
       index: join(srcMainPath, "./index.ts"),
       preload: join(srcMainPath, "./preload.ts"),
+    },
+    define: {
+      "process.env.DEBUG": JSON.stringify(process.env.DEBUG),
     },
   },
   output: {
@@ -28,7 +35,10 @@ const Config = defineConfig({
     },
     cleanDistPath: true,
     sourceMap: {
-      js: process.env.NODE_ENV === "production" ? "source-map" : "cheap-module-source-map",
+      js:
+        process.env.NODE_ENV === "production"
+          ? "source-map"
+          : "cheap-module-source-map",
       css: true,
     },
   },

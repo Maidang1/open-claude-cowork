@@ -6,12 +6,22 @@ import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
 
-import { initDB, setSetting, getSetting } from "./db/store";
+import {
+  initDB,
+  setSetting,
+  getSetting,
+  listTasks,
+  getTask,
+  createTask,
+  updateTask,
+  deleteTask,
+} from "./db/store";
 
 const execAsync = promisify(exec);
 
 export let mainWindow: BrowserWindow | null = null;
 let acpClient: ACPClient | null = null;
+let activeConnectionKey: string | null = null;
 
 export const isDev = !app.isPackaged;
 const loadUrl: string = isDev
@@ -86,10 +96,51 @@ const initIpc = () => {
     setSetting("last_workspace", workspace);
   });
 
+  ipcMain.handle("db:get-active-task", () => {
+    return getSetting("active_task_id");
+  });
+
+  ipcMain.handle("db:set-active-task", (_, taskId: string | null) => {
+    if (taskId) {
+      setSetting("active_task_id", taskId);
+    } else {
+      setSetting("active_task_id", "");
+    }
+  });
+
+  ipcMain.handle("db:list-tasks", () => {
+    return listTasks();
+  });
+
+  ipcMain.handle("db:get-task", (_, taskId: string) => {
+    return getTask(taskId);
+  });
+
+  ipcMain.handle("db:create-task", (_, task: any) => {
+    createTask(task);
+    return { success: true };
+  });
+
+  ipcMain.handle("db:update-task", (_, taskId: string, updates: any) => {
+    updateTask(taskId, updates);
+    return { success: true };
+  });
+
+  ipcMain.handle("db:delete-task", (_, taskId: string) => {
+    deleteTask(taskId);
+    return { success: true };
+  });
+
   // ACP IPC Handlers
   ipcMain.handle(
     "agent:connect",
-    async (_, command: string, cwd?: string, env?: Record<string, string>) => {
+    async (
+      _,
+      command: string,
+      cwd?: string,
+      env?: Record<string, string>,
+      options?: { reuseIfSame?: boolean; createSession?: boolean },
+    ) => {
       if (!acpClient) {
         acpClient = new ACPClient((msg) => {
           // Forward agent messages to renderer
@@ -148,9 +199,30 @@ const initIpc = () => {
         }
       }
 
+      const connectionKey = JSON.stringify({
+        cmd,
+        args,
+        cwd: cwd || process.cwd(),
+        env: env || null,
+      });
+
       try {
-        await acpClient.connect(cmd, args, cwd, env);
-        return { success: true };
+        if (
+          options?.reuseIfSame &&
+          acpClient.isConnected() &&
+          activeConnectionKey === connectionKey
+        ) {
+          return { success: true, reused: true, sessionId: null };
+        }
+        const result = await acpClient.connect(cmd, args, cwd, env, {
+          createSession: options?.createSession ?? true,
+        });
+        activeConnectionKey = connectionKey;
+        return {
+          success: true,
+          reused: false,
+          sessionId: result?.sessionId ?? null,
+        };
       } catch (e: any) {
         console.error("Connect error:", e);
         return { success: false, error: e.message };
@@ -356,6 +428,51 @@ const initIpc = () => {
     }
   });
 
+  ipcMain.handle("agent:get-capabilities", async () => {
+    if (!acpClient) {
+      return null;
+    }
+    return acpClient.getCapabilities();
+  });
+
+  ipcMain.handle("agent:new-session", async (_, cwd?: string) => {
+    if (!acpClient) {
+      throw new Error("Agent not connected");
+    }
+    const sessionId = await acpClient.createSession(cwd);
+    return { success: true, sessionId };
+  });
+
+  ipcMain.handle(
+    "agent:load-session",
+    async (_, sessionId: string, cwd?: string) => {
+      if (!acpClient) {
+        throw new Error("Agent not connected");
+      }
+      await acpClient.loadSession(sessionId, cwd);
+      return { success: true };
+    },
+  );
+
+  ipcMain.handle(
+    "agent:resume-session",
+    async (_, sessionId: string, cwd?: string) => {
+      if (!acpClient) {
+        throw new Error("Agent not connected");
+      }
+      await acpClient.resumeSession(sessionId, cwd);
+      return { success: true };
+    },
+  );
+
+  ipcMain.handle("agent:set-active-session", async (_, sessionId: string) => {
+    if (!acpClient) {
+      throw new Error("Agent not connected");
+    }
+    acpClient.setActiveSession(sessionId);
+    return { success: true };
+  });
+
   ipcMain.handle("agent:set-model", async (_, modelId: string) => {
     try {
       if (!acpClient) {
@@ -372,6 +489,7 @@ const initIpc = () => {
     if (acpClient) {
       await acpClient.disconnect();
       acpClient = null;
+      activeConnectionKey = null;
     }
     return { success: true };
   });

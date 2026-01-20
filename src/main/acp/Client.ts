@@ -116,8 +116,10 @@ export class ACPClient {
   private connection: ClientSideConnection | null = null;
   // Callback now sends structured objects instead of strings
   private onMessageCallback: ((msg: any) => void) | null = null;
-  private sessionId: string | null = null;
+  private activeSessionId: string | null = null;
   private cwd: string = process.cwd();
+  private connected = false;
+  private agentCapabilities: any | null = null;
 
   private pendingPermissions = new Map<string, (response: any) => void>();
 
@@ -140,6 +142,7 @@ export class ACPClient {
     args: string[] = [],
     cwd?: string,
     env?: Record<string, string>,
+    options?: { createSession?: boolean },
   ) {
     if (this.process) {
       await this.disconnect();
@@ -175,6 +178,7 @@ export class ACPClient {
         type: "system",
         text: `System: Agent process error: ${err.message}`,
       });
+      this.connected = false;
     });
 
     this.process.on("exit", (code) => {
@@ -185,7 +189,9 @@ export class ACPClient {
       });
       this.process = null;
       this.connection = null;
-      this.sessionId = null;
+      this.activeSessionId = null;
+      this.connected = false;
+      this.agentCapabilities = null;
     });
 
     // Create Stream (Node -> Web Stream adapter)
@@ -219,12 +225,14 @@ export class ACPClient {
         },
         sessionUpdate: async (params) => {
           const update = params.update;
+          const sessionId = params.sessionId;
 
           // Agent Text Message
           if (update.sessionUpdate === "agent_message_chunk") {
             if (update.content.type === "text") {
               this.onMessageCallback?.({
                 type: "agent_text",
+                sessionId,
                 text: update.content.text,
               });
             }
@@ -234,6 +242,7 @@ export class ACPClient {
             if (update.content.type === "text") {
               this.onMessageCallback?.({
                 type: "agent_thought",
+                sessionId,
                 text: update.content.text,
               });
             }
@@ -242,6 +251,7 @@ export class ACPClient {
           else if (update.sessionUpdate === "tool_call") {
             this.onMessageCallback?.({
               type: "tool_call",
+              sessionId,
               toolCallId: update.toolCallId,
               name: update.title,
               kind: update.kind,
@@ -252,6 +262,7 @@ export class ACPClient {
           else if (update.sessionUpdate === "tool_call_update") {
             this.onMessageCallback?.({
               type: "tool_call_update",
+              sessionId,
               toolCallId: update.toolCallId,
               status: update.status,
             });
@@ -260,6 +271,7 @@ export class ACPClient {
           else if (update.sessionUpdate === "available_commands_update") {
             this.onMessageCallback?.({
               type: "agent_info",
+              sessionId,
               info: {
                 commands: update.availableCommands as AgentCommandInfo[],
               },
@@ -273,6 +285,7 @@ export class ACPClient {
             if (modelUpdate) {
               this.onMessageCallback?.({
                 type: "agent_info",
+                sessionId,
                 info: modelUpdate,
               });
             }
@@ -377,36 +390,18 @@ export class ACPClient {
         clientInfo: { name: "test-client", version: "1.0.0" },
       });
       console.log("Initialized:", initResult);
+      this.agentCapabilities = initResult?.agentCapabilities ?? null;
 
-      // New Session
-      if (!this.connection) {
-        throw new Error("Connection closed before session creation");
-      }
-      const sessionResult = await this.connection.newSession({
-        cwd: this.cwd,
-        mcpServers: [],
-      });
-      this.sessionId = sessionResult.sessionId;
-      this.onMessageCallback?.({
-        type: "system",
-        text: "System: Connected and Session Created.",
-      });
-
-      if (sessionResult.models?.availableModels?.length) {
+      this.connected = true;
+      if (options?.createSession !== false) {
+        const sessionId = await this.createSession(this.cwd, true);
+        return { sessionId };
+      } else {
         this.onMessageCallback?.({
-          type: "agent_info",
-          info: {
-            models: sessionResult.models.availableModels,
-            currentModelId: sessionResult.models.currentModelId,
-          },
+          type: "system",
+          text: "System: Connected.",
         });
-      } else if (sessionResult.configOptions?.length) {
-        const modelUpdate = normalizeModelsFromConfigOptions(
-          sessionResult.configOptions,
-        );
-        if (modelUpdate) {
-          this.onMessageCallback?.({ type: "agent_info", info: modelUpdate });
-        }
+        return { sessionId: null };
       }
     } catch (e: any) {
       console.error("Init failed:", e);
@@ -419,15 +414,99 @@ export class ACPClient {
     }
   }
 
+  private handleSessionInitUpdate(sessionResult: any) {
+    if (sessionResult?.models?.availableModels?.length) {
+      this.onMessageCallback?.({
+        type: "agent_info",
+        info: {
+          models: sessionResult.models.availableModels,
+          currentModelId: sessionResult.models.currentModelId,
+        },
+      });
+    } else if (sessionResult?.configOptions?.length) {
+      const modelUpdate = normalizeModelsFromConfigOptions(
+        sessionResult.configOptions,
+      );
+      if (modelUpdate) {
+        this.onMessageCallback?.({ type: "agent_info", info: modelUpdate });
+      }
+    }
+  }
+
+  async createSession(cwd?: string, isInitial = false) {
+    if (!this.connection) {
+      throw new Error("Connection closed before session creation");
+    }
+    const sessionResult = await this.connection.newSession({
+      cwd: cwd || this.cwd,
+      mcpServers: [],
+    });
+    this.activeSessionId = sessionResult.sessionId;
+    this.onMessageCallback?.({
+      type: "system",
+      text: isInitial
+        ? "System: Connected and Session Created."
+        : "System: Session Created.",
+    });
+    this.handleSessionInitUpdate(sessionResult);
+    return sessionResult.sessionId;
+  }
+
+  async loadSession(sessionId: string, cwd?: string) {
+    if (!this.connection || !this.connection.loadSession) {
+      throw new Error("Agent does not support session/load");
+    }
+    const result = await this.connection.loadSession({
+      sessionId,
+      cwd: cwd || this.cwd,
+      mcpServers: [],
+    });
+    this.activeSessionId = sessionId;
+    this.onMessageCallback?.({
+      type: "system",
+      text: "System: Session Loaded.",
+    });
+    this.handleSessionInitUpdate(result);
+  }
+
+  async resumeSession(sessionId: string, cwd?: string) {
+    if (!this.connection || !this.connection.unstable_resumeSession) {
+      throw new Error("Agent does not support session/resume");
+    }
+    const result = await this.connection.unstable_resumeSession({
+      sessionId,
+      cwd: cwd || this.cwd,
+      mcpServers: [],
+    });
+    this.activeSessionId = sessionId;
+    this.onMessageCallback?.({
+      type: "system",
+      text: "System: Session Resumed.",
+    });
+    this.handleSessionInitUpdate(result);
+  }
+
+  setActiveSession(sessionId: string) {
+    this.activeSessionId = sessionId;
+  }
+
+  isConnected() {
+    return this.connected && !!this.connection;
+  }
+
+  getCapabilities() {
+    return this.agentCapabilities;
+  }
+
   async sendMessage(text: string) {
-    if (!this.connection || !this.sessionId) {
+    if (!this.connection || !this.activeSessionId) {
       throw new Error("Not connected");
     }
 
     // Send Prompt
     try {
       const response = await this.connection.prompt({
-        sessionId: this.sessionId,
+        sessionId: this.activeSessionId,
         prompt: [{ type: "text", text: text }],
       });
       const usage = extractTokenUsage(response);
@@ -448,13 +527,13 @@ export class ACPClient {
   }
 
   async setModel(modelId: string) {
-    if (!this.connection || !this.sessionId) {
+    if (!this.connection || !this.activeSessionId) {
       throw new Error("Not connected");
     }
 
     try {
       await this.connection.unstable_setSessionModel({
-        sessionId: this.sessionId,
+        sessionId: this.activeSessionId,
         modelId,
       });
       this.onMessageCallback?.({
@@ -484,6 +563,8 @@ export class ACPClient {
       this.process = null;
     }
     this.connection = null;
-    this.sessionId = null;
+    this.activeSessionId = null;
+    this.connected = false;
+    this.agentCapabilities = null;
   }
 }
