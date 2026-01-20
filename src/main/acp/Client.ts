@@ -290,6 +290,14 @@ export class ACPClient {
               });
             }
           }
+          // Plan Update
+          else if (update.sessionUpdate === "plan") {
+            this.onMessageCallback?.({
+              type: "agent_plan",
+              sessionId,
+              plan: update,
+            });
+          }
         },
         readTextFile: async (params) => {
           console.log(`[Client] readTextFile: ${params.path}`);

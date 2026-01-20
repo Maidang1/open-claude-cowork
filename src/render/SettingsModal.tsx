@@ -210,7 +210,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     setPreset(p);
     if (p === "qwen") {
       onAgentCommandChange(
-        "qwen --acp --allowed-tools run_shell_command --experimental-skills",
+        "qwen --acp --allowed-tools all,run_shell_command --experimental-skills",
       );
     } else {
       onAgentCommandChange("");
@@ -220,75 +220,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={handleBackdropClick}
-    >
-      <div
-        ref={modalRef}
-        style={{
-          backgroundColor: "white",
-          borderRadius: "8px",
-          width: "500px",
-          maxWidth: "90%",
-          padding: "24px",
-          boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
-          maxHeight: "80vh",
-          overflowY: "auto",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginBottom: "20px",
-          }}
-        >
-          <h2 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600 }}>
-            Settings
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "#6b7280",
-            }}
-          >
+    <div className="modal-overlay" onClick={handleBackdropClick}>
+      <div ref={modalRef} className="modal-content">
+        <div className="modal-header">
+          <h2 className="modal-title">Settings</h2>
+          <button type="button" onClick={onClose} className="modal-close-btn">
             <X size={20} />
           </button>
         </div>
 
         {/* Node.js Warning */}
         {nodeStatus === "not-installed" && (
-          <div
-            style={{
-              marginBottom: "20px",
-              padding: "12px",
-              backgroundColor: "#fef2f2",
-              border: "1px solid #fee2e2",
-              borderRadius: "6px",
-              color: "#991b1b",
-              fontSize: "0.9rem",
-              display: "flex",
-              alignItems: "start",
-              gap: "8px",
-            }}
-          >
+          <div className="node-warning">
             <div style={{ marginTop: "2px" }}>⚠️</div>
             <div>
               <strong>Node.js Environment Missing</strong>
@@ -303,46 +246,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
 
         {/* Agent Preset Selector */}
-        <div style={{ marginBottom: "20px" }}>
-          <label
-            style={{
-              display: "block",
-              fontSize: "0.9rem",
-              fontWeight: 500,
-              marginBottom: "8px",
-              color: "#374151",
-            }}
-          >
-            Agent Type
-          </label>
-          <div style={{ display: "flex", gap: "12px" }}>
+        <div className="modal-section">
+          <label className="modal-label">Agent Type</label>
+          <div className="preset-buttons">
             <button
               type="button"
               onClick={() => handlePresetChange("custom")}
-              style={{
-                flex: 1,
-                padding: "8px",
-                borderRadius: "6px",
-                border: `1px solid ${preset === "custom" ? "#f97316" : "#d1d5db"}`,
-                backgroundColor: preset === "custom" ? "#fff7ed" : "white",
-                color: preset === "custom" ? "#c2410c" : "#374151",
-                cursor: "pointer",
-              }}
+              className={`preset-button ${preset === "custom" ? "active" : ""}`}
             >
               Custom
             </button>
             <button
               type="button"
               onClick={() => handlePresetChange("qwen")}
-              style={{
-                flex: 1,
-                padding: "8px",
-                borderRadius: "6px",
-                border: `1px solid ${preset === "qwen" ? "#f97316" : "#d1d5db"}`,
-                backgroundColor: preset === "qwen" ? "#fff7ed" : "white",
-                color: preset === "qwen" ? "#c2410c" : "#374151",
-                cursor: "pointer",
-              }}
+              className={`preset-button ${preset === "qwen" ? "active" : ""}`}
             >
               Qwen Agent
             </button>
@@ -351,81 +268,37 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
         {/* Qwen Status & Install */}
         {preset === "qwen" && (
-          <div
-            style={{
-              marginBottom: "20px",
-              padding: "12px",
-              backgroundColor: "#f3f4f6",
-              borderRadius: "6px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "0.9rem", fontWeight: 500 }}>
-                Status:
-              </span>
+          <div className="status-box">
+            <div className="status-info">
+              <span className="status-label">Status:</span>
               {installStatus === "checking" && (
-                <span style={{ color: "#6b7280", fontSize: "0.9rem" }}>
-                  Checking...
-                </span>
+                <span className="status-text checking">Checking...</span>
               )}
               {installStatus === "installed" && (
-                <span
-                  style={{
-                    color: "#10b981",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
+                <span className="status-text installed">
                   <Check size={16} /> Installed
                   {installedVersion && (
-                    <span style={{ color: "#6b7280", fontSize: "0.85rem" }}>
+                    <span style={{ opacity: 0.7, fontSize: "0.85rem" }}>
                       v{installedVersion}
                     </span>
                   )}
                 </span>
               )}
               {installStatus === "not-installed" && (
-                <span style={{ color: "#ef4444", fontSize: "0.9rem" }}>
-                  Not Installed
-                </span>
+                <span className="status-text not-installed">Not Installed</span>
               )}
               {installStatus === "installing" && (
-                <span
-                  style={{
-                    color: "#f97316",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
+                <span className="status-text processing">
                   <Loader2 size={16} className="animate-spin" /> Installing...
                 </span>
               )}
               {installStatus === "updating" && (
-                <span
-                  style={{
-                    color: "#f97316",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
+                <span className="status-text processing">
                   <Loader2 size={16} className="animate-spin" /> Updating...
                 </span>
               )}
               {installStatus === "uninstalling" && (
-                <span
-                  style={{
-                    color: "#f97316",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
+                <span className="status-text processing">
                   <Loader2 size={16} className="animate-spin" /> Uninstalling...
                 </span>
               )}
@@ -435,18 +308,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={handleInstall}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: "4px",
-                  backgroundColor: "#f97316",
-                  color: "white",
-                  border: "none",
-                  fontSize: "0.85rem",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
+                className="btn-primary btn-small"
               >
                 <Download size={14} /> Install
               </button>
@@ -456,36 +318,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <button
                   type="button"
                   onClick={handleUpdate}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "4px",
-                    backgroundColor: "#f97316",
-                    color: "white",
-                    border: "none",
-                    fontSize: "0.85rem",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
+                  className="btn-primary btn-small"
                 >
                   <RefreshCw size={14} /> Update
                 </button>
                 <button
                   type="button"
                   onClick={handleUninstall}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: "4px",
-                    backgroundColor: "white",
-                    color: "#ef4444",
-                    border: "1px solid #ef4444",
-                    fontSize: "0.85rem",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
+                  className="btn-danger-outline"
                 >
                   <Trash2 size={14} /> Uninstall
                 </button>
@@ -495,17 +335,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         )}
 
         {/* Command Input */}
-        <div style={{ marginBottom: "20px" }}>
-          <label
-            htmlFor="agent-command"
-            style={{
-              display: "block",
-              fontSize: "0.9rem",
-              fontWeight: 500,
-              marginBottom: "8px",
-              color: "#374151",
-            }}
-          >
+        <div className="modal-section">
+          <label htmlFor="agent-command" className="modal-label">
             Agent Command
           </label>
           <input
@@ -515,111 +346,54 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             onChange={(e) => onAgentCommandChange(e.target.value)}
             placeholder="e.g. qwen --acp"
             disabled={preset === "qwen"}
-            style={{
-              width: "100%",
-              padding: "8px 12px",
-              borderRadius: "6px",
-              border: "1px solid #d1d5db",
-              fontSize: "0.9rem",
-              boxSizing: "border-box",
-              backgroundColor: preset === "qwen" ? "#f9fafb" : "white",
-            }}
+            className="modal-input"
           />
         </div>
 
         {/* Environment Variables */}
-        <div style={{ marginBottom: "20px" }}>
-          <label
-            style={{
-              display: "block",
-              fontSize: "0.9rem",
-              fontWeight: 500,
-              marginBottom: "8px",
-              color: "#374151",
-            }}
-          >
-            Environment Variables
-          </label>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div className="modal-section">
+          <label className="modal-label">Environment Variables</label>
+          <div className="env-list">
             {Object.entries(agentEnv).map(([key, val]) => (
-              <div
-                key={key}
-                style={{ display: "flex", gap: "8px", alignItems: "center" }}
-              >
+              <div key={key} className="env-row">
                 <input
                   readOnly
                   value={key}
-                  style={{
-                    flex: 1,
-                    padding: "6px",
-                    borderRadius: "4px",
-                    border: "1px solid #e5e7eb",
-                    backgroundColor: "#f9fafb",
-                    fontSize: "0.85rem",
-                  }}
+                  className="env-input key"
                 />
                 <input
                   readOnly
                   value={val}
                   type="password"
-                  style={{
-                    flex: 2,
-                    padding: "6px",
-                    borderRadius: "4px",
-                    border: "1px solid #e5e7eb",
-                    backgroundColor: "#f9fafb",
-                    fontSize: "0.85rem",
-                  }}
+                  className="env-input val"
                 />
                 <button
                   type="button"
                   onClick={() => removeEnvVar(key)}
-                  style={{
-                    border: "none",
-                    background: "none",
-                    cursor: "pointer",
-                    color: "#ef4444",
-                  }}
+                  className="btn-icon danger"
                 >
                   <Trash2 size={16} />
                 </button>
               </div>
             ))}
-            <div style={{ display: "flex", gap: "8px" }}>
+            <div className="env-row">
               <input
                 placeholder="KEY"
                 value={newEnvKey}
                 onChange={(e) => setNewEnvKey(e.target.value)}
-                style={{
-                  flex: 1,
-                  padding: "6px",
-                  borderRadius: "4px",
-                  border: "1px solid #d1d5db",
-                  fontSize: "0.85rem",
-                }}
+                className="env-input key"
               />
               <input
                 placeholder="VALUE"
                 value={newEnvVal}
                 onChange={(e) => setNewEnvVal(e.target.value)}
-                style={{
-                  flex: 2,
-                  padding: "6px",
-                  borderRadius: "4px",
-                  border: "1px solid #d1d5db",
-                  fontSize: "0.85rem",
-                }}
+                className="env-input val"
               />
               <button
                 type="button"
                 onClick={addEnvVar}
                 disabled={!newEnvKey.trim()}
-                style={{
-                  border: "none",
-                  background: "none",
-                  cursor: "pointer",
-                  color: newEnvKey.trim() ? "#10b981" : "#d1d5db",
-                }}
+                className={`btn-icon ${newEnvKey.trim() ? "success" : ""}`}
               >
                 <Plus size={18} />
               </button>
@@ -627,44 +401,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "12px",
-            borderTop: "1px solid #e5e7eb",
-            paddingTop: "16px",
-          }}
-        >
+        <div className="modal-footer">
           {preset === "qwen" &&
           installStatus === "installed" &&
           !isConnected ? (
             <>
-              <div
-                style={{
-                  marginRight: "auto",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
+              <div style={{ marginRight: "auto" }}>
                 <button
                   type="button"
                   onClick={handleAuthTerminal}
                   title="Open terminal to login manually (type '/auth')"
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "6px",
-                    border: "1px solid #d1d5db",
-                    backgroundColor: "white",
-                    color: "#374151",
-                    fontSize: "0.9rem",
-                    fontWeight: 500,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
+                  className="btn-secondary"
                 >
                   <span style={{ fontSize: "1.1em" }}>🔑</span> Authenticate in
                   Terminal
@@ -673,16 +420,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={onConnectToggle}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: "6px",
-                  border: "none",
-                  backgroundColor: "#10b981",
-                  color: "white",
-                  fontSize: "0.9rem",
-                  fontWeight: 500,
-                  cursor: "pointer",
-                }}
+                className="btn-primary"
               >
                 Connect
               </button>
@@ -691,16 +429,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <button
               type="button"
               onClick={onConnectToggle}
-              style={{
-                padding: "8px 16px",
-                borderRadius: "6px",
-                border: "none",
-                backgroundColor: isConnected ? "#ef4444" : "#10b981",
-                color: "white",
-                fontSize: "0.9rem",
-                fontWeight: 500,
-                cursor: "pointer",
-              }}
+              className="btn-primary"
+              style={
+                isConnected ? { backgroundColor: "#ef4444" } : undefined
+              }
             >
               {isConnected ? "Disconnect" : "Connect & Save"}
             </button>
@@ -709,6 +441,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       </div>
     </div>
   );
+
 };
 
 export default SettingsModal;

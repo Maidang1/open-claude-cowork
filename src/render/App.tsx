@@ -4,13 +4,15 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  Moon,
   Plus,
   Send,
   Settings,
+  Sun,
   XCircle,
 } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -57,7 +59,7 @@ interface AgentInfoState {
 
 const LOCAL_COMMANDS: AgentCommandInfo[] = [];
 const DEFAULT_QWEN_COMMAND =
-  "qwen --acp --allowed-tools run_shell_command --experimental-skills";
+  "qwen --acp --allowed-tools all,run_shell_command --experimental-skills";
 
 const mergeCommands = (
   agentCommands: AgentCommandInfo[],
@@ -94,7 +96,8 @@ interface IncomingMessage {
     | "tool_call_update"
     | "tool_log"
     | "system"
-    | "permission_request";
+    | "permission_request"
+    | "agent_plan";
   text?: string;
   toolCallId?: string;
   id?: string; // For permission requests
@@ -105,6 +108,7 @@ interface IncomingMessage {
   tool?: string;
   info?: Partial<AgentInfoState>;
   sessionId?: string;
+  plan?: any;
 }
 
 interface Task {
@@ -163,30 +167,15 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
                 key={opt.optionId}
                 type="button"
                 onClick={() => handlePermission(opt.optionId)}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: "4px",
-                  border: "1px solid #e5e7eb",
-                  backgroundColor: "#fff",
-                  cursor: "pointer",
-                  fontSize: "0.9em",
-                }}
+                className="permission-btn"
               >
-                {opt.label || opt.kind}
+                {opt.label || opt.name || opt.kind || opt.optionId}
               </button>
             ))}
             <button
               type="button"
               onClick={() => handlePermission(null)}
-              style={{
-                padding: "6px 12px",
-                borderRadius: "4px",
-                border: "1px solid #ef4444",
-                backgroundColor: "#fff",
-                color: "#ef4444",
-                cursor: "pointer",
-                fontSize: "0.9em",
-              }}
+              className="permission-btn deny"
             >
               Deny
             </button>
@@ -333,20 +322,7 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
             }}
           >
             {msg.toolCalls.map((tool) => (
-              <div
-                key={tool.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "8px 12px",
-                  backgroundColor: "#ffffff",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: "6px",
-                  fontSize: "0.85em",
-                  color: "#374151",
-                }}
-              >
+              <div key={tool.id} className="tool-call-item">
                 {tool.status === "pending" || tool.status === "in_progress" ? (
                   <Loader2 size={14} className="animate-spin" color="#f97316" />
                 ) : tool.status === "completed" ? (
@@ -401,35 +377,64 @@ const App = () => {
     state: "connecting" | "connected" | "error" | "disconnected";
     message: string;
   }>({ state: "disconnected", message: "Disconnected" });
+
+  // Track if we are waiting for an agent response
+  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined" && window.matchMedia) {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+    }
+    return "light";
+  });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoConnectAttempted = useRef(false);
   const connectInFlight = useRef(false);
   const sessionLoadInFlight = useRef(false);
+  const tasksRef = useRef<Task[]>([]);
+  const activeTaskIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
+
+  useEffect(() => {
+    activeTaskIdRef.current = activeTaskId;
+  }, [activeTaskId]);
 
   // Ref to track current generating message ID for stream updates
   const currentAgentMsgId = useRef<string | null>(null);
   const activeTask = tasks.find((task) => task.id === activeTaskId) || null;
   const messages = activeTask?.messages ?? [];
 
-  const persistTaskUpdates = (taskId: string, updates: Partial<Task>) => {
-    window.electron.invoke("db:update-task", taskId, updates);
-  };
+  const persistTaskUpdates = useCallback(
+    (taskId: string, updates: Partial<Task>) => {
+      window.electron.invoke("db:update-task", taskId, updates);
+    },
+    [],
+  );
 
-  const applyTaskUpdates = (taskId: string, updates: Partial<Task>) => {
-    setTasks((prev) => {
-      const next = prev.map((task) =>
-        task.id === taskId ? { ...task, ...updates } : task,
-      );
-      if (updates.lastActiveAt !== undefined) {
-        return [...next].sort((a, b) => b.lastActiveAt - a.lastActiveAt);
-      }
-      return next;
-    });
-    persistTaskUpdates(taskId, updates);
-  };
+  const applyTaskUpdates = useCallback(
+    (taskId: string, updates: Partial<Task>) => {
+      setTasks((prev) => {
+        const next = prev.map((task) =>
+          task.id === taskId ? { ...task, ...updates } : task,
+        );
+        if (updates.lastActiveAt !== undefined) {
+          return [...next].sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+        }
+        return next;
+      });
+      persistTaskUpdates(taskId, updates);
+    },
+    [persistTaskUpdates],
+  );
 
-  const clearAllSessionIds = () => {
+  const clearAllSessionIds = useCallback(() => {
     setTasks((prev) => {
       const next = prev.map((task) => ({ ...task, sessionId: null }));
       next.forEach((task) => {
@@ -437,7 +442,7 @@ const App = () => {
       });
       return next;
     });
-  };
+  }, [persistTaskUpdates]);
 
   const syncActiveTaskState = (task: Task | null) => {
     if (!task) return;
@@ -451,70 +456,13 @@ const App = () => {
     }));
   };
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Setup once
   useEffect(() => {
-    // Listen for agent messages
-    const removeListener = window.electron.on(
-      "agent:message",
-      (msg: IncomingMessage | string) => {
-        const data: IncomingMessage =
-          typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
-        console.log("[agent:message]", data);
-        setAgentMessageLog((prev) => {
-          const next = [
-            `[${new Date().toISOString()}] ${JSON.stringify(data)}`,
-            ...prev,
-          ];
-          return next.slice(0, 50);
-        });
-        handleIncomingMessage(data);
-      },
-    );
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
 
-    const loadInitialState = async () => {
-      const [storedTasks, storedActiveTaskId, lastWs] = await Promise.all([
-        window.electron.invoke("db:list-tasks"),
-        window.electron.invoke("db:get-active-task"),
-        window.electron.invoke("db:get-last-workspace"),
-      ]);
-
-      const loadedTasks = Array.isArray(storedTasks)
-        ? storedTasks.map((task) => ({
-            ...task,
-            agentEnv: task.agentEnv || {},
-            messages: Array.isArray(task.messages) ? task.messages : [],
-            sessionId: task.sessionId ?? null,
-            modelId: task.modelId ?? null,
-            tokenUsage: task.tokenUsage ?? null,
-          }))
-        : [];
-      setTasks(loadedTasks);
-
-      const resolvedActiveId = loadedTasks.find(
-        (task) => task.id === storedActiveTaskId,
-      )
-        ? storedActiveTaskId
-        : (loadedTasks[0]?.id ?? null);
-
-      if (resolvedActiveId) {
-        setActiveTaskId(resolvedActiveId);
-        const nextTask = loadedTasks.find(
-          (task) => task.id === resolvedActiveId,
-        );
-        if (nextTask) {
-          syncActiveTaskState(nextTask);
-        }
-      } else if (lastWs) {
-        setCurrentWorkspace(lastWs);
-      }
-    };
-
-    loadInitialState();
-
-    return () => {
-      removeListener();
-    };
-  }, []);
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  };
 
   // Save last workspace when it changes
   useEffect(() => {
@@ -590,364 +538,451 @@ const App = () => {
     }
   }, [inputText]);
 
-  const handleIncomingMessage = (data: IncomingMessage) => {
-    if (
-      !activeTaskId &&
-      !data.sessionId &&
-      data.type !== "system" &&
-      data.type !== "agent_info"
-    ) {
-      return;
-    }
-    const resolveTaskId = (list: Task[]) => {
-      if (data.sessionId) {
-        const match = list.find((task) => task.sessionId === data.sessionId);
-        return match?.id ?? activeTaskId;
-      }
-      return activeTaskId;
-    };
-    if (data.type === "agent_info") {
-      const resolvedTaskId = data.sessionId
-        ? (tasks.find((task) => task.sessionId === data.sessionId)?.id ??
-          activeTaskId)
-        : activeTaskId;
-      const nextUsage = data.info?.tokenUsage ?? null;
-      const baseUsage = activeTask?.tokenUsage ?? null;
-      const mergedUsage = nextUsage
-        ? {
-            promptTokens:
-              (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
-            completionTokens:
-              (baseUsage?.completionTokens ?? 0) +
-              (nextUsage.completionTokens ?? 0),
-            totalTokens:
-              (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
-          }
-        : baseUsage;
-      if (nextUsage) {
-        setTasks((prev) =>
-          prev.map((task) => {
-            if (!resolvedTaskId || task.id !== resolvedTaskId) return task;
-            const lastAgentIndex = [...task.messages]
-              .reverse()
-              .findIndex((msg) => msg.sender === "agent");
-            if (lastAgentIndex === -1) {
-              return task;
-            }
-            const realIndex = task.messages.length - 1 - lastAgentIndex;
-            const nextMessages = task.messages.map((msg, idx) =>
-              idx === realIndex ? { ...msg, tokenUsage: nextUsage } : msg,
-            );
-            const updatedAt = Date.now();
-            persistTaskUpdates(task.id, {
-              messages: nextMessages,
-              updatedAt,
-              lastActiveAt: updatedAt,
-            });
-            return {
-              ...task,
-              messages: nextMessages,
-              updatedAt,
-              lastActiveAt: updatedAt,
-            };
-          }),
-        );
-      }
-      setAgentInfo((prev) => ({
-        models: data.info?.models ?? prev.models,
-        currentModelId: data.info?.currentModelId ?? prev.currentModelId,
-        commands: data.info?.commands ?? prev.commands,
-        tokenUsage: mergedUsage,
-      }));
-      if (data.info?.currentModelId && resolvedTaskId) {
-        applyTaskUpdates(resolvedTaskId, {
-          modelId: data.info.currentModelId,
-          updatedAt: Date.now(),
-          lastActiveAt: Date.now(),
-        });
-      }
-      if (mergedUsage && resolvedTaskId) {
-        applyTaskUpdates(resolvedTaskId, {
-          tokenUsage: mergedUsage,
-          updatedAt: Date.now(),
-          lastActiveAt: Date.now(),
-        });
-      }
-      return;
-    }
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, []);
 
-    // System Messages
-    if (data.type === "system") {
-      const content = data.text || "";
+  const handleIncomingMessage = useCallback(
+    (data: IncomingMessage) => {
+      const tasksSnapshot = tasksRef.current;
+      const activeTaskIdSnapshot = activeTaskIdRef.current;
+      const activeTaskSnapshot =
+        tasksSnapshot.find((task) => task.id === activeTaskIdSnapshot) ?? null;
+      const messagesSnapshot = activeTaskSnapshot?.messages ?? [];
+
       if (
-        content.includes("Agent disconnected") ||
-        content.includes("Agent process error")
+        !activeTaskIdSnapshot &&
+        !data.sessionId &&
+        data.type !== "system" &&
+        data.type !== "agent_info" &&
+        data.type !== "permission_request"
       ) {
-        setIsConnected(false);
-        clearAllSessionIds();
-        sessionLoadInFlight.current = false;
-        setConnectionStatus({
-          state: "error",
-          message: content.replace(/^System:\s*/, ""),
-        });
         return;
       }
-      const resolvedTaskId = resolveTaskId(tasks);
-      const targetTask = resolvedTaskId
-        ? tasks.find((task) => task.id === resolvedTaskId)
-        : null;
-      const baseMessages = targetTask?.messages ?? messages;
-      if (resolvedTaskId) {
-        const updatedAt = Date.now();
-        applyTaskUpdates(resolvedTaskId, {
-          messages: [
-            ...baseMessages,
-            {
-              id: Date.now().toString(),
-              sender: "system",
-              content,
-            },
-          ],
-          updatedAt,
-          lastActiveAt: updatedAt,
-        });
-      }
-      return;
-    }
-
-    if (data.type === "permission_request") {
-      const updatedAt = Date.now();
-      const resolvedTaskId = resolveTaskId(tasks);
-      const targetTask = resolvedTaskId
-        ? tasks.find((task) => task.id === resolvedTaskId)
-        : null;
-      const baseMessages = targetTask?.messages ?? messages;
-      if (resolvedTaskId) {
-        applyTaskUpdates(resolvedTaskId, {
-          messages: [
-            ...baseMessages,
-            {
-              id: Date.now().toString(),
-              sender: "system",
-              content: `Requesting permission to run tool: ${data.tool}`,
-              permissionId: data.id,
-              options: data.options,
-            },
-          ],
-          updatedAt,
-          lastActiveAt: updatedAt,
-        });
-      }
-      return;
-    }
-
-    if (
-      sessionLoadInFlight.current &&
-      (data.type === "agent_text" ||
-        data.type === "agent_thought" ||
-        data.type === "tool_call" ||
-        data.type === "tool_call_update")
-    ) {
-      return;
-    }
-
-    // Agent Messages
-    setTasks((prev) => {
-      const resolvedTaskId = resolveTaskId(prev);
-      const targetTask = resolvedTaskId
-        ? prev.find((task) => task.id === resolvedTaskId)
-        : null;
-      if (!targetTask) return prev;
-      const lastMsg = targetTask.messages[targetTask.messages.length - 1];
-      const isAgentGenerating =
-        lastMsg &&
-        lastMsg.sender === "agent" &&
-        currentAgentMsgId.current === lastMsg.id;
-
-      if (data.type === "agent_text") {
-        if (isAgentGenerating) {
-          const nextMessages = targetTask.messages.map((m) =>
-            m.id === lastMsg.id
-              ? { ...m, content: m.content + (data.text || "") }
-              : m,
-          );
-          const updatedAt = Date.now();
-          if (resolvedTaskId) {
-            persistTaskUpdates(resolvedTaskId, {
-              messages: nextMessages,
-              updatedAt,
-              lastActiveAt: updatedAt,
-            });
-          }
-          return prev.map((task) =>
-            task.id === resolvedTaskId
-              ? {
-                  ...task,
-                  messages: nextMessages,
-                  updatedAt,
-                  lastActiveAt: updatedAt,
-                }
-              : task,
-          );
-        } else {
-          const newId = Date.now().toString();
-          currentAgentMsgId.current = newId;
-          const nextMessages = [
-            ...targetTask.messages,
-            { id: newId, sender: "agent", content: data.text || "" },
-          ];
-          const updatedAt = Date.now();
-          if (resolvedTaskId) {
-            persistTaskUpdates(resolvedTaskId, {
-              messages: nextMessages,
-              updatedAt,
-              lastActiveAt: updatedAt,
-            });
-          }
-          return prev.map((task) =>
-            task.id === resolvedTaskId
-              ? {
-                  ...task,
-                  messages: nextMessages,
-                  updatedAt,
-                  lastActiveAt: updatedAt,
-                }
-              : task,
+      const resolveTaskId = (list: Task[]) => {
+        if (data.sessionId) {
+          const match = list.find((task) => task.sessionId === data.sessionId);
+          return match?.id ?? activeTaskIdSnapshot;
+        }
+        return activeTaskIdSnapshot;
+      };
+      if (data.type === "agent_info") {
+        const resolvedTaskId = data.sessionId
+          ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)
+              ?.id ?? activeTaskIdSnapshot)
+          : activeTaskIdSnapshot;
+        const nextUsage = data.info?.tokenUsage ?? null;
+        const baseUsage = activeTaskSnapshot?.tokenUsage ?? null;
+        const mergedUsage = nextUsage
+          ? {
+              promptTokens:
+                (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
+              completionTokens:
+                (baseUsage?.completionTokens ?? 0) +
+                (nextUsage.completionTokens ?? 0),
+              totalTokens:
+                (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
+            }
+          : baseUsage;
+        if (nextUsage) {
+          setTasks((prev) =>
+            prev.map((task) => {
+              if (!resolvedTaskId || task.id !== resolvedTaskId) return task;
+              const lastAgentIndex = [...task.messages]
+                .reverse()
+                .findIndex((msg) => msg.sender === "agent");
+              if (lastAgentIndex === -1) {
+                return task;
+              }
+              const realIndex = task.messages.length - 1 - lastAgentIndex;
+              const nextMessages = task.messages.map((msg, idx) =>
+                idx === realIndex ? { ...msg, tokenUsage: nextUsage } : msg,
+              );
+              const updatedAt = Date.now();
+              persistTaskUpdates(task.id, {
+                messages: nextMessages,
+                updatedAt,
+                lastActiveAt: updatedAt,
+              });
+              return {
+                ...task,
+                messages: nextMessages,
+                updatedAt,
+                lastActiveAt: updatedAt,
+              };
+            }),
           );
         }
-      }
-
-      if (data.type === "agent_thought") {
-        if (isAgentGenerating) {
-          const nextMessages = targetTask.messages.map((m) =>
-            m.id === lastMsg.id
-              ? { ...m, thought: (m.thought || "") + (data.text || "") }
-              : m,
-          );
-          const updatedAt = Date.now();
-          if (resolvedTaskId) {
-            persistTaskUpdates(resolvedTaskId, {
-              messages: nextMessages,
-              updatedAt,
-              lastActiveAt: updatedAt,
-            });
-          }
-          return prev.map((task) =>
-            task.id === resolvedTaskId
-              ? {
-                  ...task,
-                  messages: nextMessages,
-                  updatedAt,
-                  lastActiveAt: updatedAt,
-                }
-              : task,
-          );
-        } else {
-          const newId = Date.now().toString();
-          currentAgentMsgId.current = newId;
-          const nextMessages = [
-            ...targetTask.messages,
-            {
-              id: newId,
-              sender: "agent",
-              content: "",
-              thought: data.text || "",
-            },
-          ];
-          const updatedAt = Date.now();
-          if (resolvedTaskId) {
-            persistTaskUpdates(resolvedTaskId, {
-              messages: nextMessages,
-              updatedAt,
-              lastActiveAt: updatedAt,
-            });
-          }
-          return prev.map((task) =>
-            task.id === resolvedTaskId
-              ? {
-                  ...task,
-                  messages: nextMessages,
-                  updatedAt,
-                  lastActiveAt: updatedAt,
-                }
-              : task,
-          );
-        }
-      }
-
-      if (data.type === "tool_call") {
-        if (isAgentGenerating) {
-          const newTool: ToolCall = {
-            id: data.toolCallId || "",
-            name: data.name || "Unknown Tool",
-            kind: data.kind,
-            status: (data.status as any) || "in_progress",
-          };
-          const nextMessages = targetTask.messages.map((m) =>
-            m.id === lastMsg.id
-              ? { ...m, toolCalls: [...(m.toolCalls || []), newTool] }
-              : m,
-          );
-          const updatedAt = Date.now();
-          if (resolvedTaskId) {
-            persistTaskUpdates(resolvedTaskId, {
-              messages: nextMessages,
-              updatedAt,
-              lastActiveAt: updatedAt,
-            });
-          }
-          return prev.map((task) =>
-            task.id === resolvedTaskId
-              ? {
-                  ...task,
-                  messages: nextMessages,
-                  updatedAt,
-                  lastActiveAt: updatedAt,
-                }
-              : task,
-          );
-        }
-      }
-
-      if (data.type === "tool_call_update") {
-        if (isAgentGenerating) {
-          const nextMessages = targetTask.messages.map((m) => {
-            if (m.id !== lastMsg.id) return m;
-            return {
-              ...m,
-              toolCalls: m.toolCalls?.map((t) =>
-                t.id === data.toolCallId
-                  ? { ...t, status: data.status as any }
-                  : t,
-              ),
-            };
+        setAgentInfo((prev) => ({
+          models: data.info?.models ?? prev.models,
+          currentModelId: data.info?.currentModelId ?? prev.currentModelId,
+          commands: data.info?.commands ?? prev.commands,
+          tokenUsage: mergedUsage,
+        }));
+        if (data.info?.currentModelId && resolvedTaskId) {
+          applyTaskUpdates(resolvedTaskId, {
+            modelId: data.info.currentModelId,
+            updatedAt: Date.now(),
+            lastActiveAt: Date.now(),
           });
-          const updatedAt = Date.now();
-          if (resolvedTaskId) {
-            persistTaskUpdates(resolvedTaskId, {
-              messages: nextMessages,
-              updatedAt,
-              lastActiveAt: updatedAt,
-            });
-          }
-          return prev.map((task) =>
-            task.id === resolvedTaskId
-              ? {
-                  ...task,
-                  messages: nextMessages,
-                  updatedAt,
-                  lastActiveAt: updatedAt,
-                }
-              : task,
-          );
         }
+        if (mergedUsage && resolvedTaskId) {
+          applyTaskUpdates(resolvedTaskId, {
+            tokenUsage: mergedUsage,
+            updatedAt: Date.now(),
+            lastActiveAt: Date.now(),
+          });
+        }
+        return;
       }
 
-      return prev;
-    });
+      // System Messages
+      if (data.type === "system") {
+        const content = data.text || "";
+        if (
+          content.includes("Agent disconnected") ||
+          content.includes("Agent process error")
+        ) {
+          setIsConnected(false);
+          clearAllSessionIds();
+          sessionLoadInFlight.current = false;
+          setConnectionStatus({
+            state: "error",
+            message: content.replace(/^System:\s*/, ""),
+          });
+          return;
+        }
+        const resolvedTaskId = resolveTaskId(tasksSnapshot);
+        const targetTask = resolvedTaskId
+          ? tasksSnapshot.find((task) => task.id === resolvedTaskId)
+          : null;
+        const baseMessages = targetTask?.messages ?? messagesSnapshot;
+        if (resolvedTaskId) {
+          const updatedAt = Date.now();
+          applyTaskUpdates(resolvedTaskId, {
+            messages: [
+              ...baseMessages,
+              {
+                id: Date.now().toString(),
+                sender: "system" as const,
+                content,
+              },
+            ],
+            updatedAt,
+            lastActiveAt: updatedAt,
+          });
+        }
+        return;
+      }
 
-    setTimeout(scrollToBottom, 100);
-  };
+      if (data.type === "permission_request") {
+        const updatedAt = Date.now();
+        const resolvedTaskId =
+          resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
+        const targetTask = resolvedTaskId
+          ? tasksSnapshot.find((task) => task.id === resolvedTaskId)
+          : null;
+        const baseMessages = targetTask?.messages ?? messagesSnapshot;
+        const content =
+          (data as any).content ||
+          data.text ||
+          `Requesting permission to run: ${data.tool || "Unknown tool"}`;
+        const normalizedOptions = data.options?.map((opt: any) => ({
+          ...opt,
+          label: opt.label || opt.name || opt.kind || opt.optionId,
+        }));
+        if (resolvedTaskId) {
+          applyTaskUpdates(resolvedTaskId, {
+            messages: [
+              ...baseMessages,
+              {
+                id: Date.now().toString(),
+                sender: "system" as const,
+                content,
+                permissionId: data.id,
+                options: normalizedOptions,
+              },
+            ],
+            updatedAt,
+            lastActiveAt: updatedAt,
+          });
+        }
+        return;
+      }
+
+      if (
+        sessionLoadInFlight.current &&
+        (data.type === "agent_text" ||
+          data.type === "agent_thought" ||
+          data.type === "tool_call" ||
+          data.type === "tool_call_update")
+      ) {
+        return;
+      }
+
+      // Agent Messages
+      setTasks((prev) => {
+        const resolvedTaskId = resolveTaskId(prev);
+        const targetTask = resolvedTaskId
+          ? prev.find((task) => task.id === resolvedTaskId)
+          : null;
+        if (!targetTask) return prev;
+        const lastMsg = targetTask.messages[targetTask.messages.length - 1];
+        const isAgentGenerating =
+          lastMsg &&
+          lastMsg.sender === "agent" &&
+          currentAgentMsgId.current === lastMsg.id;
+
+        if (data.type === "agent_text") {
+          if (isAgentGenerating) {
+            const nextMessages = targetTask.messages.map((m) =>
+              m.id === lastMsg.id
+                ? { ...m, content: m.content + (data.text || "") }
+                : m,
+            );
+            const updatedAt = Date.now();
+            if (resolvedTaskId) {
+              persistTaskUpdates(resolvedTaskId, {
+                messages: nextMessages,
+                updatedAt,
+                lastActiveAt: updatedAt,
+              });
+            }
+            return prev.map((task) =>
+              task.id === resolvedTaskId
+                ? {
+                    ...task,
+                    messages: nextMessages,
+                    updatedAt,
+                    lastActiveAt: updatedAt,
+                  }
+                : task,
+            );
+          } else {
+            const newId = Date.now().toString();
+            currentAgentMsgId.current = newId;
+            const nextMessages = [
+              ...targetTask.messages,
+              { id: newId, sender: "agent" as const, content: data.text || "" },
+            ];
+            const updatedAt = Date.now();
+            if (resolvedTaskId) {
+              persistTaskUpdates(resolvedTaskId, {
+                messages: nextMessages,
+                updatedAt,
+                lastActiveAt: updatedAt,
+              });
+            }
+            return prev.map((task) =>
+              task.id === resolvedTaskId
+                ? {
+                    ...task,
+                    messages: nextMessages,
+                    updatedAt,
+                    lastActiveAt: updatedAt,
+                  }
+                : task,
+            );
+          }
+        }
+
+        if (data.type === "agent_thought") {
+          if (isAgentGenerating) {
+            const nextMessages = targetTask.messages.map((m) =>
+              m.id === lastMsg.id
+                ? { ...m, thought: (m.thought || "") + (data.text || "") }
+                : m,
+            );
+            const updatedAt = Date.now();
+            if (resolvedTaskId) {
+              persistTaskUpdates(resolvedTaskId, {
+                messages: nextMessages,
+                updatedAt,
+                lastActiveAt: updatedAt,
+              });
+            }
+            return prev.map((task) =>
+              task.id === resolvedTaskId
+                ? {
+                    ...task,
+                    messages: nextMessages,
+                    updatedAt,
+                    lastActiveAt: updatedAt,
+                  }
+                : task,
+            );
+          } else {
+            const newId = Date.now().toString();
+            currentAgentMsgId.current = newId;
+            const nextMessages = [
+              ...targetTask.messages,
+              {
+                id: newId,
+                sender: "agent" as const,
+                content: "",
+                thought: data.text || "",
+              },
+            ];
+            const updatedAt = Date.now();
+            if (resolvedTaskId) {
+              persistTaskUpdates(resolvedTaskId, {
+                messages: nextMessages,
+                updatedAt,
+                lastActiveAt: updatedAt,
+              });
+            }
+            return prev.map((task) =>
+              task.id === resolvedTaskId
+                ? {
+                    ...task,
+                    messages: nextMessages,
+                    updatedAt,
+                    lastActiveAt: updatedAt,
+                  }
+                : task,
+            );
+          }
+        }
+
+        if (data.type === "tool_call") {
+          if (isAgentGenerating) {
+            const newTool: ToolCall = {
+              id: data.toolCallId || "",
+              name: data.name || "Unknown Tool",
+              kind: data.kind,
+              status: (data.status as any) || "in_progress",
+            };
+            const nextMessages = targetTask.messages.map((m) =>
+              m.id === lastMsg.id
+                ? { ...m, toolCalls: [...(m.toolCalls || []), newTool] }
+                : m,
+            );
+            const updatedAt = Date.now();
+            if (resolvedTaskId) {
+              persistTaskUpdates(resolvedTaskId, {
+                messages: nextMessages,
+                updatedAt,
+                lastActiveAt: updatedAt,
+              });
+            }
+            return prev.map((task) =>
+              task.id === resolvedTaskId
+                ? {
+                    ...task,
+                    messages: nextMessages,
+                    updatedAt,
+                    lastActiveAt: updatedAt,
+                  }
+                : task,
+            );
+          }
+        }
+
+        if (data.type === "tool_call_update") {
+          if (isAgentGenerating) {
+            const nextMessages = targetTask.messages.map((m) => {
+              if (m.id !== lastMsg.id) return m;
+              return {
+                ...m,
+                toolCalls: m.toolCalls?.map((t) =>
+                  t.id === data.toolCallId
+                    ? { ...t, status: data.status as any }
+                    : t,
+                ),
+              };
+            });
+            const updatedAt = Date.now();
+            if (resolvedTaskId) {
+              persistTaskUpdates(resolvedTaskId, {
+                messages: nextMessages,
+                updatedAt,
+                lastActiveAt: updatedAt,
+              });
+            }
+            return prev.map((task) =>
+              task.id === resolvedTaskId
+                ? {
+                    ...task,
+                    messages: nextMessages,
+                    updatedAt,
+                    lastActiveAt: updatedAt,
+                  }
+                : task,
+            );
+          }
+        }
+
+        return prev;
+      });
+
+      setTimeout(scrollToBottom, 100);
+    },
+    [applyTaskUpdates, clearAllSessionIds, scrollToBottom, setAgentInfo],
+  );
+
+  useEffect(() => {
+    // Listen for agent messages
+    const removeListener = window.electron.on(
+      "agent:message",
+      (msg: IncomingMessage | string) => {
+        const data: IncomingMessage =
+          typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
+        console.log("[agent:message]", data);
+        setAgentMessageLog((prev) => {
+          const next = [
+            `[${new Date().toISOString()}] ${JSON.stringify(data)}`,
+            ...prev,
+          ];
+          return next.slice(0, 50);
+        });
+        handleIncomingMessage(data);
+      },
+    );
+
+    const loadInitialState = async () => {
+      const [storedTasks, storedActiveTaskId, lastWs] = await Promise.all([
+        window.electron.invoke("db:list-tasks"),
+        window.electron.invoke("db:get-active-task"),
+        window.electron.invoke("db:get-last-workspace"),
+      ]);
+
+      const loadedTasks = Array.isArray(storedTasks)
+        ? storedTasks.map((task) => ({
+            ...task,
+            agentEnv: task.agentEnv || {},
+            messages: Array.isArray(task.messages) ? task.messages : [],
+            sessionId: task.sessionId ?? null,
+            modelId: task.modelId ?? null,
+            tokenUsage: task.tokenUsage ?? null,
+          }))
+        : [];
+      setTasks(loadedTasks);
+
+      const resolvedActiveId = loadedTasks.find(
+        (task) => task.id === storedActiveTaskId,
+      )
+        ? storedActiveTaskId
+        : (loadedTasks[0]?.id ?? null);
+
+      if (resolvedActiveId) {
+        setActiveTaskId(resolvedActiveId);
+        const nextTask = loadedTasks.find(
+          (task) => task.id === resolvedActiveId,
+        );
+        if (nextTask) {
+          syncActiveTaskState(nextTask);
+        }
+      } else if (lastWs) {
+        setCurrentWorkspace(lastWs);
+      }
+    };
+
+    loadInitialState();
+
+    return () => {
+      removeListener();
+    };
+  }, [handleIncomingMessage]);
 
   const ensureTaskSession = async (task: Task) => {
     if (connectInFlight.current) {
@@ -1093,10 +1128,6 @@ const App = () => {
     }
     ensureTaskSession(activeTask);
   }, [activeTask, isConnected]);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
 
   const handleConnect = async () => {
     if (connectInFlight.current) {
@@ -1255,11 +1286,12 @@ const App = () => {
     setInputText("");
 
     currentAgentMsgId.current = null;
+    setIsWaitingForResponse(true);
 
     if (activeTaskId) {
       const nextMessages = [
         ...messages,
-        { id: Date.now().toString(), sender: "user", content: text },
+        { id: Date.now().toString(), sender: "user" as const, content: text },
       ];
       const updatedAt = Date.now();
       applyTaskUpdates(activeTaskId, {
@@ -1476,15 +1508,28 @@ const App = () => {
         )}
 
         <div className="sidebar-settings">
-          <button
-            type="button"
-            className="sidebar-settings-button"
-            onClick={() => setIsSettingsOpen(true)}
-            aria-label="Open settings"
-          >
-            <Settings size={16} />
-            <span>Settings</span>
-          </button>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              type="button"
+              className="sidebar-settings-button"
+              onClick={() => setIsSettingsOpen(true)}
+              aria-label="Open settings"
+              style={{ flex: 1 }}
+            >
+              <Settings size={16} />
+              <span>Settings</span>
+            </button>
+            <button
+              type="button"
+              className="sidebar-settings-button"
+              onClick={toggleTheme}
+              aria-label="Toggle theme"
+              style={{ width: "auto", padding: "10px" }}
+              title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+            >
+              {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
+            </button>
+          </div>
         </div>
       </div>
 

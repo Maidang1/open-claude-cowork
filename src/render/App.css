@@ -697,44 +697,42 @@ body,
     cursor: not-allowed;
 }
 
-@media (prefers-color-scheme: dark) {
-    :root {
-        --color-bg: #0f1115;
-        --color-bg-sidebar: #13161c;
-        --color-border: #232834;
-        --color-text-primary: #e5e7eb;
-        --color-text-secondary: #9aa3b2;
-        --color-primary: #f97316;
-        --color-primary-hover: #fb923c;
-        --color-message-user-bg: #1b1f2a;
-        --color-message-bot-bg: #13161c;
-        --color-input-bg: #13161c;
-        --color-surface: #0f1115;
-        --color-surface-muted: #151a24;
-    }
+[data-theme="dark"] {
+    --color-bg: #0f1115;
+    --color-bg-sidebar: #13161c;
+    --color-border: #232834;
+    --color-text-primary: #e5e7eb;
+    --color-text-secondary: #9aa3b2;
+    --color-primary: #f97316;
+    --color-primary-hover: #fb923c;
+    --color-message-user-bg: #1b1f2a;
+    --color-message-bot-bg: #13161c;
+    --color-input-bg: #13161c;
+    --color-surface: #0f1115;
+    --color-surface-muted: #151a24;
+}
 
-    .new-chat-btn,
-    .sidebar-settings-button,
-    .input-box,
-    .command-dropdown,
-    .model-dropdown {
-        background-color: #13161c;
-    }
+[data-theme="dark"] .new-chat-btn,
+[data-theme="dark"] .sidebar-settings-button,
+[data-theme="dark"] .input-box,
+[data-theme="dark"] .command-dropdown,
+[data-theme="dark"] .model-dropdown {
+    background-color: #13161c;
+}
 
-    .new-chat-btn:hover,
-    .sidebar-settings-button:hover,
-    .history-item:hover,
-    .history-item.active,
-    .command-item.active,
-    .command-item:hover,
-    .model-item.active,
-    .model-item:hover {
-        background-color: #1b202b;
-    }
+[data-theme="dark"] .new-chat-btn:hover,
+[data-theme="dark"] .sidebar-settings-button:hover,
+[data-theme="dark"] .history-item:hover,
+[data-theme="dark"] .history-item.active,
+[data-theme="dark"] .command-item.active,
+[data-theme="dark"] .command-item:hover,
+[data-theme="dark"] .model-item.active,
+[data-theme="dark"] .model-item:hover {
+    background-color: #1b202b;
+}
 
-    .message-usage {
-        background-color: #151a24;
-    }
+[data-theme="dark"] .message-usage {
+    background-color: #151a24;
 }
 
 /* Connection Bar Overlay */
@@ -765,4 +763,406 @@ body,
     margin: 12px 0;
     border-radius: 8px;
     overflow: hidden;
+}
+
+/* Settings Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    border-radius: 8px;
+    width: 500px;
+    max-width: 90%;
+    padding: 24px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    max-height: 80vh;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.modal-close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close-btn:hover {
+    color: var(--color-text-primary);
+}
+
+.modal-section {
+    margin-bottom: 20px;
+}
+
+.modal-label {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: var(--color-text-primary);
+}
+
+.modal-input {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    font-size: 0.9rem;
+    box-sizing: border-box;
+    background-color: var(--color-input-bg);
+    color: var(--color-text-primary);
+}
+
+.modal-input:disabled {
+    background-color: var(--color-surface-muted);
+    color: var(--color-text-secondary);
+}
+
+/* Agent Preset Buttons */
+.preset-buttons {
+    display: flex;
+    gap: 12px;
+}
+
+.preset-button {
+    flex: 1;
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.preset-button.active {
+    border-color: var(--color-primary);
+    background-color: rgba(249, 115, 22, 0.1);
+    color: var(--color-primary);
+}
+
+/* Status Box */
+.status-box {
+    margin-bottom: 20px;
+    padding: 12px;
+    background-color: var(--color-surface-muted);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid var(--color-border);
+}
+
+.status-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+}
+
+.status-text {
+    font-size: 0.9rem;
+}
+
+.status-text.checking { color: var(--color-text-secondary); }
+.status-text.installed { color: #10b981; display: flex; align-items: center; gap: 4px; }
+.status-text.not-installed { color: #ef4444; }
+.status-text.processing { color: var(--color-primary); display: flex; align-items: center; gap: 4px; }
+
+/* Env Vars */
+.env-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.env-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.env-input {
+    padding: 6px;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-input-bg);
+    color: var(--color-text-primary);
+    font-size: 0.85rem;
+}
+
+.env-input.key { flex: 1; }
+.env-input.val { flex: 2; }
+
+.env-input[readonly] {
+    background-color: var(--color-surface-muted);
+}
+
+/* Buttons */
+.btn-primary {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: none;
+    background-color: var(--color-primary);
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-primary:hover {
+    background-color: var(--color-primary-hover);
+}
+
+.btn-secondary {
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.btn-secondary:hover {
+    background-color: var(--color-surface-muted);
+}
+
+.btn-small {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+}
+
+.btn-danger-outline {
+    padding: 6px 12px;
+    border-radius: 4px;
+    background-color: transparent;
+    color: #ef4444;
+    border: 1px solid #ef4444;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.btn-danger-outline:hover {
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
+.btn-icon {
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.btn-icon:hover {
+    color: var(--color-text-primary);
+}
+.btn-icon.danger {
+    color: #ef4444;
+}
+.btn-icon.success {
+    color: #10b981;
+}
+.btn-icon:disabled {
+    color: var(--color-border);
+    cursor: not-allowed;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    border-top: 1px solid var(--color-border);
+    padding-top: 16px;
+}
+
+.node-warning {
+    margin-bottom: 20px;
+    padding: 12px;
+    background-color: rgba(254, 242, 242, 0.1); /* light red transparent */
+    border: 1px solid rgba(254, 226, 226, 0.2);
+    border-radius: 6px;
+    color: #ef4444;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: start;
+    gap: 8px;
+}
+
+/* Light mode overrides for warning if needed, but red usually works on both.
+   However, let's make it adaptive. */
+[data-theme="light"] .node-warning {
+    background-color: #fef2f2;
+    border-color: #fee2e2;
+    color: #991b1b;
+}
+
+[data-theme="dark"] .node-warning {
+    background-color: rgba(127, 29, 29, 0.2);
+    border-color: rgba(127, 29, 29, 0.4);
+    color: #fca5a5;
+}
+
+/* Additional Modal Styles for NewTaskModal */
+.modal-content.large {
+    width: 640px;
+}
+
+.modal-subtitle {
+    font-size: 0.9rem;
+    color: var(--color-text-secondary);
+    margin-top: 4px;
+}
+
+.input-group {
+    display: flex;
+    gap: 10px;
+}
+
+.input-group-text {
+    flex: 1;
+    border: 1px solid var(--color-border);
+    border-radius: 8px; /* matching modal-input radius */
+    padding: 8px 12px;
+    font-size: 0.9rem;
+    color: var(--color-text-primary);
+    background-color: var(--color-input-bg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+}
+
+.input-group-text.placeholder {
+    color: var(--color-text-secondary);
+}
+
+.modal-input-hint {
+    font-size: 0.8rem;
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+}
+
+/* Workspace Welcome */
+.welcome-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background-color: var(--color-bg);
+    color: var(--color-text-primary);
+}
+
+.welcome-header {
+    margin-bottom: 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.welcome-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--color-text-primary);
+}
+
+.welcome-subtitle {
+    color: var(--color-text-secondary);
+    font-size: 1.1rem;
+}
+
+.welcome-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--color-primary);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: background-color 0.2s;
+}
+
+.welcome-button:hover {
+    background-color: var(--color-primary-hover);
+}
+
+/* Tool Calls & Permissions */
+.tool-call-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    font-size: 0.85em;
+    color: var(--color-text-primary);
+}
+
+.permission-btn {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.permission-btn.deny {
+    border-color: #ef4444;
+    color: #ef4444;
 }
