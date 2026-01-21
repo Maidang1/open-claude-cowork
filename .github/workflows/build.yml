@@ -69,7 +69,13 @@ jobs:
         with:
           name: ${{ matrix.build_target }}-${{ github.event.inputs.environment || 'production' }}
           path: |
-            release/app/${{ matrix.build_target }}/**/*.{dmg,zip,exe,msi,AppImage,deb,rpm}
+            release/app/${{ matrix.build_target }}/**/*.dmg
+            release/app/${{ matrix.build_target }}/**/*.zip
+            release/app/${{ matrix.build_target }}/**/*.exe
+            release/app/${{ matrix.build_target }}/**/*.msi
+            release/app/${{ matrix.build_target }}/**/*.AppImage
+            release/app/${{ matrix.build_target }}/**/*.deb
+            release/app/${{ matrix.build_target }}/**/*.rpm
           retention-days: 7
 
       - name: Upload release artifacts
@@ -79,6 +85,12 @@ jobs:
           fail_on_unmatched_files: true
           tag_name: ${{ github.ref_name }}
           files: |
-            release/app/${{ matrix.build_target }}/**/*.{dmg,zip,exe,msi,AppImage,deb}
+            release/app/${{ matrix.build_target }}/**/*.dmg
+            release/app/${{ matrix.build_target }}/**/*.zip
+            release/app/${{ matrix.build_target }}/**/*.exe
+            release/app/${{ matrix.build_target }}/**/*.msi
+            release/app/${{ matrix.build_target }}/**/*.AppImage
+            release/app/${{ matrix.build_target }}/**/*.deb
+            release/app/${{ matrix.build_target }}/**/*.rpm
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
