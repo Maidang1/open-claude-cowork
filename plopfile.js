@@ -119,7 +119,7 @@ const onBuilder = (platform) => {
   const buildArch = resolveBuildArch(platform);
   const nodeEnv = ` BUILD_ARCH=${buildArch}`;
   createSpawnBuilder(`${envPrefix}${nodeEnv} node`, ["scripts/download-node.js"]);
-  createSpawnBuilder(`${envPrefix}${nodeEnv} npm`, ["run", "build:main"]);
-  createSpawnBuilder(`${envPrefix}${nodeEnv} npm`, ["run", "build:render"]);
+  createSpawnBuilder(`${envPrefix}${nodeEnv} pnpm`, ["run", "build:main"]);
+  createSpawnBuilder(`${envPrefix}${nodeEnv} pnpm`, ["run", "build:render"]);
   createSpawnBuilder(`${envPrefix}${nodeEnv} electron-builder -c ./builder.js ${envSuffix}`);
 };

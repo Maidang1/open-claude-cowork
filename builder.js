@@ -57,9 +57,6 @@ const config = {
         arch: ["universal"],
       },
     ],
-    macUniversal: {
-      mergeASARs: true,
-    },
   },
   // MAC Store
   mas: {
