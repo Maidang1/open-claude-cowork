@@ -1,406 +1,455 @@
 .env-setup {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  padding: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    padding: 20px;
 }
 
 .env-setup-container {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  padding: 40px;
-  text-align: center;
-  max-width: 400px;
-  width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 40px;
+    text-align: center;
+    max-width: 400px;
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .env-setup-container.wide {
-  max-width: 600px;
+    max-width: 600px;
 }
 
 .env-setup-icon {
-  font-size: 48px;
-  margin-bottom: 20px;
+    font-size: 48px;
+    margin-bottom: 20px;
 }
 
 .env-setup-icon.checking {
-  animation: pulse 1.5s infinite;
+    animation: pulse 1.5s infinite;
 }
 
 .env-setup-icon.success {
-  color: #4ade80;
-  font-size: 64px;
+    color: #4ade80;
+    font-size: 64px;
 }
 
 .env-setup-icon.warning {
-  font-size: 64px;
+    font-size: 64px;
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
 }
 
 .env-setup h1 {
-  color: #fff;
-  font-size: 1.5rem;
-  margin: 0 0 12px 0;
-  font-weight: 600;
+    color: #fff;
+    font-size: 1.5rem;
+    margin: 0 0 12px 0;
+    font-weight: 600;
 }
 
 .env-setup p {
-  color: rgba(255, 255, 255, 0.7);
-  margin: 0;
-  line-height: 1.5;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0;
+    line-height: 1.5;
 }
 
 .env-setup-desc {
-  margin-bottom: 24px !important;
+    margin-bottom: 24px !important;
 }
 
 .install-methods {
-  text-align: left;
-  margin-top: 24px;
+    text-align: left;
+    margin-top: 24px;
 }
 
 .install-methods h2 {
-  color: #fff;
-  font-size: 1.1rem;
-  margin: 0 0 16px 0;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 1.1rem;
+    margin: 0 0 16px 0;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .install-method {
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
 }
 
 .install-method:last-child {
-  margin-bottom: 0;
+    margin-bottom: 0;
 }
 
 .install-method h3 {
-  color: #fff;
-  font-size: 0.95rem;
-  margin: 0 0 6px 0;
-  font-weight: 500;
+    color: #fff;
+    font-size: 0.95rem;
+    margin: 0 0 6px 0;
+    font-weight: 500;
 }
 
 .install-method p {
-  font-size: 0.85rem;
-  margin-bottom: 10px;
+    font-size: 0.85rem;
+    margin-bottom: 10px;
 }
 
 .install-command {
-  display: block;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 6px;
-  padding: 10px 12px;
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 0.8rem;
-  color: #4ade80;
-  margin-bottom: 10px;
-  overflow-x: auto;
-  white-space: nowrap;
+    display: block;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: "Monaco", "Menlo", "Consolas", monospace;
+    font-size: 0.8rem;
+    color: #4ade80;
+    margin-bottom: 10px;
+    overflow-x: auto;
+    white-space: nowrap;
 }
 
 .install-btn {
-  background: #3b82f6;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: background 0.2s;
+    background: #3b82f6;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s;
 }
 
 .install-btn:hover {
-  background: #2563eb;
+    background: #2563eb;
 }
 
 .env-setup-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  margin-top: 24px;
-  flex-wrap: wrap;
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 24px;
+    flex-wrap: wrap;
 }
 
 .refresh-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  padding: 10px 20px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.2s;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
 }
 
 .refresh-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
 .advanced-toggle {
-  background: none;
-  color: rgba(255, 255, 255, 0.5);
-  border: none;
-  padding: 10px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: color 0.2s;
+    background: none;
+    color: rgba(255, 255, 255, 0.5);
+    border: none;
+    padding: 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: color 0.2s;
 }
 
 .advanced-toggle:hover {
-  color: rgba(255, 255, 255, 0.8);
+    color: rgba(255, 255, 255, 0.8);
 }
 
 .advanced-options {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  text-align: left;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    text-align: left;
 }
 
 .advanced-options h3 {
-  color: #fff;
-  font-size: 0.95rem;
-  margin: 0 0 8px 0;
+    color: #fff;
+    font-size: 0.95rem;
+    margin: 0 0 8px 0;
 }
 
 .advanced-options > p {
-  font-size: 0.85rem;
-  margin-bottom: 12px;
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+}
+
+.runtime-toggle {
+    display: flex;
+    gap: 8px;
+    margin: 8px 0 10px;
+    flex-wrap: wrap;
+}
+
+.runtime-toggle button {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.runtime-toggle button.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: #fff;
+}
+
+.runtime-toggle button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.runtime-hint {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 12px;
 }
 
 .custom-path-input {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .custom-path-input input {
-  flex: 1;
-  min-width: 200px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  padding: 8px 12px;
-  color: #fff;
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 0.85rem;
+    flex: 1;
+    min-width: 200px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #fff;
+    font-family: "Monaco", "Menlo", "Consolas", monospace;
+    font-size: 0.85rem;
 }
 
 .custom-path-input input::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.custom-path-input input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .custom-path-input input:focus {
-  outline: none;
-  border-color: #3b82f6;
+    outline: none;
+    border-color: #3b82f6;
 }
 
 .custom-path-input button {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
 }
 
 .custom-path-input button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.15);
 }
 
 .custom-path-input button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 /* One-click install section */
 .install-oneclick {
-  margin: 24px 0;
-  text-align: center;
+    margin: 24px 0;
+    text-align: center;
 }
 
 .install-btn.primary {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  padding: 14px 28px;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    padding: 14px 28px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 15px rgba(34, 197, 94, 0.3);
 }
 
 .install-btn.primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
 }
 
 .install-hint {
-  margin-top: 12px !important;
-  font-size: 0.8rem !important;
-  color: rgba(255, 255, 255, 0.5) !important;
+    margin-top: 12px !important;
+    font-size: 0.8rem !important;
+    color: rgba(255, 255, 255, 0.5) !important;
 }
 
 /* Installation progress */
 .install-progress {
-  text-align: left;
-  margin: 24px 0;
+    text-align: left;
+    margin: 24px 0;
 }
 
 .install-progress h2 {
-  color: #fff;
-  font-size: 1rem;
-  margin: 0 0 16px 0;
+    color: #fff;
+    font-size: 1rem;
+    margin: 0 0 16px 0;
 }
 
 .install-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .install-step {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  padding: 12px 16px;
-  border-left: 3px solid rgba(255, 255, 255, 0.2);
-  transition: all 0.3s;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 12px 16px;
+    border-left: 3px solid rgba(255, 255, 255, 0.2);
+    transition: all 0.3s;
 }
 
 .install-step.running {
-  border-left-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.1);
+    border-left-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
 }
 
 .install-step.success {
-  border-left-color: #22c55e;
+    border-left-color: #22c55e;
 }
 
 .install-step.error {
-  border-left-color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
+    border-left-color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
 }
 
 .step-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
 }
 
 .step-status {
-  font-size: 1rem;
+    font-size: 1rem;
 }
 
 .step-status {
-  animation: none;
+    animation: none;
 }
 
 .install-step.running .step-status {
-  animation: spin 1s linear infinite;
+    animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .step-name {
-  color: #fff;
-  font-size: 0.9rem;
-  font-weight: 500;
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 500;
 }
 
 .step-command {
-  display: block;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 4px;
-  padding: 8px 10px;
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.7);
-  margin-top: 8px;
-  overflow-x: auto;
-  white-space: nowrap;
+    display: block;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-family: "Monaco", "Menlo", "Consolas", monospace;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.7);
+    margin-top: 8px;
+    overflow-x: auto;
+    white-space: nowrap;
 }
 
 .step-output {
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: 4px;
-  padding: 10px;
-  margin-top: 8px;
-  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.6);
-  max-height: 150px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
+    background: rgba(0, 0, 0, 0.4);
+    border-radius: 4px;
+    padding: 10px;
+    margin-top: 8px;
+    font-family: "Monaco", "Menlo", "Consolas", monospace;
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.6);
+    max-height: 150px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
 }
 
 .install-error {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 16px;
-  text-align: center;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 16px;
+    text-align: center;
 }
 
 .install-error p {
-  color: #fca5a5;
-  margin-bottom: 12px;
+    color: #fca5a5;
+    margin-bottom: 12px;
 }
 
 .retry-btn {
-  background: #ef4444;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: background 0.2s;
+    background: #ef4444;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.2s;
 }
 
 .retry-btn:hover {
-  background: #dc2626;
+    background: #dc2626;
 }
 
 .install-success {
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-  border-radius: 8px;
-  padding: 16px;
-  margin-top: 16px;
-  text-align: center;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 16px;
+    text-align: center;
 }
 
 .install-success p {
-  color: #4ade80;
-  margin: 0;
+    color: #4ade80;
+    margin: 0;
 }
 
 .refresh-btn:disabled,
 .advanced-toggle:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+    opacity: 0.5;
+    cursor: not-allowed;
 }
