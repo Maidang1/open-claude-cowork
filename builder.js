@@ -49,7 +49,7 @@ const config = {
     icon: resolve(__dirname, `./public/assets/icons/icon.icns`),
     bundleVersion: bundleVersion,
     bundleShortVersion: bundleShortVersion,
-    artifactName: "${productName}-${version}-${env.BUILD_ENV}-universal.${ext}",
+    artifactName: "${productName}-${version}-${env.BUILD_ENV}-${arch}.${ext}",
     hardenedRuntime: buildEnv === "production",
     gatekeeperAssess: buildEnv === "production",
     identity: process.env?._APPLE_IDENTITY,
@@ -60,11 +60,11 @@ const config = {
     target: [
       {
         target: "dmg",
-        arch: ["universal"],
+        arch: ["x64", "arm64"],
       },
       {
         target: "zip",
-        arch: ["universal"],
+        arch: ["x64", "arm64"],
       },
     ],
   },
@@ -128,7 +128,7 @@ const config = {
       { target: "deb", arch: ["x64", "arm64"] },
       { target: "rpm", arch: ["x64", "arm64"] },
     ],
-    icon: resolve(__dirname, `./public/assets/icons/icon.icns`),
+    icon: resolve(__dirname, `./public/assets/icons`),
   },
 };
 module.exports = config;

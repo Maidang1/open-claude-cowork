@@ -27,7 +27,9 @@ jobs:
       matrix:
         include:
           - os: macos-14
-            build_target: darwin
+            build_target: darwin-arm64
+          - os: macos-13
+            build_target: darwin-x64
           - os: windows-latest
             build_target: win32
           - os: ubuntu-latest
