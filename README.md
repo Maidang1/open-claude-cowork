@@ -73,6 +73,23 @@ To build the application for production:
 npm run build
 ```
 
+To build for a specific platform (no prompt):
+
+```bash
+pnpm run build:darwin
+pnpm run build:mac-x64
+pnpm run build:mac-arm64
+pnpm run build:win32
+pnpm run build:linux
+```
+
+You can also pass a platform flag or env var:
+
+```bash
+pnpm run build -- --build-platform=darwin
+BUILD_PLATFORM=linux pnpm run build
+```
+
 To build and run the production build locally:
 
 ```bash

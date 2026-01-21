@@ -28,7 +28,7 @@ const Config = defineConfig({
   dev: {
     setupMiddlewares: [
       (middlewares) => {
-        spawn("npm", ["run", "dev:main"], {
+        spawn("bun", ["run", "dev:main"], {
           shell: true,
           stdio: "inherit",
         }).on("error", (spawnError: Error) => {

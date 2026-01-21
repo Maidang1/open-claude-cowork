@@ -19,14 +19,10 @@ const WorkspaceWelcome: React.FC<WorkspaceWelcomeProps> = ({ onSelect }) => {
 
   return (
     <div className="welcome-container">
-      <div className="welcome-header">
-        <h1 className="welcome-title">
-          Welcome to Claude Cowork
-        </h1>
-        <p className="welcome-subtitle">
-          Open a folder to start your workspace session
-        </p>
-      </div>
+      <h1 className="welcome-title">Welcome to Claude Cowork</h1>
+      <p className="welcome-subtitle">
+        Open a folder to start your workspace session
+      </p>
 
       <button
         type="button"

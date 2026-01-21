@@ -3,8 +3,18 @@ name: Build/Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
+    inputs:
+      environment:
+        description: "Build environment"
+        required: true
+        default: "production"
+        type: choice
+        options:
+          - production
+          - staging
+          - development
 
 jobs:
   release:
@@ -15,43 +25,75 @@ jobs:
 
     strategy:
       matrix:
-        os: [macos-latest, windows-latest]
+        include:
+          - os: macos-14
+            build_target: darwin-arm64
+            npm_script: build:mac-arm64
+            artifacts: |
+              release/app/darwin-arm64/**/*.dmg
+              release/app/darwin-arm64/**/*.zip
+          - os: macos-15-intel
+            build_target: darwin-x64
+            npm_script: build:mac-x64
+            artifacts: |
+              release/app/darwin-x64/**/*.dmg
+              release/app/darwin-x64/**/*.zip
+          - os: windows-latest
+            build_target: win32
+            npm_script: build:win32
+            artifacts: |
+              release/app/win32/**/*.exe
+          - os: ubuntu-latest
+            build_target: linux
+            npm_script: build:linux
+            artifacts: |
+              release/app/linux/**/*.AppImage
+              release/app/linux/**/*.deb
+              release/app/linux/**/*.rpm
 
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
       - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: "pnpm"
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
+      - name: Enable corepack
+        run: corepack enable
 
       - name: Install dependencies
-        run: bun install
+        run: pnpm install --frozen-lockfile
 
-      # Ensure build scripts are executable (especially download-node.js if needed)
-      # In our case, download-node.js is run via 'node scripts/download-node.js', so no chmod needed there.
-      
-      - name: Build/Release Electron App
-        uses: samuelmeuli/action-electron-builder@v1
+      - name: Build Electron App
+        run: pnpm run ${{ matrix.npm_script }}
+        env:
+          # For universal mac build, tell electron-builder to produce universal binaries
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: true
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts for workflow dispatch
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
         with:
-          # GitHub token, automatically provided to the action
-          # (No need to define this secret in the repo settings)
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          name: ${{ matrix.build_target }}-${{ github.event.inputs.environment || 'production' }}
+          path: ${{ matrix.artifacts }}
+          retention-days: 7
 
-          # If the commit is tagged with a version (e.g. "v1.0.0"),
-          # release the app after building
-          release: ${{ startsWith(github.ref, 'refs/tags/v') }}
-          
-          # Disable yarn, force use of npm/pnpm (we already installed deps)
-          use_yarn: false
-          
-          # Use bun for build script if needed, though electron-builder usually runs via node
-          # Since we installed with bun, node_modules are present.
-          # The action might try to run 'npm run dist' or similar.
-          # We can override the build command if necessary, but standard 'package.json' scripts should work. 
+      - name: Upload release artifacts
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          fail_on_unmatched_files: true
+          tag_name: ${{ github.ref_name }}
+          files: ${{ matrix.artifacts }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

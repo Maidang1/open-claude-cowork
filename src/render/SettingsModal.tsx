@@ -52,7 +52,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [installedVersion, setInstalledVersion] = useState<string | null>(null);
   const [newEnvKey, setNewEnvKey] = useState("");
   const [newEnvVal, setNewEnvVal] = useState("");
-
+  const [activeTab, setActiveTab] = useState<"agents" | "general">("agents");
+  const [isAgentDropdownOpen, setIsAgentDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const selectedPlugin = getAgentPlugin(selectedPluginId);
 
   // Check Node.js availability on mount
@@ -74,19 +76,20 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   // Auto-detect preset based on command
   useEffect(() => {
     if (isOpen) {
-        let found = false;
-        // Simple heuristic: check if command contains any plugin's checkCommand or part of default command
-        for (const plugin of AGENT_PLUGINS) {
-            const heuristic = plugin.checkCommand || plugin.defaultCommand.split(" ")[0];
-            if (agentCommand.includes(heuristic)) {
-                 setSelectedPluginId(plugin.id);
-                 found = true;
-                 break;
-            }
+      let found = false;
+      // Simple heuristic: check if command contains any plugin's checkCommand or part of default command
+      for (const plugin of AGENT_PLUGINS) {
+        const heuristic =
+          plugin.checkCommand || plugin.defaultCommand.split(" ")[0];
+        if (agentCommand.includes(heuristic)) {
+          setSelectedPluginId(plugin.id);
+          found = true;
+          break;
         }
-        if (!found) {
-            setSelectedPluginId("custom");
-        }
+      }
+      if (!found) {
+        setSelectedPluginId("custom");
+      }
     }
   }, [isOpen]); // Run when modal opens
 
@@ -98,14 +101,17 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const checkInstall = async (plugin: AgentPlugin) => {
     if (!plugin.checkCommand || !plugin.packageSpec) {
-        setInstallStatus("installed"); // Assume installed if no check
-        return;
+      setInstallStatus("installed"); // Assume installed if no check
+      return;
     }
-    
+
     setInstallStatus("checking");
     setInstalledVersion(null);
     try {
-      const res = await window.electron.invoke("agent:check-command", plugin.checkCommand);
+      const res = await window.electron.invoke(
+        "agent:check-command",
+        plugin.checkCommand,
+      );
       if (res.installed) {
         const versionRes = await window.electron.invoke(
           "agent:get-package-version",
@@ -206,15 +212,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const handleAuthTerminal = async () => {
     try {
-      // Use the raw command or plugin check command
-      const cmd = selectedPlugin?.checkCommand || agentCommand.split(" ")[0];
-      await window.electron.invoke(
+      // Auth in terminal should launch without extra args.
+      const cmd =
+        selectedPlugin?.checkCommand ||
+        agentCommand.split(" ")[0] ||
+        agentCommand.trim();
+      const res = await window.electron.invoke(
         "agent:auth-terminal",
         cmd,
         currentWorkspace,
       );
+      if (!res?.success) {
+        console.error(
+          `Failed to launch terminal: ${res?.error || "unknown error"}`,
+        );
+      }
     } catch (e: any) {
-      alert(`Failed to launch terminal: ${e.message}`);
+      console.error(`Failed to launch terminal: ${e.message}`);
     }
   };
 
@@ -234,14 +248,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const [activeTab, setActiveTab] = useState<"agents" | "general">("agents");
-  const [isAgentDropdownOpen, setIsAgentDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
   // Click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
         setIsAgentDropdownOpen(false);
       }
     };
@@ -258,7 +271,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       <div ref={modalRef} className="modal-content settings-modal">
         {/* Sidebar */}
         <div className="settings-sidebar">
-          <div style={{ padding: "8px 12px", marginBottom: "12px", fontWeight: 600, color: "var(--text-primary)" }}>
+          <div
+            style={{
+              padding: "8px 12px",
+              marginBottom: "12px",
+              fontWeight: 600,
+              color: "var(--text-primary)",
+            }}
+          >
             Settings
           </div>
           <button
@@ -268,7 +288,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           >
             <span>🤖</span> Agents
           </button>
-           <button
+          <button
             type="button"
             className={`settings-nav-item ${activeTab === "general" ? "active" : ""}`}
             onClick={() => setActiveTab("general")}
@@ -281,15 +301,23 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="settings-content">
           <div className="settings-content-header">
             <h2 className="settings-title">
-              {activeTab === "agents" ? "Agents Configuration" : "General Settings"}
+              {activeTab === "agents"
+                ? "Agents Configuration"
+                : "General Settings"}
             </h2>
-            <button type="button" onClick={onClose} className="modal-close-btn">
-              <X size={20} />
-            </button>
+              <button type="button" onClick={onClose} className="modal-close-btn">
+                <X size={20} />
+              </button>
           </div>
 
           {activeTab === "general" && (
-            <div style={{ padding: "20px", textAlign: "center", color: "var(--text-secondary)" }}>
+            <div
+              style={{
+                padding: "20px",
+                textAlign: "center",
+                color: "var(--text-secondary)",
+              }}
+            >
               General settings coming soon...
             </div>
           )}
@@ -303,10 +331,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div>
                     <strong>Node.js Environment Missing</strong>
                     <div
-                      style={{ marginTop: "4px", fontSize: "0.85rem", opacity: 0.9 }}
+                      style={{
+                        marginTop: "4px",
+                        fontSize: "0.85rem",
+                        opacity: 0.9,
+                      }}
                     >
-                      No system Node.js found. Some agents may fail to start. Please
-                      install Node.js or ensure the bundled runtime is available.
+                      No system Node.js found. Some agents may fail to start.
+                      Please install Node.js or ensure the bundled runtime is
+                      available.
                     </div>
                   </div>
                 </div>
@@ -324,9 +357,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     <span>
                       {selectedPlugin ? selectedPlugin.name : "Custom Agent"}
                     </span>
-                    <ChevronDown size={16} className={`select-arrow ${isAgentDropdownOpen ? "open" : ""}`} />
+                    <ChevronDown
+                      size={16}
+                      className={`select-arrow ${isAgentDropdownOpen ? "open" : ""}`}
+                    />
                   </button>
-                  
+
                   {isAgentDropdownOpen && (
                     <div className="custom-select-dropdown">
                       <button
@@ -351,7 +387,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           }}
                         >
                           {plugin.name}
-                          {selectedPluginId === plugin.id && <Check size={14} />}
+                          {selectedPluginId === plugin.id && (
+                            <Check size={14} />
+                          )}
                         </button>
                       ))}
                     </div>
@@ -361,7 +399,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {/* Plugin Status & Install */}
               {selectedPlugin && selectedPlugin.packageSpec && (
-                <div className="status-box" style={{ marginTop: 0, marginBottom: "20px" }}>
+                <div
+                  className="status-box"
+                  style={{ marginTop: 0, marginBottom: "20px" }}
+                >
                   <div className="status-info">
                     <span className="status-label">Status:</span>
                     {installStatus === "checking" && (
@@ -378,21 +419,26 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       </span>
                     )}
                     {installStatus === "not-installed" && (
-                      <span className="status-text not-installed">Not Installed</span>
+                      <span className="status-text not-installed">
+                        Not Installed
+                      </span>
                     )}
                     {installStatus === "installing" && (
                       <span className="status-text processing">
-                        <Loader2 size={16} className="animate-spin" /> Installing...
+                        <Loader2 size={16} className="animate-spin" />{" "}
+                        Installing...
                       </span>
                     )}
                     {installStatus === "updating" && (
                       <span className="status-text processing">
-                        <Loader2 size={16} className="animate-spin" /> Updating...
+                        <Loader2 size={16} className="animate-spin" />{" "}
+                        Updating...
                       </span>
                     )}
                     {installStatus === "uninstalling" && (
                       <span className="status-text processing">
-                        <Loader2 size={16} className="animate-spin" /> Uninstalling...
+                        <Loader2 size={16} className="animate-spin" />{" "}
+                        Uninstalling...
                       </span>
                     )}
                   </div>
@@ -452,11 +498,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="env-list">
                   {Object.entries(agentEnv).map(([key, val]) => (
                     <div key={key} className="env-row">
-                      <input
-                        readOnly
-                        value={key}
-                        className="env-input key"
-                      />
+                      <input readOnly value={key} className="env-input key" />
                       <input
                         readOnly
                         value={val}
@@ -500,48 +542,37 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
               <div className="modal-footer" style={{ marginTop: "auto" }}>
                 {selectedPlugin &&
                 selectedPlugin.packageSpec &&
-                installStatus === "installed" &&
-                !isConnected ? (
-                  <>
-                    <div style={{ marginRight: "auto" }}>
-                      <button
-                        type="button"
-                        onClick={handleAuthTerminal}
-                        title="Open terminal to login manually (type '/auth')"
-                        className="btn-secondary"
-                      >
-                        <span style={{ fontSize: "1.1em" }}>🔑</span> Authenticate in
-                        Terminal
-                      </button>
-                    </div>
+                installStatus === "installed" ? (
+                  <div style={{ marginRight: "auto" }}>
                     <button
                       type="button"
-                      onClick={onConnectToggle}
-                      className="btn-primary"
+                      onClick={handleAuthTerminal}
+                      title="Open system terminal to login manually (type '/auth')"
+                      className="btn-secondary"
                     >
-                      Connect
+                      <span style={{ fontSize: "1.1em" }}>🔑</span> Authenticate
+                      in Terminal
                     </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={onConnectToggle}
-                    className="btn-primary"
-                    style={
-                      isConnected ? { backgroundColor: "#ef4444" } : undefined
-                    }
-                  >
-                    {isConnected ? "Disconnect" : "Connect & Save"}
-                  </button>
-                )}
+                  </div>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={onConnectToggle}
+                  className="btn-primary"
+                  style={
+                    isConnected ? { backgroundColor: "#ef4444" } : undefined
+                  }
+                >
+                  {isConnected ? "Disconnect" : "Connect & Save"}
+                </button>
               </div>
             </>
           )}
         </div>
       </div>
+
     </div>
   );
-
 };
 
 export default SettingsModal;
