@@ -16,6 +16,7 @@ const Config = defineConfig({
       target: "electron-main",
       externals: {
         "better-sqlite3": "commonjs better-sqlite3",
+        "node-pty": "commonjs node-pty",
       },
     },
   },

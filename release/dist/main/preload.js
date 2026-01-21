@@ -1,2 +1,0 @@
-(()=>{"use strict";let e=require("electron"),r=process.versions;e.contextBridge.exposeInMainWorld("electron",{send:(r,...n)=>{e.ipcRenderer.send(r,...n)},invoke:(r,...n)=>e.ipcRenderer.invoke(r,...n),on:(r,n)=>{let o=(e,...r)=>n(...r);return e.ipcRenderer.on(r,o),()=>{e.ipcRenderer.removeListener(r,o)}},version:{electron:r.electron,chrome:r.chrome,node:r.node}}),module.exports={}})();
-//# sourceMappingURL=preload.js.map

@@ -3,9 +3,9 @@ const path = require('path');
 const https = require('https');
 const { execSync } = require('child_process');
 
-const NODE_VERSION = 'v20.11.0'; // LTS Version matching development env recommended
-const PLATFORM = process.platform; // 'darwin', 'win32', 'linux'
-const ARCH = process.arch; // 'x64', 'arm64'
+const NODE_VERSION = process.env.BUILD_NODE_VERSION || 'v20.11.0';
+const PLATFORM = process.env.BUILD_PLATFORM || process.platform;
+const ARCH = process.env.BUILD_ARCH || process.arch;
 
 // Map platform to Node.js distribution naming
 const platformMap = {
@@ -17,7 +17,8 @@ const platformMap = {
 // Map arch to Node.js distribution naming
 const archMap = {
   'x64': 'x64',
-  'arm64': 'arm64'
+  'arm64': 'arm64',
+  'ia32': 'x86'
 };
 
 const distPlatform = platformMap[PLATFORM];
@@ -34,6 +35,7 @@ const downloadUrl = `https://nodejs.org/dist/${NODE_VERSION}/${filename}`;
 
 const outputDir = path.resolve(__dirname, '../resources/node_bin');
 const outputPath = path.join(outputDir, filename);
+const metaPath = path.join(outputDir, '.meta.json');
 
 // Ensure output dir exists
 if (!fs.existsSync(outputDir)) {
@@ -44,9 +46,36 @@ if (!fs.existsSync(outputDir)) {
 const nodeBinName = PLATFORM === 'win32' ? 'node.exe' : 'node';
 const finalNodePath = path.join(outputDir, nodeBinName);
 
-if (fs.existsSync(finalNodePath)) {
-  console.log(`Node.js binary already exists at ${finalNodePath}. Skipping download.`);
+let needDownload = true;
+if (fs.existsSync(finalNodePath) && fs.existsSync(metaPath)) {
+  try {
+    const metaRaw = fs.readFileSync(metaPath, 'utf-8');
+    const meta = JSON.parse(metaRaw);
+    if (
+      meta.version === NODE_VERSION &&
+      meta.platform === distPlatform &&
+      meta.arch === distArch
+    ) {
+      console.log(`Node.js binary already matches ${NODE_VERSION} (${distPlatform}/${distArch}). Skipping download.`);
+      needDownload = false;
+    }
+  } catch (e) {
+    console.warn(`Failed to read existing node meta, will re-download. ${e?.message || e}`);
+  }
+}
+
+if (!needDownload && fs.existsSync(finalNodePath)) {
   process.exit(0);
+}
+
+// Cleanup old content if mismatch
+if (fs.existsSync(outputDir) && needDownload) {
+  try {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+  } catch (e) {
+    console.warn(`Failed to clean old node dir: ${e?.message || e}`);
+  }
+  fs.mkdirSync(outputDir, { recursive: true });
 }
 
 console.log(`Downloading Node.js from ${downloadUrl}...`);
@@ -56,7 +85,7 @@ const file = fs.createWriteStream(outputPath);
 https.get(downloadUrl, (response) => {
   if (response.statusCode !== 200) {
     console.error(`Failed to download: HTTP Status Code ${response.statusCode}`);
-    fs.unlink(outputPath, () => {}); // Delete partial file
+    fs.unlink(outputPath, () => {});
     process.exit(1);
   }
 
@@ -77,35 +106,40 @@ https.get(downloadUrl, (response) => {
 function extract(filePath, targetDir, archiveName) {
   try {
     if (PLATFORM === 'win32') {
-      // Windows extraction (requires PowerShell or similar, here assuming tar/unzip availability or use a library like adm-zip if added to devDeps)
-      // For simplicity in this script without deps, we try using tar (available in modern Win10+)
       execSync(`tar -xf "${filePath}" -C "${targetDir}"`);
     } else {
       execSync(`tar -xzf "${filePath}" -C "${targetDir}"`);
     }
 
-    // Move binary to root of node_bin and cleanup
     const extractedFolder = archiveName.replace(`.${ext}`, '');
-    const binSource = path.join(targetDir, extractedFolder, 'bin', 'node');
-    // On Windows structure is slightly different (node.exe is in root of extracted folder usually)
-    const binSourceWin = path.join(targetDir, extractedFolder, 'node.exe');
+    const src = PLATFORM === 'win32'
+      ? path.join(targetDir, extractedFolder, 'node.exe')
+      : path.join(targetDir, extractedFolder, 'bin', 'node');
 
-    const src = PLATFORM === 'win32' ? binSourceWin : binSource;
-    
     if (fs.existsSync(src)) {
-        fs.renameSync(src, finalNodePath);
-        // Set executable permission
-        if (PLATFORM !== 'win32') {
-            fs.chmodSync(finalNodePath, 0o755);
-        }
-        console.log(`Node.js binary ready at: ${finalNodePath}`);
-        
-        // Cleanup archive and extracted folder
-        fs.unlinkSync(filePath);
-        fs.rmSync(path.join(targetDir, extractedFolder), { recursive: true, force: true });
+      fs.renameSync(src, finalNodePath);
+      if (PLATFORM !== 'win32') {
+        fs.chmodSync(finalNodePath, 0o755);
+      }
+      console.log(`Node.js binary ready at: ${finalNodePath}`);
+      fs.writeFileSync(
+        metaPath,
+        JSON.stringify(
+          {
+            version: NODE_VERSION,
+            platform: distPlatform,
+            arch: distArch,
+            downloadedAt: new Date().toISOString(),
+          },
+          null,
+          2,
+        ),
+      );
+      fs.unlinkSync(filePath);
+      fs.rmSync(path.join(targetDir, extractedFolder), { recursive: true, force: true });
     } else {
-        console.error(`Could not find node binary in extracted folder: ${src}`);
-        process.exit(1);
+      console.error(`Could not find node binary in extracted folder: ${src}`);
+      process.exit(1);
     }
 
   } catch (error) {

@@ -16,10 +16,8 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-13
-            build_target: darwin-x64
           - os: macos-14
-            build_target: darwin-arm64
+            build_target: darwin
           - os: windows-latest
             build_target: win32
           - os: ubuntu-latest
@@ -33,15 +31,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
-      - name: Enable Corepack (pnpm)
-        run: corepack enable
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: npm ci
 
       - name: Build Electron App
-        run: pnpm run build -- --build-platform=${{ matrix.build_target }}
+        run: npm run build
+        env:
+          BUILD_PLATFORM: ${{ matrix.build_target }}
+          # For universal mac build, tell electron-builder to produce universal binaries
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          ELECTRON_BUILDER_ALLOW_UNRESOLVED_DEPENDENCIES: true
 
       - name: Upload release artifacts
         if: startsWith(github.ref, 'refs/tags/v')

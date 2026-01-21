@@ -5,12 +5,11 @@ require("dotenv").config({
   path: ["./env/.env", "./env/.env.local"],
 });
 
-const buildTarget =
-  process.env?.BUILD_TARGET || process.env?.ENV_FILE || "unknown";
+const buildTarget = process.env?.BUILD_TARGET || process.env?.ENV_FILE || "unknown";
 const dir = buildTarget + "/" + dayjs().format("YYYY_MM_DD_HH_mm_ss");
 const versionArr = version.split("-");
 const bundleShortVersion = versionArr[0];
-const bundleVersion = versionArr[1];
+const bundleVersion = versionArr[1] || versionArr[0];
 
 const productName = process.env?._PRODUCT_NAME ?? name;
 
@@ -23,8 +22,9 @@ const config = {
   productName: productName,
   appId: process.env?._APP_ID,
   directories: {
-    output: `./release/app/${dir}`,
+    output: `./release/app/${buildTarget}`,
   },
+  files: ["./release/dist", "package.json"],
   extraResources: [
     {
       from: "./public/assets/icons",
@@ -37,17 +37,28 @@ const config = {
   ],
   icon: resolve(__dirname, `./public/assets/icons/icon.icns`),
   asarUnpack: "**\\*.{node,dll}",
-  files: ["./release/dist", "package.json"],
   mac: {
-    target: ["dmg", "zip"],
     icon: resolve(__dirname, `./public/assets/icons/icon.icns`),
     bundleVersion: bundleVersion,
     bundleShortVersion: bundleShortVersion,
-    artifactName: "${productName}-${version}-${arch}.${ext}",
+    artifactName: "${productName}-${version}-universal.${ext}",
     identity: process.env?._APPLE_IDENTITY,
     extendInfo: {
       ElectronTeamID: process.env?._APPLE_TEAM_ID,
       ITSAppUsesNonExemptEncryption: "NO",
+    },
+    target: [
+      {
+        target: "dmg",
+        arch: ["universal"],
+      },
+      {
+        target: "zip",
+        arch: ["universal"],
+      },
+    ],
+    macUniversal: {
+      mergeASARs: true,
     },
   },
   // MAC Store

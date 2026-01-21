@@ -7,21 +7,21 @@
     "dev:render": "rsbuild dev --config ./builder/rsbuild.render.ts",
     "dev:main": "nodemon",
     "build": "cross-env NODE_ENV=production plop",
-    "build:darwin": "cross-env BUILD_PLATFORM=darwin pnpm run build",
-    "build:mac-x64": "cross-env BUILD_PLATFORM=darwin-x64 pnpm run build",
-    "build:mac-arm64": "cross-env BUILD_PLATFORM=darwin-arm64 pnpm run build",
-    "build:win32": "cross-env BUILD_PLATFORM=win32 pnpm run build",
-    "build:linux": "cross-env BUILD_PLATFORM=linux pnpm run build",
+    "build:darwin": "cross-env BUILD_PLATFORM=darwin npm run build",
+    "build:mac-x64": "cross-env BUILD_PLATFORM=darwin-x64 npm run build",
+    "build:mac-arm64": "cross-env BUILD_PLATFORM=darwin-arm64 npm run build",
+    "build:win32": "cross-env BUILD_PLATFORM=win32 npm run build",
+    "build:linux": "cross-env BUILD_PLATFORM=linux npm run build",
     "rebuild:main": "npm run build:main && electron ./release/dist/main/index.js",
     "build:main": "rsbuild build --config ./builder/rsbuild.main.ts",
     "build:render": "rsbuild build --config ./builder/rsbuild.render.ts",
-    "postinstall": "electron-builder install-app-deps && node scripts/download-node.js",
+    "postinstall": "node node_modules/electron/install.js && electron-builder install-app-deps && node scripts/download-node.js",
     "icon": "electron-icon-builder -i=./public/assets/icons/icon.png -o=./public/assets/icons -f",
-    "lint": "pnpm biome check --write ./src"
+    "lint": "bun biome check --write ./src"
   },
   "lint-staged": {
     "./src/**/*.{ts,tsx,js,json,html,yml,css,less,scss,md}": [
-      "pnpm run lint"
+      "bun run lint"
     ]
   },
   "devDependencies": {

@@ -1,10 +1,10 @@
-import path, { resolve } from "node:path";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { ACPClient } from "./acp/Client";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import { existsSync } from "node:fs";
+import path from "node:path";
 
 import {
   initDB,
@@ -27,6 +27,23 @@ export const isDev = !app.isPackaged;
 const loadUrl: string = isDev
   ? `http://localhost:${process.env._PORT}`
   : `file://${path.resolve(__dirname, "../render/index.html")}`;
+
+const NODE_BIN_NAME = process.platform === "win32" ? "node.exe" : "node";
+const resolveBundledNodePath = () => {
+  const packagedPath = path.join(process.resourcesPath, "node_bin", NODE_BIN_NAME);
+  if (existsSync(packagedPath)) {
+    return packagedPath;
+  }
+  const devPath = path.resolve(
+    __dirname,
+    "../../../resources/node_bin",
+    NODE_BIN_NAME,
+  );
+  if (existsSync(devPath)) {
+    return devPath;
+  }
+  return null;
+};
 
 const getAgentsDir = () => path.join(app.getPath("userData"), "agents");
 
@@ -68,6 +85,91 @@ const extractPackageName = (specifier: string) => {
 const toLatestSpecifier = (specifier: string) => {
   const pkgName = extractPackageName(specifier);
   return pkgName ? `${pkgName}@latest` : specifier;
+};
+
+const parseCommandLine = (input: string) => {
+  const args: string[] = [];
+  let current = "";
+  let quote: "'" | '"' | null = null;
+
+  for (let i = 0; i < input.length; i += 1) {
+    const char = input[i];
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      } else if (char === "\\" && i + 1 < input.length) {
+        current += input[i + 1];
+        i += 1;
+      } else {
+        current += char;
+      }
+    } else {
+      if (char === "'" || char === '"') {
+        quote = char;
+      } else if (/\s/.test(char)) {
+        if (current) {
+          args.push(current);
+          current = "";
+        }
+      } else if (char === "\\" && i + 1 < input.length) {
+        current += input[i + 1];
+        i += 1;
+      } else {
+        current += char;
+      }
+    }
+  }
+
+  if (current) args.push(current);
+  return args;
+};
+
+const resolveAuthCommand = async (command: string) => {
+  const trimmed = command.trim();
+  if (!trimmed) return null;
+
+  const [cmdName, ...cmdArgs] = parseCommandLine(trimmed);
+  if (!cmdName) return null;
+
+  const localBin = getLocalAgentBin(cmdName);
+  if (!localBin) {
+    return {
+      file: cmdName,
+      args: cmdArgs,
+    };
+  }
+
+  if (localBin.endsWith(".js") || cmdName === "qwen") {
+    let nodePath = "node";
+    try {
+      const { stdout } = await execAsync("which node");
+      nodePath = stdout.trim();
+    } catch {
+      const bundledNode = resolveBundledNodePath();
+      if (bundledNode) {
+        nodePath = bundledNode;
+      }
+    }
+    return {
+      file: nodePath,
+      args: [localBin, ...cmdArgs],
+    };
+  }
+
+  return {
+    file: localBin,
+    args: cmdArgs,
+  };
+};
+
+const quoteForShell = (value: string) => {
+  if (!value) return '""';
+  if (/^[A-Za-z0-9_./:-]+$/.test(value)) return value;
+  return `"${value.replace(/(["\\$`])/g, "\\$1")}"`;
+};
+
+const buildCommandString = (file: string, args: string[]) => {
+  return [file, ...args].map(quoteForShell).join(" ");
 };
 
 const initIpc = () => {
@@ -179,12 +281,8 @@ const initIpc = () => {
             cmd = stdout.trim();
             console.log(`[Main] Resolved system node path: ${cmd}`);
           } catch (e) {
-            // Fallback to bundled node if system node not found
-            const bundledNode = path.resolve(
-              __dirname,
-              "../../resources/node_bin/node",
-            );
-            if (existsSync(bundledNode)) {
+            const bundledNode = resolveBundledNodePath();
+            if (bundledNode) {
               cmd = bundledNode;
               console.log(`[Main] Using bundled node path: ${cmd}`);
             } else {
@@ -236,24 +334,20 @@ const initIpc = () => {
       return { installed: true, source: "local" };
     }
 
-    // 2. Check system
-    try {
-      await execAsync(`which ${command}`);
-      return { installed: true, source: "system" };
-    } catch {
-      // 3. Special check for Node environment availability
-      if (command === "node") {
-        // Check bundled node
-        const bundledNode = path.resolve(
-          __dirname,
-          "../../resources/node_bin/node",
-        );
-        if (existsSync(bundledNode)) {
-          return { installed: true, source: "bundled" };
+        // 2. Check system
+        try {
+          await execAsync(`which ${command}`);
+          return { installed: true, source: "system" };
+        } catch {
+          // 3. Special check for Node environment availability
+          if (command === "node") {
+            const bundledNode = resolveBundledNodePath();
+            if (bundledNode) {
+              return { installed: true, source: "bundled" };
+            }
+          }
+          return { installed: false };
         }
-      }
-      return { installed: false };
-    }
   });
 
   ipcMain.handle(
@@ -345,32 +439,12 @@ const initIpc = () => {
   ipcMain.handle(
     "agent:auth-terminal",
     async (_, command: string, cwd?: string) => {
-      // Resolve full path if it's a local agent command (e.g. "qwen")
-      let targetCmd = command;
-      let localBin = getLocalAgentBin(command);
-
-      if (localBin) {
-        // If it's a JS/Node script, prefix with node
-        if (localBin.endsWith(".js") || command === "qwen") {
-          let nodePath = "node";
-          // Try to find absolute node path
-          try {
-            const { stdout } = await execAsync("which node");
-            nodePath = stdout.trim();
-          } catch {
-            const bundledNode = path.resolve(
-              __dirname,
-              "../../resources/node_bin/node",
-            );
-            if (existsSync(bundledNode)) {
-              nodePath = bundledNode;
-            }
-          }
-          targetCmd = `"${nodePath}" "${localBin}"`;
-        } else {
-          targetCmd = `"${localBin}"`;
-        }
+      const resolved = await resolveAuthCommand(command);
+      if (!resolved) {
+        return { success: false, error: "Invalid command" };
       }
+
+      const targetCmd = buildCommandString(resolved.file, resolved.args);
 
       console.log(
         `[Main] Launching auth terminal for: ${targetCmd} in ${cwd || "default cwd"}`,
@@ -501,7 +575,7 @@ const onCreateMainWindow = () => {
     minWidth: 1000,
     height: 900,
     minHeight: 700,
-    icon: resolve(__dirname, "../../../../assets/icons/256x256.png"),
+    icon: path.resolve(__dirname, "../../../../assets/icons/256x256.png"),
     webPreferences: {
       devTools: isDev,
       nodeIntegration: false,
