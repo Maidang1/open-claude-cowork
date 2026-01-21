@@ -42,7 +42,8 @@ jobs:
             build_target: win32
             npm_script: build:win32
             artifacts: |
-              release/app/win32/**/*.exe
+              release/app/win32/**/*-setup.exe
+              release/app/win32/**/*-portable.exe
           - os: ubuntu-latest
             build_target: linux
             npm_script: build:linux

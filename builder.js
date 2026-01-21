@@ -150,7 +150,6 @@ const config = {
   },
   win: {
     icon: resolve(__dirname, `./public/assets/icons/icon.ico`),
-    artifactName: "${productName}-${version}-${env.BUILD_ENV}-setup.${ext}",
     target: [
       { target: "nsis", arch: ["x64", "ia32"] },
       { target: "portable", arch: ["x64"] },
@@ -159,6 +158,7 @@ const config = {
     requestedExecutionLevel: "asInvoker",
   },
   nsis: {
+    artifactName: "${productName}-${version}-${env.BUILD_ENV}-setup.${ext}",
     oneClick: false,
     perMachine: false,
     allowToChangeInstallationDirectory: true,
@@ -166,6 +166,9 @@ const config = {
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
     shortcutName: productName,
+  },
+  portable: {
+    artifactName: "${productName}-${version}-${env.BUILD_ENV}-portable.${ext}",
   },
   linux: {
     artifactName: "${productName}-${version}-${env.BUILD_ENV}.${ext}",
