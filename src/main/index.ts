@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell, clipboard } from "electron";
 import { ACPClient } from "./acp/Client";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
@@ -28,21 +28,44 @@ const loadUrl: string = isDev
   ? `http://localhost:${process.env._PORT}`
   : `file://${path.resolve(__dirname, "../render/index.html")}`;
 
-const NODE_BIN_NAME = process.platform === "win32" ? "node.exe" : "node";
-const resolveBundledNodePath = () => {
-  const packagedPath = path.join(process.resourcesPath, "node_bin", NODE_BIN_NAME);
-  if (existsSync(packagedPath)) {
-    return packagedPath;
+// Shell-safe path quoting for execAsync
+const shellQuote = (p: string) => {
+  if (process.platform === "win32") {
+    // Windows cmd.exe uses double quotes
+    return `"${p.replace(/"/g, '""')}"`;
   }
-  const devPath = path.resolve(
-    __dirname,
-    "../../../resources/node_bin",
-    NODE_BIN_NAME,
-  );
-  if (existsSync(devPath)) {
-    return devPath;
+  // Unix shells: single quotes are safest (no variable expansion)
+  return `'${p.replace(/'/g, "'\\''")}'`;
+};
+
+// Get custom node path from settings (for offline/manual configuration)
+const getCustomNodePath = (): string | null => {
+  try {
+    const customPath = getSetting("custom_node_path");
+    if (customPath && existsSync(customPath)) {
+      return customPath;
+    }
+  } catch {
+    // ignore
   }
   return null;
+};
+
+// Resolve Node.js path - prefer custom, then system
+const resolveNodePath = async (): Promise<string> => {
+  // 1. Check custom path first
+  const customPath = getCustomNodePath();
+  if (customPath) {
+    return customPath;
+  }
+
+  // 2. Use system node
+  return "node";
+};
+
+// Resolve npm path - use system npm
+const resolveNpmPath = async (): Promise<string> => {
+  return "npm";
 };
 
 const getAgentsDir = () => path.join(app.getPath("userData"), "agents");
@@ -51,6 +74,29 @@ const getLocalAgentBin = (command: string) => {
   const agentsDir = getAgentsDir();
   const binPath = path.join(agentsDir, "node_modules", ".bin", command);
   return existsSync(binPath) ? binPath : null;
+};
+
+// Resolve the actual JS entry point from a .bin symlink/wrapper
+const resolveActualJsEntry = async (binPath: string): Promise<string | null> => {
+  try {
+    // On Unix, .bin entries are usually symlinks to the actual JS file
+    const realPath = await fs.realpath(binPath);
+    if (realPath.endsWith(".js")) {
+      return realPath;
+    }
+    // If it's not a JS file directly, read it to find the target
+    // (some packages use shell wrappers)
+    const content = await fs.readFile(binPath, "utf-8");
+    // Check if it's a Node.js shebang script
+    if (content.startsWith("#!/usr/bin/env node") || content.startsWith("#!/usr/bin/node")) {
+      return binPath; // It's a valid Node.js script
+    }
+    // For shell wrappers, the symlink resolution should have worked
+    return realPath;
+  } catch (e) {
+    console.warn(`[Main] Failed to resolve actual JS entry for ${binPath}:`, e);
+    return null;
+  }
 };
 
 const getPackageJsonPath = (packageName: string) => {
@@ -139,20 +185,18 @@ const resolveAuthCommand = async (command: string) => {
     };
   }
 
-  if (localBin.endsWith(".js") || cmdName === "qwen") {
-    let nodePath = "node";
-    try {
-      const { stdout } = await execAsync("which node");
-      nodePath = stdout.trim();
-    } catch {
-      const bundledNode = resolveBundledNodePath();
-      if (bundledNode) {
-        nodePath = bundledNode;
-      }
-    }
+  // Resolve the actual JS entry point
+  const actualJsPath = await resolveActualJsEntry(localBin);
+  const isJsAgent = actualJsPath && actualJsPath.endsWith(".js");
+
+  if (isJsAgent || cmdName === "qwen") {
+    // Use node to run JS files
+    const nodePath = await resolveNodePath();
+    // Use the resolved actual JS path
+    const jsPath = actualJsPath || localBin;
     return {
       file: nodePath,
-      args: [localBin, ...cmdArgs],
+      args: [jsPath, ...cmdArgs],
     };
   }
 
@@ -165,6 +209,11 @@ const resolveAuthCommand = async (command: string) => {
 const quoteForShell = (value: string) => {
   if (!value) return '""';
   if (/^[A-Za-z0-9_./:-]+$/.test(value)) return value;
+  if (process.platform === "win32") {
+    // Windows cmd.exe: escape double quotes by doubling them
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  // Unix: escape special characters
   return `"${value.replace(/(["\\$`])/g, "\\$1")}"`;
 };
 
@@ -177,6 +226,170 @@ const initIpc = () => {
     dialog.showMessageBox(mainWindow!, {
       message: "hello",
     });
+  });
+
+  // Environment check IPC handlers
+  ipcMain.handle("env:check", async () => {
+    const result = {
+      node: { installed: false, version: null as string | null, path: null as string | null },
+      npm: { installed: false, version: null as string | null },
+      platform: process.platform,
+      arch: process.arch,
+    };
+
+    // Check custom path first
+    const customNodePath = getCustomNodePath();
+    
+    try {
+      // Check Node.js
+      const nodeCmd = customNodePath ? shellQuote(customNodePath) : "node";
+      const { stdout: nodeVersion } = await execAsync(`${nodeCmd} --version`);
+      result.node.installed = true;
+      result.node.version = nodeVersion.trim();
+      
+      // Get node path
+      if (customNodePath) {
+        result.node.path = customNodePath;
+      } else {
+        try {
+          const whichCmd = process.platform === "win32" ? "where" : "which";
+          const { stdout: nodePath } = await execAsync(`${whichCmd} node`);
+          result.node.path = nodePath.trim().split("\n")[0];
+        } catch {
+          // ignore
+        }
+      }
+    } catch {
+      // Node not found
+    }
+
+    try {
+      // Check npm
+      const { stdout: npmVersion } = await execAsync("npm --version");
+      result.npm.installed = true;
+      result.npm.version = npmVersion.trim();
+    } catch {
+      // npm not found
+    }
+
+    return result;
+  });
+
+  ipcMain.handle("env:open-url", async (_, url: string) => {
+    await shell.openExternal(url);
+  });
+
+  ipcMain.handle("env:copy-to-clipboard", async (_, text: string) => {
+    clipboard.writeText(text);
+  });
+
+  ipcMain.handle("env:validate-node-path", async (_, nodePath: string) => {
+    try {
+      if (!existsSync(nodePath)) {
+        return { valid: false, error: "File does not exist" };
+      }
+      const { stdout } = await execAsync(`${shellQuote(nodePath)} --version`);
+      const version = stdout.trim();
+      if (!version.startsWith("v")) {
+        return { valid: false, error: "Not a valid Node.js executable" };
+      }
+      return { valid: true, version };
+    } catch (e: any) {
+      return { valid: false, error: e.message || "Failed to execute" };
+    }
+  });
+
+  ipcMain.handle("env:set-custom-node-path", async (_, nodePath: string) => {
+    setSetting("custom_node_path", nodePath);
+    return { success: true };
+  });
+
+  ipcMain.handle("env:get-custom-node-path", async () => {
+    return getCustomNodePath();
+  });
+
+  // Run installation command for Node.js setup
+  ipcMain.handle("env:run-install-command", async (_, command: string) => {
+    console.log(`[Install] Running command: ${command}`);
+    
+    try {
+      // Different shell handling for different platforms
+      let shellCmd: string;
+      let shellArgs: string[];
+      
+      if (process.platform === "win32") {
+        // On Windows, use PowerShell for better compatibility
+        shellCmd = "powershell.exe";
+        shellArgs = ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", command];
+      } else {
+        // On Unix, use bash with login shell to get proper PATH
+        // Source nvm if available
+        const setupCmd = `
+          export NVM_DIR="$HOME/.nvm"
+          [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+          ${command}
+        `;
+        shellCmd = "/bin/bash";
+        shellArgs = ["-l", "-c", setupCmd];
+      }
+      
+      const { spawn } = await import("node:child_process");
+      
+      return new Promise((resolve, reject) => {
+        const child = spawn(shellCmd, shellArgs, {
+          env: { ...process.env, TERM: "xterm-256color" },
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        
+        let stdout = "";
+        let stderr = "";
+        
+        child.stdout.on("data", (data) => {
+          stdout += data.toString();
+        });
+        
+        child.stderr.on("data", (data) => {
+          stderr += data.toString();
+        });
+        
+        child.on("close", (code) => {
+          const output = (stdout + stderr).trim();
+          console.log(`[Install] Command finished with code ${code}`);
+          console.log(`[Install] Output: ${output.substring(0, 500)}...`);
+          
+          if (code === 0) {
+            resolve({ success: true, output });
+          } else {
+            reject(new Error(output || `Command failed with exit code ${code}`));
+          }
+        });
+        
+        child.on("error", (err) => {
+          reject(err);
+        });
+        
+        // Timeout after 5 minutes
+        setTimeout(() => {
+          child.kill();
+          reject(new Error("Installation timed out after 5 minutes"));
+        }, 5 * 60 * 1000);
+      });
+    } catch (e: any) {
+      console.error(`[Install] Error:`, e);
+      throw e;
+    }
+  });
+
+  ipcMain.handle("dialog:openFile", async (_, options?: { title?: string; filters?: { name: string; extensions: string[] }[] }) => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow!, {
+      title: options?.title || "Select File",
+      properties: ["openFile"],
+      filters: options?.filters,
+    });
+    if (canceled || filePaths.length === 0) {
+      return null;
+    }
+    return filePaths[0];
   });
 
   ipcMain.handle("dialog:openFolder", async () => {
@@ -261,39 +474,41 @@ const initIpc = () => {
       const localBin = getLocalAgentBin(cmd);
       if (localBin) {
         console.log(`[Main] Using local agent binary: ${localBin}`);
-        // Ensure execution permission for local binary
-        try {
-          await fs.chmod(localBin, 0o755);
-        } catch (e) {
-          console.error(`[Main] Failed to chmod local bin: ${e}`);
+        // Ensure execution permission for local binary (Unix only)
+        if (process.platform !== "win32") {
+          try {
+            await fs.chmod(localBin, 0o755);
+          } catch (e) {
+            console.error(`[Main] Failed to chmod local bin: ${e}`);
+          }
         }
 
-        // Special handling for node scripts (like qwen which is a symlink to cli.js)
-        // If we just execute the JS file directly, it might fail if shebang is not respected or env is weird
-        // So we prefix with 'node' if it looks like a JS file or we know it's a node script
-        if (localBin.endsWith(".js") || cmd === "qwen") {
-          // Quote the path because Client.ts uses { shell: true } which requires manual quoting for paths with spaces
-          args.unshift(`"${localBin}"`);
+        // Resolve the actual JS entry point (the .bin entry might be a shell wrapper or symlink)
+        const actualJsPath = await resolveActualJsEntry(localBin);
+        const isJsAgent = actualJsPath && actualJsPath.endsWith(".js");
 
-          // Try to resolve absolute path to node
-          try {
-            const { stdout } = await execAsync("which node");
-            cmd = stdout.trim();
-            console.log(`[Main] Resolved system node path: ${cmd}`);
-          } catch (e) {
-            const bundledNode = resolveBundledNodePath();
-            if (bundledNode) {
-              cmd = bundledNode;
-              console.log(`[Main] Using bundled node path: ${cmd}`);
-            } else {
-              console.warn(
-                "[Main] Failed to resolve node path and no bundled node found, falling back to 'node'",
-              );
-              cmd = "node";
-            }
+        // Special handling for node scripts (like qwen which is a symlink to cli.js)
+        // Use node to run JS files
+        if (isJsAgent || cmd === "qwen") {
+          // Use the resolved actual JS path, fallback to localBin
+          const jsPath = actualJsPath || localBin;
+          console.log(`[Main] Resolved JS entry: ${jsPath}`);
+          
+          // Quote the path because Client.ts uses { shell: true } which requires manual quoting for paths with spaces
+          args.unshift(shellQuote(jsPath));
+
+          // Use system node (or custom path)
+          const nodePath = await resolveNodePath();
+          const customNodePath = getCustomNodePath();
+          if (customNodePath) {
+            cmd = shellQuote(customNodePath);
+            console.log(`[Main] Using custom node path: ${cmd}`);
+          } else {
+            cmd = nodePath;
+            console.log(`[Main] Using system node: ${cmd}`);
           }
         } else {
-          cmd = localBin;
+          cmd = shellQuote(localBin);
         }
       }
 
@@ -334,20 +549,22 @@ const initIpc = () => {
       return { installed: true, source: "local" };
     }
 
-        // 2. Check system
-        try {
-          await execAsync(`which ${command}`);
-          return { installed: true, source: "system" };
-        } catch {
-          // 3. Special check for Node environment availability
-          if (command === "node") {
-            const bundledNode = resolveBundledNodePath();
-            if (bundledNode) {
-              return { installed: true, source: "bundled" };
-            }
-          }
-          return { installed: false };
-        }
+    // 2. Check custom node path
+    if (command === "node") {
+      const customNodePath = getCustomNodePath();
+      if (customNodePath) {
+        return { installed: true, source: "custom" };
+      }
+    }
+
+    // 3. Check system PATH
+    try {
+      const whichCmd = process.platform === "win32" ? "where" : "which";
+      await execAsync(`${whichCmd} ${command}`);
+      return { installed: true, source: "system" };
+    } catch {
+      return { installed: false };
+    }
   });
 
   ipcMain.handle(
@@ -376,13 +593,13 @@ const initIpc = () => {
       if (!existsSync(agentsDir)) {
         await fs.mkdir(agentsDir, { recursive: true });
         // Init package.json if needed
-        await fs.writeFile(path.join(agentsDir, "package.json"), "{}", "utf-8");
+        await fs.writeFile(path.join(agentsDir, "package.json"), '{"name": "agents", "version": "1.0.0"}', "utf-8");
       }
 
       const pkgName = extractPackageName(packageName);
       const latestSpecifier = toLatestSpecifier(packageName);
 
-      // Remove previously installed version so npm cannot reuse the old lock entry
+      // Remove previously installed version
       if (pkgName) {
         try {
           await execAsync(`npm uninstall ${pkgName}`, { cwd: agentsDir });
@@ -393,16 +610,9 @@ const initIpc = () => {
         }
       }
 
-      // Install
+      // Install using npm
       console.log(`[Main] Installing ${latestSpecifier} to ${agentsDir}...`);
-      // We rely on system npm for now, but in future could use bundled npm
-      // Quote paths to handle spaces
-      await execAsync(
-        `npm install ${latestSpecifier} --force --prefer-online --registry https://registry.npmmirror.com`,
-        {
-          cwd: agentsDir,
-        },
-      );
+      await execAsync(`npm install ${latestSpecifier}`, { cwd: agentsDir });
       return { success: true };
     } catch (e: any) {
       console.error("Install error:", e);

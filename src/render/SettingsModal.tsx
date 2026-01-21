@@ -57,7 +57,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const selectedPlugin = getAgentPlugin(selectedPluginId);
 
-  // Check Node.js availability on mount
+  // Check Node availability on mount (node is used to run JS agents)
   useEffect(() => {
     if (isOpen) {
       checkNode();
@@ -324,7 +324,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {activeTab === "agents" && (
             <>
-              {/* Node.js Warning */}
+              {/* Node Warning */}
               {nodeStatus === "not-installed" && (
                 <div className="node-warning">
                   <div style={{ marginTop: "2px" }}>⚠️</div>
@@ -337,9 +337,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         opacity: 0.9,
                       }}
                     >
-                      No system Node.js found. Some agents may fail to start.
-                      Please install Node.js or ensure the bundled runtime is
-                      available.
+                      No Node.js runtime found. Some agents may fail to start.
+                      Please ensure the bundled runtime is available.
                     </div>
                   </div>
                 </div>

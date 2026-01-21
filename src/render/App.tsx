@@ -18,6 +18,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 import "./App.css";
+import EnvironmentSetup from "./EnvironmentSetup";
 import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
 import WorkspaceWelcome from "./WorkspaceWelcome";
@@ -319,6 +320,7 @@ const MessageBubble = ({ msg }: { msg: Message }) => {
 // --- Main App ---
 
 const App = () => {
+  const [envReady, setEnvReady] = useState<boolean | null>(null); // null = checking
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
@@ -1393,6 +1395,40 @@ const App = () => {
       });
     }
   };
+
+  // Check environment on mount
+  useEffect(() => {
+    const checkEnv = async () => {
+      try {
+        const result = await window.electron.invoke("env:check");
+        if (result.node.installed && result.npm.installed) {
+          // Check version
+          const versionMatch = result.node.version?.match(/^v?(\d+)/);
+          const majorVersion = versionMatch ? parseInt(versionMatch[1], 10) : 0;
+          setEnvReady(majorVersion >= 18);
+        } else {
+          setEnvReady(false);
+        }
+      } catch {
+        setEnvReady(false);
+      }
+    };
+    checkEnv();
+  }, []);
+
+  // Show environment setup if not ready
+  if (envReady === null) {
+    // Still checking
+    return (
+      <div className="app-layout" style={{ alignItems: "center", justifyContent: "center" }}>
+        <Loader2 className="spin" size={32} />
+      </div>
+    );
+  }
+
+  if (!envReady) {
+    return <EnvironmentSetup onReady={() => setEnvReady(true)} />;
+  }
 
   if (!currentWorkspace && tasks.length === 0) {
     return (
