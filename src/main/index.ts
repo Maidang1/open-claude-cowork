@@ -152,25 +152,6 @@ const resolveNodeRuntime = async (): Promise<NodeRuntime> => {
   };
 };
 
-const resolveBundledToolsRoot = () => {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, "tools", "bun");
-  }
-  const cwdPath = path.join(process.cwd(), "public", "tools", "bun");
-  if (existsSync(cwdPath)) {
-    return cwdPath;
-  }
-  return path.resolve(__dirname, "../../..", "public", "tools", "bun");
-};
-
-const resolveBundledBunPath = () => {
-  const baseDir = resolveBundledToolsRoot();
-  const folder = `${process.platform}-${process.arch}`;
-  const binName = process.platform === "win32" ? "bun.exe" : "bun";
-  const bunPath = path.join(baseDir, folder, binName);
-  return existsSync(bunPath) ? bunPath : null;
-};
-
 const resolveSystemCommand = async (
   command: string,
 ): Promise<string | null> => {
@@ -185,32 +166,16 @@ const resolveSystemCommand = async (
 };
 
 type PackageManager = {
-  kind: "bun" | "npm";
+  kind: "npm";
   cmd: string;
-  source: "bundled" | "system";
+  source: "system";
 };
 
 const resolvePackageManager = async (): Promise<PackageManager> => {
   getCustomNodePath();
-  const bundledBun = resolveBundledBunPath();
-  if (bundledBun) {
-    if (process.platform !== "win32") {
-      try {
-        await fs.chmod(bundledBun, 0o755);
-      } catch {
-        // ignore
-      }
-    }
-    return { kind: "bun", cmd: bundledBun, source: "bundled" };
-  }
-
-  const systemBun = await resolveSystemCommand("bun");
-  if (systemBun) {
-    return { kind: "bun", cmd: systemBun, source: "system" };
-  }
-
   await enrichPathFromLoginShell();
-  return { kind: "npm", cmd: "npm", source: "system" };
+  const systemNpm = await resolveSystemCommand("npm");
+  return { kind: "npm", cmd: systemNpm || "npm", source: "system" };
 };
 
 const getAgentsDir = () => path.join(app.getPath("userData"), "agents");
@@ -479,10 +444,9 @@ const initIpc = () => {
       const pmCmd = shellQuote(pm.cmd);
       const { stdout: pmVersion } = await execAsync(`${pmCmd} --version`);
       result.npm.installed = true;
-      result.npm.version =
-        pm.kind === "bun" ? `bun ${pmVersion.trim()}` : pmVersion.trim();
+      result.npm.version = pmVersion.trim();
     } catch {
-      // npm/bun not found
+      // npm not found
     }
 
     return result;
@@ -869,10 +833,7 @@ const initIpc = () => {
       // Remove previously installed version
       if (pkgName) {
         try {
-          const removeCmd =
-            pm.kind === "bun"
-              ? `${pmCmd} remove ${pkgName}`
-              : `${pmCmd} uninstall ${pkgName}`;
+          const removeCmd = `${pmCmd} uninstall ${pkgName}`;
           await execAsync(removeCmd, { cwd: agentsDir });
         } catch (uninstallErr) {
           console.warn(
@@ -881,14 +842,11 @@ const initIpc = () => {
         }
       }
 
-      // Install using bundled bun or system npm/bun
+      // Install using system npm
       console.log(
         `[Main] Installing ${latestSpecifier} to ${agentsDir} using ${pm.kind} (${pm.source})...`,
       );
-      const installCmd =
-        pm.kind === "bun"
-          ? `${pmCmd} add ${latestSpecifier}`
-          : `${pmCmd} install ${latestSpecifier}`;
+      const installCmd = `${pmCmd} install ${latestSpecifier}`;
       await execAsync(installCmd, { cwd: agentsDir });
       return { success: true };
     } catch (e: any) {
@@ -919,10 +877,7 @@ const initIpc = () => {
       console.log(
         `[Main] Uninstalling ${pkgName} from ${agentsDir} using ${pm.kind} (${pm.source})...`,
       );
-      const removeCmd =
-        pm.kind === "bun"
-          ? `${pmCmd} remove ${pkgName}`
-          : `${pmCmd} uninstall ${pkgName}`;
+      const removeCmd = `${pmCmd} uninstall ${pkgName}`;
       await execAsync(removeCmd, { cwd: agentsDir });
       return { success: true };
     } catch (e: any) {
