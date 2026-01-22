@@ -50,10 +50,6 @@ const config = {
       from: "./public/assets/icons",
       to: "assets/icons",
     },
-    {
-      from: "./public/tools/bun",
-      to: "tools/bun",
-    },
   ],
   icon: resolve(__dirname, `./public/assets/icons/icon.icns`),
   asarUnpack: "**\\*.{node,dll}",

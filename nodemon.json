@@ -1,5 +1,5 @@
 {
   "watch": ["./src/main/**/*"],
   "ext": "ts json",
-  "exec": "bun run rebuild:main"
+  "exec": "npm run rebuild:main"
 }

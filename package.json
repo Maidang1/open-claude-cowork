@@ -6,8 +6,7 @@
     "dev": "cross-env NODE_ENV=development plop",
     "dev:render": "rsbuild dev --config ./builder/rsbuild.render.ts",
     "dev:main": "nodemon",
-    "prepare:bun": "node scripts/fetch-bun.cjs",
-    "build": "pnpm run prepare:bun && cross-env NODE_ENV=production plop",
+    "build": "cross-env NODE_ENV=production plop",
     "build:darwin": "cross-env BUILD_PLATFORM=darwin BUILD_ENV=production pnpm run build",
     "build:darwin:dev": "cross-env BUILD_PLATFORM=darwin BUILD_ENV=development pnpm run build",
     "build:darwin:staging": "cross-env BUILD_PLATFORM=darwin BUILD_ENV=staging pnpm run build",
@@ -25,11 +24,11 @@
     "build:render": "rsbuild build --config ./builder/rsbuild.render.ts",
     "postinstall": "node node_modules/electron/install.js && electron-builder install-app-deps",
     "icon": "electron-icon-builder -i=./public/assets/icons/icon.png -o=./public/assets/icons -f",
-    "lint": "bun biome check --write ./src"
+    "lint": "npx biome check --write ./src"
   },
   "lint-staged": {
     "./src/**/*.{ts,tsx,js,json,html,yml,css,less,scss,md}": [
-      "bun run lint"
+      "npm run lint"
     ]
   },
   "author": {

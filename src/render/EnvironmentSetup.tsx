@@ -320,7 +320,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
         ) : (
           <p className="env-setup-desc">
             This application requires Node.js {MIN_NODE_VERSION}+ and a package
-            manager (bun or npm) to run agents.
+            manager (npm) to run agents.
             <br />
             Please install Node.js to continue.
           </p>
