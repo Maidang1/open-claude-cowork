@@ -31,13 +31,11 @@ jobs:
             npm_script: build:mac-arm64
             artifacts: |
               release/app/darwin-arm64/**/*.dmg
-              release/app/darwin-arm64/**/*.zip
           - os: macos-15-intel
             build_target: darwin-x64
             npm_script: build:mac-x64
             artifacts: |
               release/app/darwin-x64/**/*.dmg
-              release/app/darwin-x64/**/*.zip
           - os: windows-latest
             build_target: win32
             npm_script: build:win32

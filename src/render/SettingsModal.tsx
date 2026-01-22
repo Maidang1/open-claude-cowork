@@ -25,6 +25,8 @@ interface SettingsModalProps {
   currentWorkspace: string | null;
 }
 
+type NodeRuntimePreference = "bundled" | "custom";
+
 const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
@@ -49,6 +51,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [nodeStatus, setNodeStatus] = useState<
     "checking" | "installed" | "not-installed"
   >("checking");
+  const [nodeRuntime, setNodeRuntime] =
+    useState<NodeRuntimePreference>("bundled");
+  const [customNodePath, setCustomNodePath] = useState("");
+  const [runtimeSaving, setRuntimeSaving] = useState(false);
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const [runtimeSaved, setRuntimeSaved] = useState(false);
   const [installedVersion, setInstalledVersion] = useState<string | null>(null);
   const [newEnvKey, setNewEnvKey] = useState("");
   const [newEnvVal, setNewEnvVal] = useState("");
@@ -57,12 +65,25 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const selectedPlugin = getAgentPlugin(selectedPluginId);
 
-  // Check Node.js availability on mount
+  // Check Node availability on mount (node is used to run JS agents)
   useEffect(() => {
     if (isOpen) {
       checkNode();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadRuntimeSettings();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setRuntimeSaved(false);
+      setRuntimeError(null);
+    }
+  }, [isOpen, nodeRuntime, customNodePath]);
 
   const checkNode = async () => {
     try {
@@ -71,6 +92,81 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
     } catch (e) {
       setNodeStatus("not-installed");
     }
+  };
+
+  const loadRuntimeSettings = async () => {
+    try {
+      const runtime = await window.electron.invoke("env:get-node-runtime");
+      if (runtime === "bundled" || runtime === "custom") {
+        setNodeRuntime(runtime);
+      }
+      const storedPath = await window.electron.invoke(
+        "env:get-custom-node-path",
+      );
+      if (storedPath) {
+        setCustomNodePath(storedPath);
+      }
+      setRuntimeError(null);
+      setRuntimeSaved(false);
+    } catch (e: any) {
+      setRuntimeError(e.message || "Failed to load runtime settings");
+    }
+  };
+
+  const handleBrowseNodePath = async () => {
+    const result = await window.electron.invoke("dialog:openFile", {
+      title: "Select Node.js executable",
+      filters: [
+        {
+          name: "Executable",
+          extensions: process.platform === "win32" ? ["exe"] : ["*"],
+        },
+      ],
+    });
+    if (result) {
+      setCustomNodePath(result);
+    }
+  };
+
+  const handleApplyRuntime = async () => {
+    setRuntimeSaving(true);
+    setRuntimeError(null);
+    setRuntimeSaved(false);
+    try {
+      const res = await window.electron.invoke(
+        "env:set-node-runtime",
+        nodeRuntime,
+      );
+      if (res?.success === false) {
+        throw new Error(res.error || "Failed to save runtime");
+      }
+      if (nodeRuntime === "custom") {
+        if (!customNodePath.trim()) {
+          throw new Error("Custom Node.js path is required.");
+        }
+        const validation = await window.electron.invoke(
+          "env:validate-node-path",
+          customNodePath,
+        );
+        if (!validation.valid) {
+          throw new Error(validation.error || "Invalid Node.js path");
+        }
+        await window.electron.invoke(
+          "env:set-custom-node-path",
+          customNodePath,
+        );
+      }
+      await checkNode();
+      setRuntimeSaved(true);
+    } catch (e: any) {
+      setRuntimeError(e.message || "Failed to save runtime settings");
+    } finally {
+      setRuntimeSaving(false);
+    }
+  };
+
+  const handleRestart = async () => {
+    await window.electron.invoke("app:relaunch");
   };
 
   // Auto-detect preset based on command
@@ -305,26 +401,130 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 ? "Agents Configuration"
                 : "General Settings"}
             </h2>
-              <button type="button" onClick={onClose} className="modal-close-btn">
-                <X size={20} />
-              </button>
+            <button type="button" onClick={onClose} className="modal-close-btn">
+              <X size={20} />
+            </button>
           </div>
 
           {activeTab === "general" && (
             <div
-              style={{
-                padding: "20px",
-                textAlign: "center",
-                color: "var(--text-secondary)",
-              }}
+              style={{ display: "flex", flexDirection: "column", gap: "20px" }}
             >
-              General settings coming soon...
+              <div className="modal-section">
+                <label className="modal-label">Node Runtime</label>
+                <span className="modal-input-hint">
+                  Choose the runtime used to launch JS agents. Changes apply
+                  after restart.
+                </span>
+                <div className="preset-buttons" style={{ maxWidth: "420px" }}>
+                  <button
+                    type="button"
+                    className={`preset-button ${
+                      nodeRuntime === "bundled" ? "active" : ""
+                    }`}
+                    onClick={() => setNodeRuntime("bundled")}
+                  >
+                    Bundled (Electron)
+                  </button>
+                  <button
+                    type="button"
+                    className={`preset-button ${
+                      nodeRuntime === "custom" ? "active" : ""
+                    }`}
+                    onClick={() => setNodeRuntime("custom")}
+                  >
+                    Custom Path
+                  </button>
+                </div>
+
+                {nodeRuntime === "custom" && (
+                  <>
+                    <label
+                      className="modal-label"
+                      style={{ marginTop: "16px" }}
+                    >
+                      Custom Node.js Path
+                    </label>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                      }}
+                    >
+                      <input
+                        className="modal-input"
+                        style={{ flex: 1, minWidth: "240px" }}
+                        placeholder="/path/to/node"
+                        value={customNodePath}
+                        onChange={(e) => setCustomNodePath(e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={handleBrowseNodePath}
+                      >
+                        Browse...
+                      </button>
+                    </div>
+                    <span className="modal-input-hint">
+                      Point to the Node.js executable (not a directory).
+                    </span>
+                  </>
+                )}
+
+                {runtimeError && (
+                  <div style={{ marginTop: "12px", color: "var(--error)" }}>
+                    {runtimeError}
+                  </div>
+                )}
+                {runtimeSaved && !runtimeError && (
+                  <div
+                    style={{
+                      marginTop: "12px",
+                      color: "var(--text-secondary)",
+                    }}
+                  >
+                    Saved. Please restart the app to apply changes.
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    justifyContent: "flex-end",
+                    marginTop: "16px",
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={handleRestart}
+                    disabled={runtimeSaving}
+                  >
+                    Restart App
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={handleApplyRuntime}
+                    disabled={
+                      runtimeSaving ||
+                      (nodeRuntime === "custom" && !customNodePath.trim())
+                    }
+                  >
+                    {runtimeSaving ? "Saving..." : "Apply"}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
           {activeTab === "agents" && (
             <>
-              {/* Node.js Warning */}
+              {/* Node Warning */}
               {nodeStatus === "not-installed" && (
                 <div className="node-warning">
                   <div style={{ marginTop: "2px" }}>⚠️</div>
@@ -337,9 +537,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         opacity: 0.9,
                       }}
                     >
-                      No system Node.js found. Some agents may fail to start.
-                      Please install Node.js or ensure the bundled runtime is
-                      available.
+                      No Node.js runtime found. Some agents may fail to start.
+                      If using a custom path, verify it; otherwise ensure the
+                      bundled runtime is available.
                     </div>
                   </div>
                 </div>
@@ -570,7 +770,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
         </div>
       </div>
-
     </div>
   );
 };

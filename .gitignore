@@ -1,3 +1,7 @@
 node_modules
 release/*
 resources
+public/tools/bun/*/bun
+public/tools/bun/*/bun.exe
+public/tools/bun/*/version.txt
+.tmp/bun-download/

@@ -1,12 +1,13 @@
 {
   "name": "open-claude-cowork",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "main": "./release/dist/main/index.js",
   "scripts": {
     "dev": "cross-env NODE_ENV=development plop",
     "dev:render": "rsbuild dev --config ./builder/rsbuild.render.ts",
     "dev:main": "nodemon",
-    "build": "cross-env NODE_ENV=production plop",
+    "prepare:bun": "node scripts/fetch-bun.cjs",
+    "build": "pnpm run prepare:bun && cross-env NODE_ENV=production plop",
     "build:darwin": "cross-env BUILD_PLATFORM=darwin BUILD_ENV=production pnpm run build",
     "build:darwin:dev": "cross-env BUILD_PLATFORM=darwin BUILD_ENV=development pnpm run build",
     "build:darwin:staging": "cross-env BUILD_PLATFORM=darwin BUILD_ENV=staging pnpm run build",
@@ -22,7 +23,7 @@
     "rebuild:main": "pnpm run build:main && electron ./release/dist/main/index.js",
     "build:main": "rsbuild build --config ./builder/rsbuild.main.ts",
     "build:render": "rsbuild build --config ./builder/rsbuild.render.ts",
-    "postinstall": "node node_modules/electron/install.js && electron-builder install-app-deps && node scripts/download-node.js",
+    "postinstall": "node node_modules/electron/install.js && electron-builder install-app-deps",
     "icon": "electron-icon-builder -i=./public/assets/icons/icon.png -o=./public/assets/icons -f",
     "lint": "bun biome check --write ./src"
   },
