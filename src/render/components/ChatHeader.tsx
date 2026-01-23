@@ -9,6 +9,10 @@ interface ChatHeaderProps {
   isModelMenuOpen: boolean;
   onToggleModelMenu: () => void;
   onModelPick: (modelId: string) => void;
+  showDebug?: boolean;
+  agentInfo?: any;
+  agentCapabilities?: any;
+  agentMessageLog?: string[];
 }
 
 export const ChatHeader = ({
@@ -19,77 +23,109 @@ export const ChatHeader = ({
   isModelMenuOpen,
   onToggleModelMenu,
   onModelPick,
+  showDebug,
+  agentInfo,
+  agentCapabilities,
+  agentMessageLog,
 }: ChatHeaderProps) => {
   const currentModel = models.find((model) => model.modelId === currentModelId);
 
   return (
-    <div className="chat-header">
-      <div className="header-left">
-        <div
-          className={`connection-status ${connectionStatus.state}`}
-          title={`Status: ${connectionStatus.state}`}
-        >
-          <div className="status-dot-container">
-            <div className={`status-dot ${connectionStatus.state}`} />
-            <div className="status-glow" />
+    <>
+      <div className="chat-header">
+        <div className="header-left">
+          <div
+            className={`connection-status ${connectionStatus.state}`}
+            title={`Status: ${connectionStatus.state}`}
+          >
+            <div className="status-dot-container">
+              <div className={`status-dot ${connectionStatus.state}`} />
+              <div className="status-glow" />
+            </div>
+            <span className="status-label">
+              {connectionStatus.state === "connected"
+                ? "System Connected"
+                : connectionStatus.state === "connecting"
+                  ? "Connecting..."
+                  : "Disconnected"}
+            </span>
           </div>
-          <span className="status-label">
-            {connectionStatus.state === "connected"
-              ? "System Connected"
-              : connectionStatus.state === "connecting"
-                ? "Connecting..."
-                : "Disconnected"}
-          </span>
+
+          {currentWorkspace && (
+            <>
+              <div className="header-divider" />
+              <div className="workspace-info">
+                <span className="folder-icon">📂</span>
+                <span className="workspace-path" title={currentWorkspace}>
+                  {currentWorkspace.split("/").pop()}
+                </span>
+              </div>
+            </>
+          )}
         </div>
 
-        {currentWorkspace && (
-          <>
-            <div className="header-divider" />
-            <div className="workspace-info">
-              <span className="folder-icon">📂</span>
-              <span className="workspace-path" title={currentWorkspace}>
-                {currentWorkspace.split("/").pop()}
-              </span>
+        <div className="header-right">
+          {models.length > 0 && (
+            <div className="model-selector">
+              <button
+                type="button"
+                className="model-selector-trigger"
+                onClick={onToggleModelMenu}
+              >
+                <span className="model-current-name">
+                  {currentModel?.name || currentModelId || "Unknown"}
+                </span>
+                <ChevronDown size={14} className="model-arrow" />
+              </button>
+              {isModelMenuOpen && (
+                <div className="model-dropdown">
+                  {models.map((model) => (
+                    <button
+                      key={model.modelId}
+                      type="button"
+                      className={`model-item ${
+                        model.modelId === currentModelId ? "active" : ""
+                      }`}
+                      onClick={() => onModelPick(model.modelId)}
+                    >
+                      <span className="model-name">{model.name}</span>
+                      <span className="model-desc">
+                        {model.description || model.modelId}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
 
-      <div className="header-right">
-        {models.length > 0 && (
-          <div className="model-selector">
-            <button
-              type="button"
-              className="model-selector-trigger"
-              onClick={onToggleModelMenu}
-            >
-              <span className="model-current-name">
-                {currentModel?.name || currentModelId || "Unknown"}
-              </span>
-              <ChevronDown size={14} className="model-arrow" />
-            </button>
-            {isModelMenuOpen && (
-              <div className="model-dropdown">
-                {models.map((model) => (
-                  <button
-                    key={model.modelId}
-                    type="button"
-                    className={`model-item ${
-                      model.modelId === currentModelId ? "active" : ""
-                    }`}
-                    onClick={() => onModelPick(model.modelId)}
-                  >
-                    <span className="model-name">{model.name}</span>
-                    <span className="model-desc">
-                      {model.description || model.modelId}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+      {showDebug && (
+        <div
+          className="debug-info-panel"
+          style={{
+            fontSize: "0.75rem",
+            color: "var(--text-secondary)",
+            backgroundColor: "var(--bg-surface-muted)",
+            border: "1px solid var(--border-color)",
+            borderTop: "none",
+            padding: "12px 24px",
+            fontFamily: "var(--font-mono)",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+            maxHeight: "200px",
+            overflowY: "auto",
+            borderBottom: "1px solid var(--border-color)",
+          }}
+        >
+          {`agentInfo=${JSON.stringify(agentInfo, null, 2)}\nagentCapabilities=${JSON.stringify(
+            agentCapabilities,
+            null,
+            2,
+          )}\nagentMessageLog=${JSON.stringify(agentMessageLog, null, 2)}`}
+        </div>
+      )}
+    </>
   );
 };

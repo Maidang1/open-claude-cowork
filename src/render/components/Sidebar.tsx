@@ -6,10 +6,7 @@ interface SidebarProps {
   activeTaskId: string | null;
   onNewTask: () => void;
   onSelectTask: (taskId: string) => void;
-  onTaskContextMenu: (taskId: string, event: React.MouseEvent) => void;
-  taskMenu: { taskId: string; x: number; y: number } | null;
   onDeleteTask: (taskId: string) => void;
-  onCloseTaskMenu: () => void;
   onOpenSettings: () => void;
   theme: "light" | "dark";
   onToggleTheme: () => void;
@@ -20,15 +17,12 @@ export const Sidebar = ({
   activeTaskId,
   onNewTask,
   onSelectTask,
-  onTaskContextMenu,
-  taskMenu,
   onDeleteTask,
-  onCloseTaskMenu,
   onOpenSettings,
   theme,
   onToggleTheme,
 }: SidebarProps) => {
-  const { Moon, Sun, Settings } = require("lucide-react");
+  const { Moon, Sun, Settings, Trash2 } = require("lucide-react");
 
   return (
     <div className="sidebar">
@@ -46,10 +40,21 @@ export const Sidebar = ({
               key={task.id}
               className={`history-item ${task.id === activeTaskId ? "active" : ""}`}
               onClick={() => onSelectTask(task.id)}
-              onContextMenu={(event) => onTaskContextMenu(task.id, event)}
+              style={{ position: "relative" }}
             >
               <div className="history-item-row">
                 <div className="history-item-title">{task.title}</div>
+                <button
+                  type="button"
+                  className="history-item-delete"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDeleteTask(task.id);
+                  }}
+                  aria-label="Delete task"
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
               <div className="history-item-subtitle" title={task.workspace}>
                 {task.workspace.split("/").pop() || task.workspace}
@@ -58,26 +63,6 @@ export const Sidebar = ({
           ))
         )}
       </div>
-
-      {taskMenu && (
-        <div
-          className="task-context-menu"
-          style={{ top: taskMenu.y, left: taskMenu.x }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          <button
-            type="button"
-            className="task-context-menu-item danger"
-            onClick={() => {
-              const taskId = taskMenu.taskId;
-              onCloseTaskMenu();
-              onDeleteTask(taskId);
-            }}
-          >
-            Delete Task
-          </button>
-        </div>
-      )}
 
       <div className="sidebar-settings">
         <div style={{ display: "flex", gap: "8px" }}>

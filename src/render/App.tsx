@@ -43,7 +43,9 @@ const App = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
-  const [agentCommand, setAgentCommand] = useState(getDefaultAgentPlugin().defaultCommand);
+  const [agentCommand, setAgentCommand] = useState(
+    getDefaultAgentPlugin().defaultCommand,
+  );
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
   const [agentInfo, setAgentInfo] = useState<AgentInfoState>({
     models: [],
@@ -62,11 +64,7 @@ const App = () => {
   const [agentMessageLog, setAgentMessageLog] = useState<string[]>([]);
   const showDebug =
     String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
-  const [taskMenu, setTaskMenu] = useState<{
-    taskId: string;
-    x: number;
-    y: number;
-  } | null>(null);
+
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     state: "disconnected",
     message: "Disconnected",
@@ -198,21 +196,6 @@ const App = () => {
       setAgentMessageLog([]);
     }
   }, [activeTaskId, agentMessageLog.length]);
-
-  useEffect(() => {
-    const handleClick = () => setTaskMenu(null);
-    const handleKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setTaskMenu(null);
-      }
-    };
-    window.addEventListener("click", handleClick);
-    window.addEventListener("keydown", handleKey);
-    return () => {
-      window.removeEventListener("click", handleClick);
-      window.removeEventListener("keydown", handleKey);
-    };
-  }, []);
 
   // Auto-resize textarea
   // biome-ignore lint/correctness/useExhaustiveDependencies: Logic requires this
@@ -449,7 +432,7 @@ const App = () => {
                     messages: nextMessages,
                     updatedAt,
                     lastActiveAt: updatedAt,
-                    }
+                  }
                 : task,
             );
           } else {
@@ -912,15 +895,6 @@ const App = () => {
     await ensureTaskSession(task);
   };
 
-  const handleTaskContextMenu = (taskId: string, event: React.MouseEvent) => {
-    event.preventDefault();
-    setTaskMenu({
-      taskId,
-      x: event.clientX,
-      y: event.clientY,
-    });
-  };
-
   const handleDeleteTask = async (taskId: string) => {
     const confirmed = window.confirm(
       "Delete this task? This cannot be undone.",
@@ -1135,7 +1109,10 @@ const App = () => {
   if (envReady === null) {
     // Still checking
     return (
-      <div className="app-layout" style={{ alignItems: "center", justifyContent: "center" }}>
+      <div
+        className="app-layout"
+        style={{ alignItems: "center", justifyContent: "center" }}
+      >
         <Loader2 className="spin" size={32} />
       </div>
     );
@@ -1182,10 +1159,7 @@ const App = () => {
         activeTaskId={activeTaskId}
         onNewTask={handleNewTask}
         onSelectTask={handleSelectTask}
-        onTaskContextMenu={handleTaskContextMenu}
-        taskMenu={taskMenu}
         onDeleteTask={handleDeleteTask}
-        onCloseTaskMenu={() => setTaskMenu(null)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         theme={theme}
         onToggleTheme={toggleTheme}
@@ -1201,31 +1175,13 @@ const App = () => {
           isModelMenuOpen={isModelMenuOpen}
           onToggleModelMenu={() => setIsModelMenuOpen((prev) => !prev)}
           onModelPick={handleModelPick}
+          showDebug={showDebug}
+          agentInfo={agentInfo}
+          agentCapabilities={agentCapabilities}
+          agentMessageLog={agentMessageLog}
         />
 
         <div className="messages-container">
-          {showDebug && (
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "#9ca3af",
-                backgroundColor: "#f8fafc",
-                border: "1px solid #e5e7eb",
-                borderRadius: "8px",
-                padding: "8px 10px",
-                marginBottom: "12px",
-                fontFamily: "monospace",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-              }}
-            >
-              {`agentInfo=${JSON.stringify(agentInfo, null, 2)}\nagentCapabilities=${JSON.stringify(
-                agentCapabilities,
-                null,
-                2,
-              )}\nagentMessageLog=${JSON.stringify(agentMessageLog, null, 2)}`}
-            </div>
-          )}
           {/* Welcome / Empty State */}
           {messages.length === 0 && (
             <div

@@ -31,7 +31,7 @@ export const MessageBubble = ({ msg }: MessageBubbleProps) => {
       await window.electron.invoke(
         "agent:permission-response",
         msg.permissionId,
-        response
+        response,
       );
     };
 
@@ -65,16 +65,7 @@ export const MessageBubble = ({ msg }: MessageBubbleProps) => {
   }
 
   if (isSystem) {
-    return (
-      <div className="message-wrapper" style={{ alignItems: "center" }}>
-        <div className="system-init-block">
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>
-            System Notification
-          </div>
-          <div>{msg.content}</div>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
