@@ -1,8 +1,9 @@
 import { Loader2 } from "lucide-react";
+import { ConfigProvider, theme as antdTheme } from "antd";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import "./App.css";
-import { MessageBubble, Sidebar, ChatHeader, ChatInput } from "./components";
+import "./tailwind.css";
+import { AntDXMessage, Sidebar, ChatHeader, ChatInput } from "./components";
 import EnvironmentSetup from "./EnvironmentSetup";
 import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
@@ -71,7 +72,7 @@ const App = () => {
   });
 
   // Track if we are waiting for an agent response
-  const [_isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
 
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined" && window.matchMedia) {
@@ -156,6 +157,20 @@ const App = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
   };
 
+  const handlePermissionResponse = useCallback(
+    async (permissionId: string, optionId: string | null) => {
+      const response = optionId
+        ? { outcome: { outcome: "selected", optionId } }
+        : { outcome: { outcome: "cancelled" } };
+      await window.electron.invoke(
+        "agent:permission-response",
+        permissionId,
+        response,
+      );
+    },
+    [],
+  );
+
   // Save last workspace when it changes
   useEffect(() => {
     if (currentWorkspace) {
@@ -221,6 +236,15 @@ const App = () => {
 
   const handleIncomingMessage = useCallback(
     (data: IncomingMessage) => {
+      // Clear waiting state when receiving agent messages
+      if (
+        data.type === "agent_text" ||
+        data.type === "agent_thought" ||
+        data.type === "tool_call"
+      ) {
+        setIsWaitingForResponse(false);
+      }
+
       const tasksSnapshot = tasksRef.current;
       const activeTaskIdSnapshot = activeTaskIdRef.current;
       const activeTaskSnapshot =
@@ -952,7 +976,6 @@ const App = () => {
     setInputText("");
 
     currentAgentMsgId.current = null;
-    setIsWaitingForResponse(true);
 
     if (activeTaskId) {
       const nextMessages = [
@@ -967,6 +990,9 @@ const App = () => {
       });
     }
     setTimeout(scrollToBottom, 100);
+
+    // Set loading state after scroll to ensure the loading bubble is visible
+    setIsWaitingForResponse(true);
 
     try {
       await window.electron.invoke("agent:send", text);
@@ -1109,11 +1135,8 @@ const App = () => {
   if (envReady === null) {
     // Still checking
     return (
-      <div
-        className="app-layout"
-        style={{ alignItems: "center", justifyContent: "center" }}
-      >
-        <Loader2 className="spin" size={32} />
+      <div className="flex h-screen w-screen overflow-hidden bg-app items-center justify-center">
+        <Loader2 className="animate-spin" size={32} />
       </div>
     );
   }
@@ -1134,96 +1157,106 @@ const App = () => {
   }
 
   return (
-    <div className="app-layout">
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        agentCommand={agentCommand}
-        onAgentCommandChange={handleAgentCommandChange}
-        agentEnv={agentEnv}
-        onAgentEnvChange={handleAgentEnvChange}
-        isConnected={isConnected}
-        onConnectToggle={handleConnect}
-        currentWorkspace={currentWorkspace}
-      />
-      <NewTaskModal
-        isOpen={isNewTaskOpen}
-        onClose={() => setIsNewTaskOpen(false)}
-        onCreate={handleCreateTask}
-        initialWorkspace={currentWorkspace}
-        initialAgentCommand={agentCommand}
-      />
-
-      <Sidebar
-        tasks={tasks}
-        activeTaskId={activeTaskId}
-        onNewTask={handleNewTask}
-        onSelectTask={handleSelectTask}
-        onDeleteTask={handleDeleteTask}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-      />
-
-      {/* Main Chat Area */}
-      <div className="chat-main">
-        <ChatHeader
-          connectionStatus={connectionStatus}
-          currentWorkspace={currentWorkspace}
-          models={agentInfo.models}
-          currentModelId={agentInfo.currentModelId}
-          isModelMenuOpen={isModelMenuOpen}
-          onToggleModelMenu={() => setIsModelMenuOpen((prev) => !prev)}
-          onModelPick={handleModelPick}
-          showDebug={showDebug}
-          agentInfo={agentInfo}
-          agentCapabilities={agentCapabilities}
-          agentMessageLog={agentMessageLog}
-        />
-
-        <div className="messages-container">
-          {/* Welcome / Empty State */}
-          {messages.length === 0 && (
-            <div
-              style={{
-                textAlign: "center",
-                color: "#9ca3af",
-                marginTop: "40px",
-              }}
-            >
-              <div style={{ marginBottom: "8px" }}>
-                Beginning of conversation
-              </div>
-              <div
-                style={{
-                  width: "40px",
-                  height: "1px",
-                  backgroundColor: "#e5e7eb",
-                  margin: "0 auto",
-                }}
-              ></div>
-            </div>
-          )}
-
-          {messages.map((msg) => (
-            <MessageBubble key={msg.id} msg={msg} />
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-
-        <ChatInput
-          inputText={inputText}
-          onInputChange={setInputText}
-          onSend={handleSend}
+    <ConfigProvider
+      theme={{
+        algorithm:
+          theme === "dark"
+            ? antdTheme.darkAlgorithm
+            : antdTheme.defaultAlgorithm,
+        token: {
+          colorPrimary: "#f97316",
+        },
+      }}
+    >
+      <div className="flex h-screen w-screen overflow-hidden bg-app">
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          agentCommand={agentCommand}
+          onAgentCommandChange={handleAgentCommandChange}
+          agentEnv={agentEnv}
+          onAgentEnvChange={handleAgentEnvChange}
           isConnected={isConnected}
-          isCommandMenuOpen={isCommandMenuOpen}
-          filteredCommands={filteredCommands}
-          commandSelectedIndex={commandSelectedIndex}
-          onCommandPick={handleCommandPick}
-          onKeyDown={handleKeyDown}
+          onConnectToggle={handleConnect}
+          currentWorkspace={currentWorkspace}
         />
+        <NewTaskModal
+          isOpen={isNewTaskOpen}
+          onClose={() => setIsNewTaskOpen(false)}
+          onCreate={handleCreateTask}
+          initialWorkspace={currentWorkspace}
+          initialAgentCommand={agentCommand}
+        />
+
+        <Sidebar
+          tasks={tasks}
+          activeTaskId={activeTaskId}
+          onNewTask={handleNewTask}
+          onSelectTask={handleSelectTask}
+          onDeleteTask={handleDeleteTask}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+        />
+
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col relative bg-app">
+          <ChatHeader
+            connectionStatus={connectionStatus}
+            currentWorkspace={currentWorkspace}
+            models={agentInfo.models}
+            currentModelId={agentInfo.currentModelId}
+            isModelMenuOpen={isModelMenuOpen}
+            onToggleModelMenu={() => setIsModelMenuOpen((prev) => !prev)}
+            onModelPick={handleModelPick}
+            showDebug={showDebug}
+            agentInfo={agentInfo}
+            agentCapabilities={agentCapabilities}
+            agentMessageLog={agentMessageLog}
+          />
+
+          <div className="flex-1 overflow-y-auto px-10 py-5 flex flex-col gap-8 w-full">
+            {/* Welcome / Empty State */}
+            {messages.length === 0 ? (
+              <div className="text-center text-gray-400 mt-10">
+                <div className="mb-2">Beginning of conversation</div>
+                <div className="w-10 h-px bg-gray-200 mx-auto dark:bg-gray-700" />
+              </div>
+            ) : null}
+
+            {messages.map((msg) => (
+              <AntDXMessage
+                key={msg.id}
+                msg={msg}
+                onPermissionResponse={handlePermissionResponse}
+              />
+            ))}
+
+            {/* Loading message bubble */}
+            {isWaitingForResponse && (
+              <AntDXMessage
+                msg={{ id: "loading", sender: "agent", content: "" }}
+                isLoading
+              />
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          <ChatInput
+            inputText={inputText}
+            onInputChange={setInputText}
+            onSend={handleSend}
+            isConnected={isConnected}
+            isCommandMenuOpen={isCommandMenuOpen}
+            filteredCommands={filteredCommands}
+            commandSelectedIndex={commandSelectedIndex}
+            onCommandPick={handleCommandPick}
+            onKeyDown={handleKeyDown}
+          />
+        </div>
       </div>
-    </div>
+    </ConfigProvider>
   );
 };
 

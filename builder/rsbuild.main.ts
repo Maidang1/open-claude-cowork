@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { defineConfig, mergeRsbuildConfig, logger } from "@rsbuild/core";
 import { releaseMainPath, srcMainPath } from "./paths";
 import CommonConfig from "./rsbuild.common";
+import { pluginTailwindCSS } from "rsbuild-plugin-tailwindcss";
 
 logger.info(
   `Self Environment`,
@@ -11,6 +12,7 @@ logger.info(
 );
 
 const Config = defineConfig({
+  plugins: [pluginTailwindCSS()],
   tools: {
     rspack: {
       target: "electron-main",

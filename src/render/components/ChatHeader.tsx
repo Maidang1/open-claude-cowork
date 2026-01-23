@@ -32,17 +32,34 @@ export const ChatHeader = ({
 
   return (
     <>
-      <div className="chat-header">
-        <div className="header-left">
+      <div className="px-6 h-14 flex items-center justify-between bg-app border-b border-color z-10">
+        <div className="flex items-center gap-3">
           <div
-            className={`connection-status ${connectionStatus.state}`}
+            className={`flex items-center gap-2 text-sm text-text-secondary py-1 ${
+              connectionStatus.state
+            }`}
             title={`Status: ${connectionStatus.state}`}
           >
-            <div className="status-dot-container">
-              <div className={`status-dot ${connectionStatus.state}`} />
-              <div className="status-glow" />
+            <div className="relative flex items-center justify-center w-3 h-3">
+              <div
+                className={`w-2 h-2 rounded-full z-2 transition-all ${
+                  connectionStatus.state === "connected"
+                    ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94.0.6),0_0_4px_rgba(34,197,94,0.8)_inset] animate-pulse-green"
+                    : connectionStatus.state === "connecting"
+                      ? "bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.8)] animate-pulse-orange"
+                      : connectionStatus.state === "error"
+                        ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse-red"
+                        : "bg-slate-400"
+                }`}
+              />
+              {connectionStatus.state === "connected" && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full rounded-full opacity-0 z-1 pointer-events-none bg-green-500/30 animate-ripple-green" />
+              )}
+              {connectionStatus.state === "connecting" && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full rounded-full opacity-0 z-1 pointer-events-none bg-orange-500/40 animate-ripple-orange" />
+              )}
             </div>
-            <span className="status-label">
+            <span className="font-medium">
               {connectionStatus.state === "connected"
                 ? "System Connected"
                 : connectionStatus.state === "connecting"
@@ -53,10 +70,13 @@ export const ChatHeader = ({
 
           {currentWorkspace && (
             <>
-              <div className="header-divider" />
-              <div className="workspace-info">
-                <span className="folder-icon">📂</span>
-                <span className="workspace-path" title={currentWorkspace}>
+              <div className="w-px h-4 bg-color" />
+              <div className="flex items-center gap-2 text-sm text-text-secondary">
+                <span className="opacity-70">📂</span>
+                <span
+                  className="font-mono font-medium text-text-primary"
+                  title={currentWorkspace}
+                >
                   {currentWorkspace.split("/").pop()}
                 </span>
               </div>
@@ -64,32 +84,34 @@ export const ChatHeader = ({
           )}
         </div>
 
-        <div className="header-right">
+        <div className="flex items-center gap-3">
           {models.length > 0 && (
-            <div className="model-selector">
+            <div className="relative inline-flex flex-col gap-1.5">
               <button
                 type="button"
-                className="model-selector-trigger"
+                className="border border-color bg-surface transition-all py-1.5 px-3 rounded-md flex items-center justify-between gap-2 cursor-pointer font-medium text-text-primary min-w-[140px] text-sm hover:bg-surface-hover hover:border-hover"
                 onClick={onToggleModelMenu}
               >
-                <span className="model-current-name">
+                <span className="max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap">
                   {currentModel?.name || currentModelId || "Unknown"}
                 </span>
-                <ChevronDown size={14} className="model-arrow" />
+                <ChevronDown size={14} className="text-text-tertiary" />
               </button>
               {isModelMenuOpen && (
-                <div className="model-dropdown">
+                <div className="absolute top-[calc(100%+6px)] right-0 w-60 bg-surface border border-color shadow-lg rounded-xl z-50 p-1 max-h-72 overflow-y-auto">
                   {models.map((model) => (
                     <button
                       key={model.modelId}
                       type="button"
-                      className={`model-item ${
+                      className={`w-full p-2 flex flex-col gap-0.5 border-none text-left bg-none cursor-pointer rounded)md ${
                         model.modelId === currentModelId ? "active" : ""
-                      }`}
+                      } hover:bg-surface-hover`}
                       onClick={() => onModelPick(model.modelId)}
                     >
-                      <span className="model-name">{model.name}</span>
-                      <span className="model-desc">
+                      <span className="font-semibold text-text-primary text-sm">
+                        {model.name}
+                      </span>
+                      <span className="text-text-secondary text-xs">
                         {model.description || model.modelId}
                       </span>
                     </button>
@@ -102,23 +124,7 @@ export const ChatHeader = ({
       </div>
 
       {showDebug && (
-        <div
-          className="debug-info-panel"
-          style={{
-            fontSize: "0.75rem",
-            color: "var(--text-secondary)",
-            backgroundColor: "var(--bg-surface-muted)",
-            border: "1px solid var(--border-color)",
-            borderTop: "none",
-            padding: "12px 24px",
-            fontFamily: "var(--font-mono)",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            maxHeight: "200px",
-            overflowY: "auto",
-            borderBottom: "1px solid var(--border-color)",
-          }}
-        >
+        <div className="text-xs text-text-secondary bg-surface-muted border border-color border-t-0 px-6 py-3 font-mono whitespace-pre-wrap break-words max-h-48 overflow-y-auto border-b border-color">
           {`agentInfo=${JSON.stringify(agentInfo, null, 2)}\nagentCapabilities=${JSON.stringify(
             agentCapabilities,
             null,

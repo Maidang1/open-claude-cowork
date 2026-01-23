@@ -18,23 +18,22 @@ const WorkspaceWelcome: React.FC<WorkspaceWelcomeProps> = ({ onSelect }) => {
   };
 
   return (
-    <div className="welcome-container">
-      <h1 className="welcome-title">Welcome to Claude Cowork</h1>
-      <p className="welcome-subtitle">
+    <div className="bg-app min-h-screen flex flex-col items-center justify-center gap-4 p-12 text-center">
+      <h1 className="text-6xl tracking-tighter">Welcome to Claude Cowork</h1>
+      <p className="text-text-secondary mt-2 text-base">
         Open a folder to start your workspace session
       </p>
 
       <button
         type="button"
         onClick={handleOpenFolder}
-        className="welcome-button"
+        className="bg-primary rounded-xl py-3.5 px-7 text-[1.1rem] inline-flex items-center gap-2.5"
       >
         <FolderOpen size={20} />
         Open Folder
       </button>
     </div>
   );
-
 };
 
 export default WorkspaceWelcome;
