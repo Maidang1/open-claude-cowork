@@ -9,9 +9,14 @@ import {
   ChevronDown,
 } from "lucide-react";
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AGENT_PLUGINS, getAgentPlugin } from "./agents/registry";
-import { AgentPlugin } from "./agents/types";
+import {
+  useNodeRuntime,
+  useAgentInstall,
+  useClickOutside,
+  useEscapeKey,
+} from "./hooks";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -25,8 +30,6 @@ interface SettingsModalProps {
   currentWorkspace: string | null;
 }
 
-type NodeRuntimePreference = "bundled" | "custom";
-
 const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
@@ -39,276 +42,87 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   currentWorkspace,
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const [selectedPluginId, setSelectedPluginId] = useState<string>("custom");
-  const [installStatus, setInstallStatus] = useState<
-    | "checking"
-    | "installed"
-    | "not-installed"
-    | "installing"
-    | "updating"
-    | "uninstalling"
-  >("checking");
-  const [nodeStatus, setNodeStatus] = useState<
-    "checking" | "installed" | "not-installed"
-  >("checking");
-  const [nodeRuntime, setNodeRuntime] =
-    useState<NodeRuntimePreference>("bundled");
-  const [customNodePath, setCustomNodePath] = useState("");
-  const [runtimeSaving, setRuntimeSaving] = useState(false);
-  const [runtimeError, setRuntimeError] = useState<string | null>(null);
-  const [runtimeSaved, setRuntimeSaved] = useState(false);
-  const [installedVersion, setInstalledVersion] = useState<string | null>(null);
   const [newEnvKey, setNewEnvKey] = useState("");
   const [newEnvVal, setNewEnvVal] = useState("");
   const [activeTab, setActiveTab] = useState<"agents" | "general">("agents");
   const [isAgentDropdownOpen, setIsAgentDropdownOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const selectedPlugin = getAgentPlugin(selectedPluginId);
 
-  // Check Node availability on mount (node is used to run JS agents)
-  useEffect(() => {
-    if (isOpen) {
-      checkNode();
-    }
-  }, [isOpen]);
+  // Use extracted hooks
+  const {
+    nodeRuntime,
+    customNodePath,
+    nodeStatus,
+    runtimeSaving,
+    runtimeError,
+    runtimeSaved,
+    setNodeRuntime,
+    setCustomNodePath,
+    browseNodePath,
+    applyRuntime,
+    restart,
+  } = useNodeRuntime(isOpen);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadRuntimeSettings();
-    }
-  }, [isOpen]);
+  const {
+    installStatus,
+    installedVersion,
+    install: handleInstall,
+    update: handleUpdate,
+    uninstall: handleUninstall,
+  } = useAgentInstall(selectedPlugin, isOpen, onAgentCommandChange);
 
-  useEffect(() => {
-    if (isOpen) {
-      setRuntimeSaved(false);
-      setRuntimeError(null);
-    }
-  }, [isOpen, nodeRuntime, customNodePath]);
+  // Close handlers
+  useEscapeKey(onClose, isOpen);
+  useClickOutside(dropdownRef, () => setIsAgentDropdownOpen(false));
 
-  const checkNode = async () => {
-    try {
-      const res = await window.electron.invoke("agent:check-command", "node");
-      setNodeStatus(res.installed ? "installed" : "not-installed");
-    } catch (e) {
-      setNodeStatus("not-installed");
-    }
-  };
-
-  const loadRuntimeSettings = async () => {
-    try {
-      const runtime = await window.electron.invoke("env:get-node-runtime");
-      if (runtime === "bundled" || runtime === "custom") {
-        setNodeRuntime(runtime);
-      }
-      const storedPath = await window.electron.invoke(
-        "env:get-custom-node-path",
-      );
-      if (storedPath) {
-        setCustomNodePath(storedPath);
-      }
-      setRuntimeError(null);
-      setRuntimeSaved(false);
-    } catch (e: any) {
-      setRuntimeError(e.message || "Failed to load runtime settings");
-    }
-  };
-
-  const handleBrowseNodePath = async () => {
-    const result = await window.electron.invoke("dialog:openFile", {
-      title: "Select Node.js executable",
-      filters: [
-        {
-          name: "Executable",
-          extensions: process.platform === "win32" ? ["exe"] : ["*"],
-        },
-      ],
-    });
-    if (result) {
-      setCustomNodePath(result);
-    }
-  };
-
-  const handleApplyRuntime = async () => {
-    setRuntimeSaving(true);
-    setRuntimeError(null);
-    setRuntimeSaved(false);
-    try {
-      const res = await window.electron.invoke(
-        "env:set-node-runtime",
-        nodeRuntime,
-      );
-      if (res?.success === false) {
-        throw new Error(res.error || "Failed to save runtime");
-      }
-      if (nodeRuntime === "custom") {
-        if (!customNodePath.trim()) {
-          throw new Error("Custom Node.js path is required.");
-        }
-        const validation = await window.electron.invoke(
-          "env:validate-node-path",
-          customNodePath,
-        );
-        if (!validation.valid) {
-          throw new Error(validation.error || "Invalid Node.js path");
-        }
-        await window.electron.invoke(
-          "env:set-custom-node-path",
-          customNodePath,
-        );
-      }
-      await checkNode();
-      setRuntimeSaved(true);
-    } catch (e: any) {
-      setRuntimeError(e.message || "Failed to save runtime settings");
-    } finally {
-      setRuntimeSaving(false);
-    }
-  };
-
-  const handleRestart = async () => {
-    await window.electron.invoke("app:relaunch");
-  };
-
-  // Auto-detect preset based on command
-  useEffect(() => {
-    if (isOpen) {
-      let found = false;
-      // Simple heuristic: check if command contains any plugin's checkCommand or part of default command
-      for (const plugin of AGENT_PLUGINS) {
-        const heuristic =
-          plugin.checkCommand || plugin.defaultCommand.split(" ")[0];
-        if (agentCommand.includes(heuristic)) {
-          setSelectedPluginId(plugin.id);
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        setSelectedPluginId("custom");
-      }
-    }
-  }, [isOpen]); // Run when modal opens
-
-  useEffect(() => {
-    if (selectedPlugin && isOpen && selectedPlugin.packageSpec) {
-      checkInstall(selectedPlugin);
-    }
-  }, [selectedPluginId, isOpen]);
-
-  const checkInstall = async (plugin: AgentPlugin) => {
-    if (!plugin.checkCommand || !plugin.packageSpec) {
-      setInstallStatus("installed"); // Assume installed if no check
-      return;
-    }
-
-    setInstallStatus("checking");
-    setInstalledVersion(null);
-    try {
-      const res = await window.electron.invoke(
-        "agent:check-command",
-        plugin.checkCommand,
-      );
-      if (res.installed) {
-        const versionRes = await window.electron.invoke(
-          "agent:get-package-version",
-          plugin.packageSpec,
-        );
-        if (versionRes.success && versionRes.version) {
-          setInstalledVersion(versionRes.version);
-        }
-        setInstallStatus("installed");
-      } else {
-        setInstallStatus("not-installed");
-      }
-    } catch (e) {
-      setInstallStatus("not-installed");
-      setInstalledVersion(null);
-    }
-  };
-
-  const installLatest = async (mode: "install" | "update") => {
-    if (!selectedPlugin?.packageSpec) return;
-
-    setInstallStatus(mode === "install" ? "installing" : "updating");
-    try {
-      const res = await window.electron.invoke(
-        "agent:install",
-        `${selectedPlugin.packageSpec}@latest`,
-      );
-      if (res.success) {
-        setInstallStatus("installed");
-        setInstalledVersion(null);
-        if (selectedPlugin) checkInstall(selectedPlugin);
-        // Ensure command is set correctly
-        onAgentCommandChange(selectedPlugin.defaultCommand);
-      } else {
-        alert(`Installation failed: ${res.error}`);
-        setInstallStatus("not-installed");
-      }
-    } catch (e) {
-      setInstallStatus("not-installed");
-    }
-  };
-
-  const handleInstall = () => {
-    installLatest("install");
-  };
-
-  const handleUpdate = () => {
-    installLatest("update");
-  };
-
-  const handleUninstall = async () => {
-    if (!selectedPlugin?.packageSpec) return;
-
-    setInstallStatus("uninstalling");
-    try {
-      const res = await window.electron.invoke(
-        "agent:uninstall",
-        selectedPlugin.packageSpec,
-      );
-      if (res.success) {
-        setInstallStatus("not-installed");
-        setInstalledVersion(null);
-      } else {
-        alert(`Uninstall failed: ${res.error}`);
-        setInstallStatus("installed");
-      }
-    } catch (e) {
-      alert(`Uninstall failed: ${(e as Error).message}`);
-      setInstallStatus("installed");
-    }
-  };
-
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
-
-  // Click outside to close
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
       onClose();
     }
   };
 
-  const addEnvVar = () => {
+  // Auto-detect preset based on command
+  useEffect(() => {
+    if (!isOpen) return;
+    const found = AGENT_PLUGINS.find((plugin) => {
+      const heuristic = plugin.checkCommand || plugin.defaultCommand.split(" ")[0];
+      return agentCommand.includes(heuristic);
+    });
+    setSelectedPluginId(found?.id ?? "custom");
+  }, [isOpen, agentCommand]);
+
+  const addEnvVar = useCallback(() => {
     if (newEnvKey.trim()) {
       onAgentEnvChange({ ...agentEnv, [newEnvKey.trim()]: newEnvVal });
       setNewEnvKey("");
       setNewEnvVal("");
     }
-  };
+  }, [newEnvKey, newEnvVal, agentEnv, onAgentEnvChange]);
 
-  const handleAuthTerminal = async () => {
+  const removeEnvVar = useCallback(
+    (key: string) => {
+      const next = { ...agentEnv };
+      delete next[key];
+      onAgentEnvChange(next);
+    },
+    [agentEnv, onAgentEnvChange]
+  );
+
+  const handlePluginChange = useCallback(
+    (pluginId: string) => {
+      setSelectedPluginId(pluginId);
+      const plugin = getAgentPlugin(pluginId);
+      onAgentCommandChange(plugin?.defaultCommand ?? "");
+    },
+    [onAgentCommandChange]
+  );
+
+  const handleAuthTerminal = useCallback(async () => {
     try {
-      // Auth in terminal should launch without extra args.
       const cmd =
         selectedPlugin?.checkCommand ||
         agentCommand.split(" ")[0] ||
@@ -316,49 +130,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       const res = await window.electron.invoke(
         "agent:auth-terminal",
         cmd,
-        currentWorkspace,
+        currentWorkspace
       );
       if (!res?.success) {
-        console.error(
-          `Failed to launch terminal: ${res?.error || "unknown error"}`,
-        );
+        console.error(`Failed to launch terminal: ${res?.error || "unknown error"}`);
       }
     } catch (e: any) {
       console.error(`Failed to launch terminal: ${e.message}`);
     }
-  };
-
-  const removeEnvVar = (key: string) => {
-    const next = { ...agentEnv };
-    delete next[key];
-    onAgentEnvChange(next);
-  };
-
-  const handlePluginChange = (pluginId: string) => {
-    setSelectedPluginId(pluginId);
-    const plugin = getAgentPlugin(pluginId);
-    if (plugin) {
-      onAgentCommandChange(plugin.defaultCommand);
-    } else {
-      onAgentCommandChange("");
-    }
-  };
-
-  // Click outside to close dropdown
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setIsAgentDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
+  }, [selectedPlugin, agentCommand, currentWorkspace]);
 
   if (!isOpen) return null;
 
@@ -463,7 +243,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       <button
                         type="button"
                         className="btn-secondary"
-                        onClick={handleBrowseNodePath}
+                        onClick={browseNodePath}
                       >
                         Browse...
                       </button>
@@ -501,7 +281,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   <button
                     type="button"
                     className="btn-secondary"
-                    onClick={handleRestart}
+                    onClick={restart}
                     disabled={runtimeSaving}
                   >
                     Restart App
@@ -509,7 +289,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   <button
                     type="button"
                     className="btn-primary"
-                    onClick={handleApplyRuntime}
+                    onClick={applyRuntime}
                     disabled={
                       runtimeSaving ||
                       (nodeRuntime === "custom" && !customNodePath.trim())

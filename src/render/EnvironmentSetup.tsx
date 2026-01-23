@@ -94,7 +94,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
   // Installation state
   const [installing, setInstalling] = useState(false);
   const [installSteps, setInstallSteps] = useState<InstallStep[]>([]);
-  const [currentStepIndex, setCurrentStepIndex] = useState(-1);
+  const [_currentStepIndex, setCurrentStepIndex] = useState(-1);
   const [installError, setInstallError] = useState<string | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
 

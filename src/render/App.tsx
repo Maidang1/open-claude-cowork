@@ -1,63 +1,24 @@
-import {
-  Brain,
-  CheckCircle,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  Moon,
-  Plus,
-  Send,
-  Settings,
-  Sun,
-  XCircle,
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Markdown from "react-markdown";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import remarkGfm from "remark-gfm";
 import "./App.css";
+import { MessageBubble, Sidebar, ChatHeader, ChatInput } from "./components";
 import EnvironmentSetup from "./EnvironmentSetup";
 import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
 import WorkspaceWelcome from "./WorkspaceWelcome";
 import { getDefaultAgentPlugin } from "./agents/registry";
+import type {
+  Task,
+  IncomingMessage,
+  AgentInfoState,
+  ConnectionStatus,
+  AgentCommandInfo,
+  ToolCall,
+} from "./types";
 
 // --- Types ---
 declare const DEBUG: string | undefined;
-
-interface ToolCall {
-  id: string;
-  name: string;
-  kind?: string;
-  status: "pending" | "in_progress" | "completed" | "failed";
-  result?: any;
-}
-
-interface AgentModelInfo {
-  modelId: string;
-  name: string;
-  description?: string | null;
-}
-
-interface AgentCommandInfo {
-  name: string;
-  description?: string | null;
-}
-
-interface TokenUsage {
-  promptTokens?: number;
-  completionTokens?: number;
-  totalTokens?: number;
-}
-
-interface AgentInfoState {
-  models: AgentModelInfo[];
-  currentModelId: string | null;
-  commands: AgentCommandInfo[];
-  tokenUsage: TokenUsage | null;
-}
 
 const LOCAL_COMMANDS: AgentCommandInfo[] = [];
 
@@ -73,248 +34,6 @@ const mergeCommands = (
     merged.set(cmd.name, cmd);
   }
   return [...merged.values()];
-};
-
-interface Message {
-  id: string;
-  sender: "user" | "agent" | "system";
-  content: string; // Markdown text
-  thought?: string; // Thought process
-  toolCalls?: ToolCall[];
-  tokenUsage?: TokenUsage;
-  // Permission Request Fields
-  permissionId?: string;
-  options?: any[];
-}
-
-interface IncomingMessage {
-  type:
-    | "agent_text"
-    | "agent_thought"
-    | "agent_info"
-    | "tool_call"
-    | "tool_call_update"
-    | "tool_log"
-    | "system"
-    | "permission_request"
-    | "agent_plan";
-  text?: string;
-  toolCallId?: string;
-  id?: string; // For permission requests
-  name?: string;
-  kind?: string;
-  status?: string;
-  options?: any[];
-  tool?: string;
-  info?: Partial<AgentInfoState>;
-  sessionId?: string;
-  plan?: any;
-}
-
-interface Task {
-  id: string;
-  title: string;
-  workspace: string;
-  agentCommand: string;
-  agentEnv: Record<string, string>;
-  messages: Message[];
-  sessionId: string | null;
-  modelId: string | null;
-  tokenUsage: TokenUsage | null;
-  createdAt: number;
-  updatedAt: number;
-  lastActiveAt: number;
-}
-
-// --- Components ---
-
-const MessageBubble = ({ msg }: { msg: Message }) => {
-  const isUser = msg.sender === "user";
-  const isSystem = msg.sender === "system";
-  const [isThoughtOpen, setIsThoughtOpen] = useState(false);
-
-  // Permission Request UI
-  if (msg.permissionId) {
-    const handlePermission = async (optionId: string | null) => {
-      let response;
-      if (optionId) {
-        response = { outcome: { outcome: "selected", optionId } };
-      } else {
-        response = { outcome: { outcome: "cancelled" } };
-      }
-      await window.electron.invoke(
-        "agent:permission-response",
-        msg.permissionId,
-        response,
-      );
-      // Optimistically update UI (remove options, show decision)
-      // In a real app, we might wait for confirmation or update message state
-    };
-
-    return (
-      <div className="message-wrapper" style={{ alignItems: "center" }}>
-        <div className="system-init-block permission-request-block">
-          <div className="permission-title">
-            ⚠️ Permission Request
-          </div>
-          <div style={{ marginBottom: "12px" }}>{msg.content}</div>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-            {msg.options?.map((opt: any) => (
-              <button
-                key={opt.optionId}
-                type="button"
-                onClick={() => handlePermission(opt.optionId)}
-                className="permission-btn"
-              >
-                {opt.label || opt.name || opt.kind || opt.optionId}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => handlePermission(null)}
-              className="permission-btn deny"
-            >
-              Deny
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (isSystem) {
-    return (
-      <div className="message-wrapper" style={{ alignItems: "center" }}>
-        <div className="system-init-block">
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>
-            System Notification
-          </div>
-          <div>{msg.content}</div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="message-wrapper">
-      <div className={`message-role ${isUser ? "user" : "assistant"}`}>
-        {isUser ? "User" : "Assistant"}
-      </div>
-
-      <div className="message-content">
-        {/* Thought Process (Collapsible) */}
-        {msg.thought && (
-          <div
-            className="thought-process-header"
-            onClick={() => setIsThoughtOpen(!isThoughtOpen)}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                fontWeight: 500,
-              }}
-            >
-              <Brain size={14} />
-              <span>Thinking Process</span>
-              {isThoughtOpen ? (
-                <ChevronDown size={14} />
-              ) : (
-                <ChevronRight size={14} />
-              )}
-            </div>
-            {isThoughtOpen && (
-              <div className="thought-process-content">
-                {msg.thought}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Main Content */}
-        {msg.content && (
-          <div className="markdown-content">
-            {isUser ? (
-              <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
-            ) : (
-              <Markdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  code(props) {
-                    const { children, className, node, ...rest } = props;
-                    const match = /language-(\w+)/.exec(className || "");
-                    return match ? (
-                      // @ts-expect-error
-                      <SyntaxHighlighter
-                        {...rest}
-                        PreTag="div"
-                        language={match[1]}
-                        style={vscDarkPlus}
-                        customStyle={{
-                          borderRadius: "8px",
-                          fontSize: "0.85em",
-                          margin: 0,
-                        }}
-                      >
-                        {String(children).replace(/\n$/, "")}
-                      </SyntaxHighlighter>
-                    ) : (
-                      <code
-                        {...rest}
-                        className={className}
-                        style={{
-                          backgroundColor: "#f3f4f6",
-                          padding: "2px 4px",
-                          borderRadius: "4px",
-                          color: "#ef4444",
-                        }}
-                      >
-                        {children}
-                      </code>
-                    );
-                  },
-                }}
-              >
-                {msg.content}
-              </Markdown>
-            )}
-          </div>
-        )}
-
-        {!isUser && msg.tokenUsage && (
-          <div className="message-usage">
-            Tokens: prompt {msg.tokenUsage.promptTokens ?? 0}, completion{" "}
-            {msg.tokenUsage.completionTokens ?? 0}, total{" "}
-            {msg.tokenUsage.totalTokens ??
-              (msg.tokenUsage.promptTokens ?? 0) +
-                (msg.tokenUsage.completionTokens ?? 0)}
-          </div>
-        )}
-
-        {/* Tool Calls */}
-        {msg.toolCalls && msg.toolCalls.length > 0 && (
-          <div className="tool-calls-container">
-            {msg.toolCalls.map((tool) => (
-              <div key={tool.id} className="tool-call-item">
-                {tool.status === "pending" || tool.status === "in_progress" ? (
-                  <Loader2 size={14} className="animate-spin" color="#f97316" />
-                ) : tool.status === "completed" ? (
-                  <CheckCircle size={14} color="#10b981" />
-                ) : (
-                  <XCircle size={14} color="#ef4444" />
-                )}
-                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>
-                  {tool.name}
-                </span>
-                <span style={{ color: "#9ca3af" }}>— {tool.status}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
 };
 
 // --- Main App ---
@@ -348,13 +67,13 @@ const App = () => {
     x: number;
     y: number;
   } | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<{
-    state: "connecting" | "connected" | "error" | "disconnected";
-    message: string;
-  }>({ state: "disconnected", message: "Disconnected" });
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
+    state: "disconnected",
+    message: "Disconnected",
+  });
 
   // Track if we are waiting for an agent response
-  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+  const [_isWaitingForResponse, setIsWaitingForResponse] = useState(false);
 
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined" && window.matchMedia) {
@@ -1321,30 +1040,9 @@ const App = () => {
     }
   };
 
-  const currentModel = agentInfo.models.find(
-    (model) => model.modelId === agentInfo.currentModelId,
-  );
-  const mergedCommands = useMemo(
-    () => mergeCommands(agentInfo.commands, LOCAL_COMMANDS),
-    [agentInfo.commands],
-  );
-  const commandQuery = inputText.startsWith("/")
-    ? inputText.slice(1).trim().toLowerCase()
-    : "";
-  const filteredCommands = mergedCommands.filter((cmd) =>
-    commandQuery ? cmd.name.toLowerCase().includes(commandQuery) : true,
-  );
-
-  useEffect(() => {
-    if (commandSelectedIndex >= filteredCommands.length) {
-      setCommandSelectedIndex(0);
-    }
-  }, [commandSelectedIndex, filteredCommands.length]);
-
   const handleCommandPick = (cmd: AgentCommandInfo) => {
     setInputText(`/${cmd.name} `);
     setIsCommandMenuOpen(false);
-    textareaRef.current?.focus();
   };
 
   const handleModelPick = async (modelId: string) => {
@@ -1373,6 +1071,23 @@ const App = () => {
       });
     }
   };
+
+  const mergedCommands = useMemo(
+    () => mergeCommands(agentInfo.commands, LOCAL_COMMANDS),
+    [agentInfo.commands],
+  );
+  const commandQuery = inputText.startsWith("/")
+    ? inputText.slice(1).trim().toLowerCase()
+    : "";
+  const filteredCommands = mergedCommands.filter((cmd) =>
+    commandQuery ? cmd.name.toLowerCase().includes(commandQuery) : true,
+  );
+
+  useEffect(() => {
+    if (commandSelectedIndex >= filteredCommands.length) {
+      setCommandSelectedIndex(0);
+    }
+  }, [commandSelectedIndex, filteredCommands.length]);
 
   const handleAgentCommandChange = (value: string) => {
     setAgentCommand(value);
@@ -1462,155 +1177,31 @@ const App = () => {
         initialAgentCommand={agentCommand}
       />
 
-      {/* Sidebar */}
-      <div className="sidebar">
-        <button type="button" className="new-chat-btn" onClick={handleNewTask}>
-          <Plus size={16} />
-          <span>New Task</span>
-        </button>
-
-        <div className="history-list">
-          {tasks.length === 0 ? (
-            <div className="history-empty">No tasks yet.</div>
-          ) : (
-            tasks.map((task) => (
-              <div
-                key={task.id}
-                className={`history-item ${
-                  task.id === activeTaskId ? "active" : ""
-                }`}
-                onClick={() => handleSelectTask(task.id)}
-                onContextMenu={(event) => handleTaskContextMenu(task.id, event)}
-              >
-                <div className="history-item-row">
-                  <div className="history-item-title">{task.title}</div>
-                </div>
-                <div className="history-item-subtitle" title={task.workspace}>
-                  {task.workspace.split("/").pop() || task.workspace}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        {taskMenu && (
-          <div
-            className="task-context-menu"
-            style={{ top: taskMenu.y, left: taskMenu.x }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="task-context-menu-item danger"
-              onClick={() => {
-                const taskId = taskMenu.taskId;
-                setTaskMenu(null);
-                handleDeleteTask(taskId);
-              }}
-            >
-              Delete Task
-            </button>
-          </div>
-        )}
-
-        <div className="sidebar-settings">
-          <div style={{ display: "flex", gap: "8px" }}>
-            <button
-              type="button"
-              className="sidebar-settings-button"
-              onClick={() => setIsSettingsOpen(true)}
-              aria-label="Open settings"
-              style={{ flex: 1 }}
-            >
-              <Settings size={16} />
-              <span>Settings</span>
-            </button>
-            <button
-              type="button"
-              className="sidebar-settings-button"
-              onClick={toggleTheme}
-              aria-label="Toggle theme"
-              style={{ width: "auto", padding: "10px" }}
-              title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-            >
-              {theme === "light" ? <Moon size={16} /> : <Sun size={16} />}
-            </button>
-          </div>
-        </div>
-      </div>
+      <Sidebar
+        tasks={tasks}
+        activeTaskId={activeTaskId}
+        onNewTask={handleNewTask}
+        onSelectTask={handleSelectTask}
+        onTaskContextMenu={handleTaskContextMenu}
+        taskMenu={taskMenu}
+        onDeleteTask={handleDeleteTask}
+        onCloseTaskMenu={() => setTaskMenu(null)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+      />
 
       {/* Main Chat Area */}
       <div className="chat-main">
-        <div className="chat-header">
-          <div className="header-left">
-            <div
-              className={`connection-status ${connectionStatus.state}`}
-              title={`Status: ${connectionStatus.state}`}
-            >
-              <div className="status-dot-container">
-                <div className={`status-dot ${connectionStatus.state}`} />
-                <div className="status-glow" />
-              </div>
-              <span className="status-label">
-                {connectionStatus.state === "connected"
-                  ? "System Connected"
-                  : connectionStatus.state === "connecting"
-                  ? "Connecting..."
-                  : "Disconnected"}
-              </span>
-            </div>
-            
-            {currentWorkspace && (
-              <>
-                <div className="header-divider" />
-                <div className="workspace-info">
-                  <span className="folder-icon">📂</span>
-                  <span className="workspace-path" title={currentWorkspace}>
-                    {currentWorkspace.split("/").pop()}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="header-right">
-            {agentInfo.models.length > 0 && (
-              <div className="model-selector">
-                <button
-                  type="button"
-                  className="model-selector-trigger"
-                  onClick={() => setIsModelMenuOpen((prev) => !prev)}
-                >
-                  <span className="model-current-name">
-                    {currentModel?.name || agentInfo.currentModelId || "Unknown"}
-                  </span>
-                  <ChevronDown size={14} className="model-arrow" />
-                </button>
-                {isModelMenuOpen && (
-                  <div className="model-dropdown">
-                    {agentInfo.models.map((model) => (
-                      <button
-                        key={model.modelId}
-                        type="button"
-                        className={`model-item ${
-                          model.modelId === agentInfo.currentModelId
-                            ? "active"
-                            : ""
-                        }`}
-                        onClick={() => handleModelPick(model.modelId)}
-                      >
-                        <span className="model-name">{model.name}</span>
-                        <span className="model-desc">
-                          {model.description || model.modelId}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        <ChatHeader
+          connectionStatus={connectionStatus}
+          currentWorkspace={currentWorkspace}
+          models={agentInfo.models}
+          currentModelId={agentInfo.currentModelId}
+          isModelMenuOpen={isModelMenuOpen}
+          onToggleModelMenu={() => setIsModelMenuOpen((prev) => !prev)}
+          onModelPick={handleModelPick}
+        />
 
         <div className="messages-container">
           {showDebug && (
@@ -1664,51 +1255,17 @@ const App = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="input-container">
-          <div className="input-box">
-            <textarea
-              ref={textareaRef}
-              className="chat-input"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Describe what you want agent to handle..."
-              rows={1}
-              disabled={!isConnected}
-            />
-            <button
-              type="button"
-              className="send-button"
-              onClick={handleSend}
-              disabled={!isConnected || !inputText.trim()}
-            >
-              <Send size={16} />
-            </button>
-            {isCommandMenuOpen && (
-              <div className="command-dropdown">
-                {filteredCommands.length === 0 ? (
-                  <div className="command-empty">No commands available.</div>
-                ) : (
-                  filteredCommands.map((cmd, index) => (
-                    <button
-                      key={cmd.name}
-                      type="button"
-                      className={`command-item ${
-                        index === commandSelectedIndex ? "active" : ""
-                      }`}
-                      onClick={() => handleCommandPick(cmd)}
-                    >
-                      <span className="command-name">/{cmd.name}</span>
-                      <span className="command-desc">
-                        {cmd.description || "No description"}
-                      </span>
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+        <ChatInput
+          inputText={inputText}
+          onInputChange={setInputText}
+          onSend={handleSend}
+          isConnected={isConnected}
+          isCommandMenuOpen={isCommandMenuOpen}
+          filteredCommands={filteredCommands}
+          commandSelectedIndex={commandSelectedIndex}
+          onCommandPick={handleCommandPick}
+          onKeyDown={handleKeyDown}
+        />
       </div>
     </div>
   );
