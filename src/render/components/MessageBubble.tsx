@@ -1,11 +1,4 @@
-import {
-  Brain,
-  CheckCircle,
-  ChevronDown,
-  ChevronRight,
-  Loader2,
-  XCircle,
-} from "lucide-react";
+import { Brain, CheckCircle, ChevronDown, ChevronRight, Loader2, XCircle } from "lucide-react";
 import { useState } from "react";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -28,11 +21,7 @@ export const MessageBubble = ({ msg }: MessageBubbleProps) => {
       const response = optionId
         ? { outcome: { outcome: "selected", optionId } }
         : { outcome: { outcome: "cancelled" } };
-      await window.electron.invoke(
-        "agent:permission-response",
-        msg.permissionId,
-        response,
-      );
+      await window.electron.invoke("agent:permission-response", msg.permissionId, response);
     };
 
     return (
@@ -77,10 +66,7 @@ export const MessageBubble = ({ msg }: MessageBubbleProps) => {
       <div className="message-content">
         {/* Thought Process (Collapsible) */}
         {msg.thought && (
-          <div
-            className="thought-process-header"
-            onClick={() => setIsThoughtOpen(!isThoughtOpen)}
-          >
+          <div className="thought-process-header" onClick={() => setIsThoughtOpen(!isThoughtOpen)}>
             <div
               style={{
                 display: "flex",
@@ -91,15 +77,9 @@ export const MessageBubble = ({ msg }: MessageBubbleProps) => {
             >
               <Brain size={14} />
               <span>Thinking Process</span>
-              {isThoughtOpen ? (
-                <ChevronDown size={14} />
-              ) : (
-                <ChevronRight size={14} />
-              )}
+              {isThoughtOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </div>
-            {isThoughtOpen && (
-              <div className="thought-process-content">{msg.thought}</div>
-            )}
+            {isThoughtOpen && <div className="thought-process-content">{msg.thought}</div>}
           </div>
         )}
 
@@ -158,8 +138,7 @@ export const MessageBubble = ({ msg }: MessageBubbleProps) => {
             Tokens: prompt {msg.tokenUsage.promptTokens ?? 0}, completion{" "}
             {msg.tokenUsage.completionTokens ?? 0}, total{" "}
             {msg.tokenUsage.totalTokens ??
-              (msg.tokenUsage.promptTokens ?? 0) +
-                (msg.tokenUsage.completionTokens ?? 0)}
+              (msg.tokenUsage.promptTokens ?? 0) + (msg.tokenUsage.completionTokens ?? 0)}
           </div>
         )}
 
@@ -175,9 +154,7 @@ export const MessageBubble = ({ msg }: MessageBubbleProps) => {
                 ) : (
                   <XCircle size={14} color="#ef4444" />
                 )}
-                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>
-                  {tool.name}
-                </span>
+                <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{tool.name}</span>
                 <span style={{ color: "#9ca3af" }}>— {tool.status}</span>
               </div>
             ))}

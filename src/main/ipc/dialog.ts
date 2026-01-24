@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from "electron";
+import { type BrowserWindow, dialog, ipcMain } from "electron";
 
 export const registerDialogHandlers = (mainWindow: BrowserWindow | null) => {
   ipcMain.handle(
@@ -8,7 +8,7 @@ export const registerDialogHandlers = (mainWindow: BrowserWindow | null) => {
       options?: {
         title?: string;
         filters?: { name: string; extensions: string[] }[];
-      }
+      },
     ) => {
       if (!mainWindow) return null;
       const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
@@ -20,7 +20,7 @@ export const registerDialogHandlers = (mainWindow: BrowserWindow | null) => {
         return null;
       }
       return filePaths[0];
-    }
+    },
   );
 
   ipcMain.handle("dialog:openFolder", async () => {

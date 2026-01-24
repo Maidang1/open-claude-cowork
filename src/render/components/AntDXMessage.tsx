@@ -1,10 +1,6 @@
+import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from "@ant-design/icons";
+import { Bubble, type BubbleItemType, Think } from "@ant-design/x";
 import { Button, Space, Tag } from "antd";
-import {
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  LoadingOutlined,
-} from "@ant-design/icons";
-import { Bubble, Think, type BubbleItemType } from "@ant-design/x";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -13,10 +9,7 @@ import type { Message, ToolCall } from "../types";
 
 interface AntDXMessageProps {
   msg: Message;
-  onPermissionResponse?: (
-    permissionId: string,
-    optionId: string | null,
-  ) => void;
+  onPermissionResponse?: (permissionId: string, optionId: string | null) => void;
   isLoading?: boolean;
 }
 
@@ -99,8 +92,7 @@ const TokenUsage = ({ tokenUsage }: { tokenUsage: any }) => {
 
   return (
     <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-      Tokens: {promptTokens} prompt, {completionTokens} completion,{" "}
-      {totalTokens} total
+      Tokens: {promptTokens} prompt, {completionTokens} completion, {totalTokens} total
     </div>
   );
 };
@@ -161,7 +153,24 @@ export const AntDXMessage = ({
       content: msg.content || "",
       variant: "filled",
       contentRender: (content: string) => (
-        <div style={{ whiteSpace: "pre-wrap" }}>{content}</div>
+        <div>
+          <div style={{ whiteSpace: "pre-wrap" }}>{content}</div>
+          {/* 图片渲染 */}
+          {msg.images && msg.images.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {msg.images.map((image) => (
+                <div key={image.id} className="relative">
+                  <img
+                    src={image.dataUrl}
+                    alt={image.filename}
+                    className="max-w-full h-auto rounded-md"
+                    style={{ maxHeight: "300px" }}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       ),
     };
 
@@ -195,9 +204,7 @@ export const AntDXMessage = ({
           contentRender={() => (
             <div className="flex items-center gap-2 py-2">
               <LoadingOutlined spin style={{ color: "#f97316" }} />
-              <span className="text-slate-500 dark:text-slate-400">
-                Thinking...
-              </span>
+              <span className="text-slate-500 dark:text-slate-400">Thinking...</span>
             </div>
           )}
         />
@@ -239,9 +246,7 @@ export const AntDXMessage = ({
           placement="start"
           content={msg.content}
           variant="borderless"
-          contentRender={(content: string) => (
-            <MarkdownContent content={content} />
-          )}
+          contentRender={(content: string) => <MarkdownContent content={content} />}
           footer={() => <TokenUsage tokenUsage={msg.tokenUsage} />}
         />
       )}

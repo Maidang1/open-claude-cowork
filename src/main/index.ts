@@ -1,11 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import path from "node:path";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { initDB } from "./db/store";
 import {
-  registerEnvHandlers,
-  registerDialogHandlers,
-  registerDbHandlers,
   registerAgentHandlers,
+  registerDbHandlers,
+  registerDialogHandlers,
+  registerEnvHandlers,
 } from "./ipc";
 
 export let mainWindow: BrowserWindow | null = null;

@@ -73,10 +73,7 @@ export const ChatHeader = ({
               <div className="w-px h-4 bg-color" />
               <div className="flex items-center gap-2 text-sm text-text-secondary">
                 <span className="opacity-70">📂</span>
-                <span
-                  className="font-mono font-medium text-text-primary"
-                  title={currentWorkspace}
-                >
+                <span className="font-mono font-medium text-text-primary" title={currentWorkspace}>
                   {currentWorkspace.split("/").pop()}
                 </span>
               </div>
@@ -108,9 +105,7 @@ export const ChatHeader = ({
                       } hover:bg-surface-hover`}
                       onClick={() => onModelPick(model.modelId)}
                     >
-                      <span className="font-semibold text-text-primary text-sm">
-                        {model.name}
-                      </span>
+                      <span className="font-semibold text-text-primary text-sm">{model.name}</span>
                       <span className="text-text-secondary text-xs">
                         {model.description || model.modelId}
                       </span>

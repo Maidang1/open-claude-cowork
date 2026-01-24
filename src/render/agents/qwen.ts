@@ -1,4 +1,4 @@
-import { AgentPlugin } from "./types";
+import type { AgentPlugin } from "./types";
 
 export const QwenAgent: AgentPlugin = {
   id: "qwen",

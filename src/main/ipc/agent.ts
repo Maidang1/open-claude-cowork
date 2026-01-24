@@ -1,28 +1,28 @@
-import { ipcMain, BrowserWindow } from "electron";
 import { exec } from "node:child_process";
-import { promisify } from "node:util";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
+import { promisify } from "node:util";
+import { type BrowserWindow, ipcMain } from "electron";
 import { ACPClient } from "../acp/Client";
 import {
-  shellQuote,
-  getAgentsDir,
-  getLocalAgentBin,
-  extractPackageName,
-  toLatestSpecifier,
-  buildCommandString,
-  buildEnvPrefix,
-  readInstalledPackageVersion,
-} from "../utils/shell";
-import {
+  enrichPathFromLoginShell,
   getCustomNodePath,
   getNodeRuntimePreference,
-  resolveNodeRuntime,
   resolveActualJsEntry,
   resolveAuthCommand,
-  enrichPathFromLoginShell,
+  resolveNodeRuntime,
 } from "../utils/node-runtime";
-import { resolveSystemCommand } from "../utils/shell";
+import {
+  buildCommandString,
+  buildEnvPrefix,
+  extractPackageName,
+  getAgentsDir,
+  getLocalAgentBin,
+  readInstalledPackageVersion,
+  resolveSystemCommand,
+  shellQuote,
+  toLatestSpecifier,
+} from "../utils/shell";
 
 const execAsync = promisify(exec);
 
@@ -50,7 +50,7 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
       command: string,
       cwd?: string,
       env?: Record<string, string>,
-      options?: { reuseIfSame?: boolean; createSession?: boolean }
+      options?: { reuseIfSame?: boolean; createSession?: boolean },
     ) => {
       try {
         if (!acpClient) {
@@ -91,7 +91,7 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
               resolvedEnv = { ...(resolvedEnv || {}), ...nodeRuntime.env };
             }
             console.log(
-              `[Main] Using ${nodeRuntime.source === "custom" ? "custom" : "bundled"} node runtime: ${cmd}`
+              `[Main] Using ${nodeRuntime.source === "custom" ? "custom" : "bundled"} node runtime: ${cmd}`,
             );
           } else {
             cmd = shellQuote(localBin);
@@ -130,7 +130,7 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
         console.error("Connect error:", e);
         return { success: false, error: e.message || "Connection failed" };
       }
-    }
+    },
   );
 
   ipcMain.handle("agent:check-command", async (_, command: string) => {
@@ -183,7 +183,7 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
         await fs.writeFile(
           `${agentsDir}/package.json`,
           '{"name": "agents", "version": "1.0.0"}',
-          "utf-8"
+          "utf-8",
         );
       }
 
@@ -198,13 +198,13 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
           await execAsync(removeCmd, { cwd: agentsDir });
         } catch (uninstallErr) {
           console.warn(
-            `[Main] package remove ${pkgName} failed (likely not installed): ${uninstallErr}`
+            `[Main] package remove ${pkgName} failed (likely not installed): ${uninstallErr}`,
           );
         }
       }
 
       console.log(
-        `[Main] Installing ${latestSpecifier} to ${agentsDir} using ${pm.kind} (${pm.source})...`
+        `[Main] Installing ${latestSpecifier} to ${agentsDir} using ${pm.kind} (${pm.source})...`,
       );
       const installCmd = `${pmCmd} install ${latestSpecifier}`;
       await execAsync(installCmd, { cwd: agentsDir });
@@ -235,7 +235,7 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
       const pm = await resolvePackageManager();
       const pmCmd = shellQuote(pm.cmd);
       console.log(
-        `[Main] Uninstalling ${pkgName} from ${agentsDir} using ${pm.kind} (${pm.source})...`
+        `[Main] Uninstalling ${pkgName} from ${agentsDir} using ${pm.kind} (${pm.source})...`,
       );
       const removeCmd = `${pmCmd} uninstall ${pkgName}`;
       await execAsync(removeCmd, { cwd: agentsDir });
@@ -261,9 +261,7 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
     const envPrefix = buildEnvPrefix(resolved.env);
     const targetWithEnv = envPrefix ? `${envPrefix}${targetCmd}` : targetCmd;
 
-    console.log(
-      `[Main] Launching auth terminal for: ${targetWithEnv} in ${cwd || "default cwd"}`
-    );
+    console.log(`[Main] Launching auth terminal for: ${targetWithEnv} in ${cwd || "default cwd"}`);
 
     try {
       if (process.platform === "darwin") {
@@ -272,7 +270,7 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
         const escapedScript = script.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
         await execAsync(
-          `osascript -e 'tell application "Terminal" to do script "${escapedScript}"'`
+          `osascript -e 'tell application "Terminal" to do script "${escapedScript}"'`,
         );
         await execAsync(`osascript -e 'tell application "Terminal" to activate'`);
       } else if (process.platform === "win32") {
@@ -281,7 +279,7 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
       } else {
         const cdCmd = cwd ? `cd "${cwd}" && ` : "";
         await execAsync(
-          `x-terminal-emulator -e "bash -c '${cdCmd}${targetWithEnv}; exec bash'" || gnome-terminal -- bash -c "${cdCmd}${targetWithEnv}; exec bash"`
+          `x-terminal-emulator -e "bash -c '${cdCmd}${targetWithEnv}; exec bash'" || gnome-terminal -- bash -c "${cdCmd}${targetWithEnv}; exec bash"`,
         );
       }
       return { success: true };
@@ -297,9 +295,9 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
     }
   });
 
-  ipcMain.handle("agent:send", async (_, message: string) => {
+  ipcMain.handle("agent:send", async (_, message: string, images?: Array<{ mimeType: string; dataUrl: string }>) => {
     if (acpClient) {
-      await acpClient.sendMessage(message);
+      await acpClient.sendMessage(message, images);
     } else {
       throw new Error("Agent not connected");
     }

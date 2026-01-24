@@ -1,5 +1,5 @@
 import { QwenAgent } from "./qwen";
-import { AgentPlugin } from "./types";
+import type { AgentPlugin } from "./types";
 
 export const AGENT_PLUGINS: AgentPlugin[] = [
   QwenAgent,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type EnvStatus = {
   node: {
@@ -49,8 +49,7 @@ const getInstallSteps = (platform: string): InstallStep[] => {
       return [
         {
           name: "Install Chocolatey",
-          command:
-            'powershell -c "irm https://community.chocolatey.org/install.ps1|iex"',
+          command: 'powershell -c "irm https://community.chocolatey.org/install.ps1|iex"',
           status: "pending",
         },
         {
@@ -79,12 +78,9 @@ const getInstallSteps = (platform: string): InstallStep[] => {
 };
 
 export default function EnvironmentSetup({ onReady }: Props) {
-  const [status, setStatus] = useState<
-    "checking" | "missing" | "outdated" | "ready"
-  >("checking");
+  const [status, setStatus] = useState<"checking" | "missing" | "outdated" | "ready">("checking");
   const [envStatus, setEnvStatus] = useState<EnvStatus | null>(null);
-  const [nodeRuntime, setNodeRuntime] =
-    useState<NodeRuntimePreference>("bundled");
+  const [nodeRuntime, setNodeRuntime] = useState<NodeRuntimePreference>("bundled");
   const [customNodePath, setCustomNodePath] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -108,9 +104,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
       if (runtime === "bundled" || runtime === "custom") {
         setNodeRuntime(runtime);
       }
-      const storedPath = await window.electron.invoke(
-        "env:get-custom-node-path",
-      );
+      const storedPath = await window.electron.invoke("env:get-custom-node-path");
       if (storedPath) {
         setCustomNodePath(storedPath);
       }
@@ -182,17 +176,11 @@ export default function EnvironmentSetup({ onReady }: Props) {
 
     setValidating(true);
     try {
-      const result = await window.electron.invoke(
-        "env:validate-node-path",
-        customNodePath,
-      );
+      const result = await window.electron.invoke("env:validate-node-path", customNodePath);
       if (result.valid) {
         await window.electron.invoke("env:set-node-runtime", "custom");
         setNodeRuntime("custom");
-        await window.electron.invoke(
-          "env:set-custom-node-path",
-          customNodePath,
-        );
+        await window.electron.invoke("env:set-custom-node-path", customNodePath);
         checkEnvironment();
       } else {
         alert(result.error || "Invalid Node.js path");
@@ -226,10 +214,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
       );
 
       try {
-        const result = await window.electron.invoke(
-          "env:run-install-command",
-          steps[i].command,
-        );
+        const result = await window.electron.invoke("env:run-install-command", steps[i].command);
 
         setInstallSteps((prev) =>
           prev.map((s, idx) =>
@@ -238,9 +223,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
         );
       } catch (e: any) {
         setInstallSteps((prev) =>
-          prev.map((s, idx) =>
-            idx === i ? { ...s, status: "error", output: e.message } : s,
-          ),
+          prev.map((s, idx) => (idx === i ? { ...s, status: "error", output: e.message } : s)),
         );
         setInstallError(e.message || "Installation failed");
         setInstalling(false);
@@ -281,12 +264,8 @@ export default function EnvironmentSetup({ onReady }: Props) {
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#1a1a2e] to-[#16213e] p-5">
         <div className="bg-white/5 rounded-2xl p-10 text-center max-w-sm w-full border border-white/10">
           <div className="text-5xl mb-5 animate-pulse">⏳</div>
-          <h1 className="text-white text-2xl font-semibold mb-3">
-            Checking Environment...
-          </h1>
-          <p className="text-white/70">
-            Detecting Node.js installation on your system
-          </p>
+          <h1 className="text-white text-2xl font-semibold mb-3">Checking Environment...</h1>
+          <p className="text-white/70">Detecting Node.js installation on your system</p>
         </div>
       </div>
     );
@@ -297,12 +276,8 @@ export default function EnvironmentSetup({ onReady }: Props) {
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#1a1a2e] to-[#16213e] p-5">
         <div className="bg-white/5 rounded-2xl p-10 text-center max-w-sm w-full border border-white/10">
           <div className="text-[#4ade80] text-6xl mb-5">✓</div>
-          <h1 className="text-white text-2xl font-semibold mb-3">
-            Environment Ready!
-          </h1>
-          <p className="text-white/70">
-            Node.js {envStatus?.node.version} detected
-          </p>
+          <h1 className="text-white text-2xl font-semibold mb-3">Environment Ready!</h1>
+          <p className="text-white/70">Node.js {envStatus?.node.version} detected</p>
         </div>
       </div>
     );
@@ -313,9 +288,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
       <div className="bg-white/5 rounded-2xl p-10 text-center max-w-lg w-full border border-white/10">
         <div className="text-6xl mb-">⚠️</div>
         <h1 className="text-white text-2xl font-semibold mb-3">
-          {status === "outdated"
-            ? "Node.js Update Required"
-            : "Node.js Not Found"}
+          {status === "outdated" ? "Node.js Update Required" : "Node.js Not Found"}
         </h1>
 
         {status === "outdated" ? (
@@ -326,8 +299,8 @@ export default function EnvironmentSetup({ onReady }: Props) {
           </p>
         ) : (
           <p className="text-white/70 mb-6">
-            This application requires Node.js {MIN_NODE_VERSION}+ and a package
-            manager (npm) to run agents.
+            This application requires Node.js {MIN_NODE_VERSION}+ and a package manager (npm) to run
+            agents.
             <br />
             Please install Node.js to continue.
           </p>
@@ -378,9 +351,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
                       {step.status === "success" && "✅"}
                       {step.status === "error" && "❌"}
                     </span>
-                    <span className="text-white text-sm font-medium">
-                      {step.name}
-                    </span>
+                    <span className="text-white text-sm font-medium">{step.name}</span>
                   </div>
                   <code className="block bg-black/30 rounded px-2.5 py-2 font-mono text-xs text-white/70 mt-2 overflow-x-auto whitespace-nowrap">
                     {step.command}
@@ -396,9 +367,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
 
             {installError && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-4 text-center">
-                <p className="text-red-400 mb-3">
-                  ❌ Installation failed: {installError}
-                </p>
+                <p className="text-red-400 mb-3">❌ Installation failed: {installError}</p>
                 <button
                   type="button"
                   className="bg-red-500 text-white border-none rounded-lg px-4 py-2 text-sm cursor-pointer transition-colors hover:bg-red-600"
@@ -412,15 +381,11 @@ export default function EnvironmentSetup({ onReady }: Props) {
               </div>
             )}
 
-            {!installing &&
-              !installError &&
-              installSteps.every((s) => s.status === "success") && (
-                <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mt-4 text-center">
-                  <p className="text-green-400">
-                    ✅ Installation completed! Checking environment...
-                  </p>
-                </div>
-              )}
+            {!installing && !installError && installSteps.every((s) => s.status === "success") && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mt-4 text-center">
+                <p className="text-green-400">✅ Installation completed! Checking environment...</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -446,9 +411,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
 
         {showAdvanced && (
           <div className="mt-5 pt-5 border-t border-white/10 text-left">
-            <h3 className="text-white text-sm font-medium mb-2">
-              Node Runtime
-            </h3>
+            <h3 className="text-white text-sm font-medium mb-2">Node Runtime</h3>
             <p className="text-white/70 text-sm mb-3">
               Choose which Node.js runtime to use for agents.
             </p>
@@ -474,16 +437,11 @@ export default function EnvironmentSetup({ onReady }: Props) {
                 Custom Path
               </button>
             </div>
-            <div className="text-white/50 text-xs mb-3">
-              Restart required to apply changes.
-            </div>
+            <div className="text-white/50 text-xs mb-3">Restart required to apply changes.</div>
 
-            <h3 className="text-white text-sm font-medium mb-2 mt-4">
-              Custom Node.js Path
-            </h3>
+            <h3 className="text-white text-sm font-medium mb-2 mt-4">Custom Node.js Path</h3>
             <p className="text-white/70 text-sm mb-3">
-              If Node.js is installed but not in your PATH, specify its
-              location:
+              If Node.js is installed but not in your PATH, specify its location:
             </p>
             <div className="flex gap-2 flex-wrap">
               <input
@@ -492,17 +450,13 @@ export default function EnvironmentSetup({ onReady }: Props) {
                 placeholder="/path/to/node"
                 value={customNodePath}
                 onChange={(e) => setCustomNodePath(e.target.value)}
-                disabled={
-                  nodeRuntime !== "custom" || runtimeSaving || installing
-                }
+                disabled={nodeRuntime !== "custom" || runtimeSaving || installing}
               />
               <button
                 type="button"
                 className="bg-white/10 text-white border border-white/20 rounded-lg px-3 py-2 text-sm cursor-pointer transition-all hover:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 onClick={handleBrowseNodePath}
-                disabled={
-                  nodeRuntime !== "custom" || runtimeSaving || installing
-                }
+                disabled={nodeRuntime !== "custom" || runtimeSaving || installing}
               >
                 Browse...
               </button>

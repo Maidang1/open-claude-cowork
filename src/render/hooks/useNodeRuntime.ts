@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export type NodeRuntimePreference = "bundled" | "custom";
 
@@ -24,7 +24,9 @@ interface NodeRuntimeActions {
 export function useNodeRuntime(isOpen: boolean): NodeRuntimeState & NodeRuntimeActions {
   const [nodeRuntime, setNodeRuntime] = useState<NodeRuntimePreference>("bundled");
   const [customNodePath, setCustomNodePath] = useState("");
-  const [nodeStatus, setNodeStatus] = useState<"checking" | "installed" | "not-installed">("checking");
+  const [nodeStatus, setNodeStatus] = useState<"checking" | "installed" | "not-installed">(
+    "checking",
+  );
   const [runtimeSaving, setRuntimeSaving] = useState(false);
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [runtimeSaved, setRuntimeSaved] = useState(false);
@@ -83,10 +85,7 @@ export function useNodeRuntime(isOpen: boolean): NodeRuntimeState & NodeRuntimeA
         if (!customNodePath.trim()) {
           throw new Error("Custom Node.js path is required.");
         }
-        const validation = await window.electron.invoke(
-          "env:validate-node-path",
-          customNodePath
-        );
+        const validation = await window.electron.invoke("env:validate-node-path", customNodePath);
         if (!validation.valid) {
           throw new Error(validation.error || "Invalid Node.js path");
         }

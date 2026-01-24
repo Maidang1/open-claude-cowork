@@ -1,32 +1,30 @@
+import { theme as antdTheme, ConfigProvider } from "antd";
 import { Loader2 } from "lucide-react";
-import { ConfigProvider, theme as antdTheme } from "antd";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./tailwind.css";
-import { AntDXMessage, Sidebar, ChatHeader, ChatInput } from "./components";
+import { getDefaultAgentPlugin } from "./agents/registry";
+import { AntDXMessage, ChatHeader, ChatInput, Sidebar } from "./components";
 import EnvironmentSetup from "./EnvironmentSetup";
 import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
-import WorkspaceWelcome from "./WorkspaceWelcome";
-import { getDefaultAgentPlugin } from "./agents/registry";
 import type {
-  Task,
-  IncomingMessage,
+  AgentCommandInfo,
   AgentInfoState,
   ConnectionStatus,
-  AgentCommandInfo,
+  ImageAttachment,
+  IncomingMessage,
+  Task,
   ToolCall,
 } from "./types";
+import WorkspaceWelcome from "./WorkspaceWelcome";
 
 // --- Types ---
 declare const DEBUG: string | undefined;
 
 const LOCAL_COMMANDS: AgentCommandInfo[] = [];
 
-const mergeCommands = (
-  agentCommands: AgentCommandInfo[],
-  localCommands: AgentCommandInfo[],
-) => {
+const mergeCommands = (agentCommands: AgentCommandInfo[], localCommands: AgentCommandInfo[]) => {
   const merged = new Map<string, AgentCommandInfo>();
   for (const cmd of localCommands) {
     merged.set(cmd.name, cmd);
@@ -44,9 +42,8 @@ const App = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
-  const [agentCommand, setAgentCommand] = useState(
-    getDefaultAgentPlugin().defaultCommand,
-  );
+  const [inputImages, setInputImages] = useState<ImageAttachment[]>([]);
+  const [agentCommand, setAgentCommand] = useState(getDefaultAgentPlugin().defaultCommand);
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
   const [agentInfo, setAgentInfo] = useState<AgentInfoState>({
     models: [],
@@ -63,8 +60,7 @@ const App = () => {
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const [agentCapabilities, setAgentCapabilities] = useState<any | null>(null);
   const [agentMessageLog, setAgentMessageLog] = useState<string[]>([]);
-  const showDebug =
-    String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
+  const showDebug = String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     state: "disconnected",
@@ -76,9 +72,7 @@ const App = () => {
 
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined" && window.matchMedia) {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
     return "light";
   });
@@ -104,19 +98,14 @@ const App = () => {
   const activeTask = tasks.find((task) => task.id === activeTaskId) || null;
   const messages = activeTask?.messages ?? [];
 
-  const persistTaskUpdates = useCallback(
-    (taskId: string, updates: Partial<Task>) => {
-      window.electron.invoke("db:update-task", taskId, updates);
-    },
-    [],
-  );
+  const persistTaskUpdates = useCallback((taskId: string, updates: Partial<Task>) => {
+    window.electron.invoke("db:update-task", taskId, updates);
+  }, []);
 
   const applyTaskUpdates = useCallback(
     (taskId: string, updates: Partial<Task>) => {
       setTasks((prev) => {
-        const next = prev.map((task) =>
-          task.id === taskId ? { ...task, ...updates } : task,
-        );
+        const next = prev.map((task) => (task.id === taskId ? { ...task, ...updates } : task));
         if (updates.lastActiveAt !== undefined) {
           return [...next].sort((a, b) => b.lastActiveAt - a.lastActiveAt);
         }
@@ -162,11 +151,7 @@ const App = () => {
       const response = optionId
         ? { outcome: { outcome: "selected", optionId } }
         : { outcome: { outcome: "cancelled" } };
-      await window.electron.invoke(
-        "agent:permission-response",
-        permissionId,
-        response,
-      );
+      await window.electron.invoke("agent:permission-response", permissionId, response);
     },
     [],
   );
@@ -269,20 +254,17 @@ const App = () => {
       };
       if (data.type === "agent_info") {
         const resolvedTaskId = data.sessionId
-          ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)
-              ?.id ?? activeTaskIdSnapshot)
+          ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)?.id ??
+            activeTaskIdSnapshot)
           : activeTaskIdSnapshot;
         const nextUsage = data.info?.tokenUsage ?? null;
         const baseUsage = activeTaskSnapshot?.tokenUsage ?? null;
         const mergedUsage = nextUsage
           ? {
-              promptTokens:
-                (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
+              promptTokens: (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
               completionTokens:
-                (baseUsage?.completionTokens ?? 0) +
-                (nextUsage.completionTokens ?? 0),
-              totalTokens:
-                (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
+                (baseUsage?.completionTokens ?? 0) + (nextUsage.completionTokens ?? 0),
+              totalTokens: (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
             }
           : baseUsage;
         if (nextUsage) {
@@ -340,10 +322,7 @@ const App = () => {
       // System Messages
       if (data.type === "system") {
         const content = data.text || "";
-        if (
-          content.includes("Agent disconnected") ||
-          content.includes("Agent process error")
-        ) {
+        if (content.includes("Agent disconnected") || content.includes("Agent process error")) {
           setIsConnected(false);
           clearAllSessionIds();
           sessionLoadInFlight.current = false;
@@ -378,8 +357,7 @@ const App = () => {
 
       if (data.type === "permission_request") {
         const updatedAt = Date.now();
-        const resolvedTaskId =
-          resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
+        const resolvedTaskId = resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
         const targetTask = resolvedTaskId
           ? tasksSnapshot.find((task) => task.id === resolvedTaskId)
           : null;
@@ -424,22 +402,16 @@ const App = () => {
       // Agent Messages
       setTasks((prev) => {
         const resolvedTaskId = resolveTaskId(prev);
-        const targetTask = resolvedTaskId
-          ? prev.find((task) => task.id === resolvedTaskId)
-          : null;
+        const targetTask = resolvedTaskId ? prev.find((task) => task.id === resolvedTaskId) : null;
         if (!targetTask) return prev;
         const lastMsg = targetTask.messages[targetTask.messages.length - 1];
         const isAgentGenerating =
-          lastMsg &&
-          lastMsg.sender === "agent" &&
-          currentAgentMsgId.current === lastMsg.id;
+          lastMsg && lastMsg.sender === "agent" && currentAgentMsgId.current === lastMsg.id;
 
         if (data.type === "agent_text") {
           if (isAgentGenerating) {
             const nextMessages = targetTask.messages.map((m) =>
-              m.id === lastMsg.id
-                ? { ...m, content: m.content + (data.text || "") }
-                : m,
+              m.id === lastMsg.id ? { ...m, content: m.content + (data.text || "") } : m,
             );
             const updatedAt = Date.now();
             if (resolvedTaskId) {
@@ -490,9 +462,7 @@ const App = () => {
         if (data.type === "agent_thought") {
           if (isAgentGenerating) {
             const nextMessages = targetTask.messages.map((m) =>
-              m.id === lastMsg.id
-                ? { ...m, thought: (m.thought || "") + (data.text || "") }
-                : m,
+              m.id === lastMsg.id ? { ...m, thought: (m.thought || "") + (data.text || "") } : m,
             );
             const updatedAt = Date.now();
             if (resolvedTaskId) {
@@ -554,9 +524,7 @@ const App = () => {
               status: (data.status as any) || "in_progress",
             };
             const nextMessages = targetTask.messages.map((m) =>
-              m.id === lastMsg.id
-                ? { ...m, toolCalls: [...(m.toolCalls || []), newTool] }
-                : m,
+              m.id === lastMsg.id ? { ...m, toolCalls: [...(m.toolCalls || []), newTool] } : m,
             );
             const updatedAt = Date.now();
             if (resolvedTaskId) {
@@ -586,9 +554,7 @@ const App = () => {
               return {
                 ...m,
                 toolCalls: m.toolCalls?.map((t) =>
-                  t.id === data.toolCallId
-                    ? { ...t, status: data.status as any }
-                    : t,
+                  t.id === data.toolCallId ? { ...t, status: data.status as any } : t,
                 ),
               };
             });
@@ -623,22 +589,16 @@ const App = () => {
 
   useEffect(() => {
     // Listen for agent messages
-    const removeListener = window.electron.on(
-      "agent:message",
-      (msg: IncomingMessage | string) => {
-        const data: IncomingMessage =
-          typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
-        console.log("[agent:message]", data);
-        setAgentMessageLog((prev) => {
-          const next = [
-            `[${new Date().toISOString()}] ${JSON.stringify(data)}`,
-            ...prev,
-          ];
-          return next.slice(0, 50);
-        });
-        handleIncomingMessage(data);
-      },
-    );
+    const removeListener = window.electron.on("agent:message", (msg: IncomingMessage | string) => {
+      const data: IncomingMessage =
+        typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
+      console.log("[agent:message]", data);
+      setAgentMessageLog((prev) => {
+        const next = [`[${new Date().toISOString()}] ${JSON.stringify(data)}`, ...prev];
+        return next.slice(0, 50);
+      });
+      handleIncomingMessage(data);
+    });
 
     const loadInitialState = async () => {
       const [storedTasks, storedActiveTaskId, lastWs] = await Promise.all([
@@ -659,17 +619,13 @@ const App = () => {
         : [];
       setTasks(loadedTasks);
 
-      const resolvedActiveId = loadedTasks.find(
-        (task) => task.id === storedActiveTaskId,
-      )
+      const resolvedActiveId = loadedTasks.find((task) => task.id === storedActiveTaskId)
         ? storedActiveTaskId
         : (loadedTasks[0]?.id ?? null);
 
       if (resolvedActiveId) {
         setActiveTaskId(resolvedActiveId);
-        const nextTask = loadedTasks.find(
-          (task) => task.id === resolvedActiveId,
-        );
+        const nextTask = loadedTasks.find((task) => task.id === resolvedActiveId);
         if (nextTask) {
           syncActiveTaskState(nextTask);
         }
@@ -708,10 +664,7 @@ const App = () => {
         return null;
       }
       if (!commandName.includes("/") && !commandName.startsWith(".")) {
-        const check = await window.electron.invoke(
-          "agent:check-command",
-          commandName,
-        );
+        const check = await window.electron.invoke("agent:check-command", commandName);
         if (!check.installed) {
           setConnectionStatus({
             state: "error",
@@ -754,11 +707,7 @@ const App = () => {
       } else if (task.sessionId && (canResume || canLoad)) {
         try {
           if (canResume) {
-            await window.electron.invoke(
-              "agent:resume-session",
-              task.sessionId,
-              task.workspace,
-            );
+            await window.electron.invoke("agent:resume-session", task.sessionId, task.workspace);
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -766,11 +715,7 @@ const App = () => {
             });
           } else if (canLoad) {
             sessionLoadInFlight.current = true;
-            await window.electron.invoke(
-              "agent:load-session",
-              task.sessionId,
-              task.workspace,
-            );
+            await window.electron.invoke("agent:load-session", task.sessionId, task.workspace);
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -785,10 +730,7 @@ const App = () => {
       }
 
       if (!sessionId) {
-        const sessionResult = await window.electron.invoke(
-          "agent:new-session",
-          task.workspace,
-        );
+        const sessionResult = await window.electron.invoke("agent:new-session", task.workspace);
         sessionId = sessionResult.sessionId;
         applyTaskUpdates(task.id, {
           sessionId,
@@ -920,9 +862,7 @@ const App = () => {
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    const confirmed = window.confirm(
-      "Delete this task? This cannot be undone.",
-    );
+    const confirmed = window.confirm("Delete this task? This cannot be undone.");
     if (!confirmed) {
       return;
     }
@@ -954,7 +894,7 @@ const App = () => {
   };
 
   const handleSend = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() && inputImages.length === 0) return;
     if (!isConnected) {
       handleIncomingMessage({
         type: "system",
@@ -973,14 +913,21 @@ const App = () => {
     sessionLoadInFlight.current = false;
 
     const text = inputText;
+    const images = [...inputImages];
     setInputText("");
+    setInputImages([]);
 
     currentAgentMsgId.current = null;
 
     if (activeTaskId) {
       const nextMessages = [
         ...messages,
-        { id: Date.now().toString(), sender: "user" as const, content: text },
+        {
+          id: Date.now().toString(),
+          sender: "user" as const,
+          content: text,
+          images: images,
+        },
       ];
       const updatedAt = Date.now();
       applyTaskUpdates(activeTaskId, {
@@ -995,7 +942,7 @@ const App = () => {
     setIsWaitingForResponse(true);
 
     try {
-      await window.electron.invoke("agent:send", text);
+      await window.electron.invoke("agent:send", text, images);
     } catch (e: any) {
       handleIncomingMessage({
         type: "system",
@@ -1076,9 +1023,7 @@ const App = () => {
     () => mergeCommands(agentInfo.commands, LOCAL_COMMANDS),
     [agentInfo.commands],
   );
-  const commandQuery = inputText.startsWith("/")
-    ? inputText.slice(1).trim().toLowerCase()
-    : "";
+  const commandQuery = inputText.startsWith("/") ? inputText.slice(1).trim().toLowerCase() : "";
   const filteredCommands = mergedCommands.filter((cmd) =>
     commandQuery ? cmd.name.toLowerCase().includes(commandQuery) : true,
   );
@@ -1159,10 +1104,7 @@ const App = () => {
   return (
     <ConfigProvider
       theme={{
-        algorithm:
-          theme === "dark"
-            ? antdTheme.darkAlgorithm
-            : antdTheme.defaultAlgorithm,
+        algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
         token: {
           colorPrimary: "#f97316",
         },
@@ -1234,10 +1176,7 @@ const App = () => {
 
             {/* Loading message bubble */}
             {isWaitingForResponse && (
-              <AntDXMessage
-                msg={{ id: "loading", sender: "agent", content: "" }}
-                isLoading
-              />
+              <AntDXMessage msg={{ id: "loading", sender: "agent", content: "" }} isLoading />
             )}
 
             <div ref={messagesEndRef} />
@@ -1253,6 +1192,8 @@ const App = () => {
             commandSelectedIndex={commandSelectedIndex}
             onCommandPick={handleCommandPick}
             onKeyDown={handleKeyDown}
+            images={inputImages}
+            onImagesChange={setInputImages}
           />
         </div>
       </div>

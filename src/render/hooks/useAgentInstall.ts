@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { AgentPlugin } from "../agents/types";
 
 export type InstallStatus =
@@ -24,7 +24,7 @@ interface AgentInstallActions {
 export function useAgentInstall(
   selectedPlugin: AgentPlugin | null | undefined,
   isOpen: boolean,
-  onCommandChange: (command: string) => void
+  onCommandChange: (command: string) => void,
 ): AgentInstallState & AgentInstallActions {
   const [installStatus, setInstallStatus] = useState<InstallStatus>("checking");
   const [installedVersion, setInstalledVersion] = useState<string | null>(null);
@@ -42,7 +42,7 @@ export function useAgentInstall(
       if (res.installed) {
         const versionRes = await window.electron.invoke(
           "agent:get-package-version",
-          plugin.packageSpec
+          plugin.packageSpec,
         );
         if (versionRes.success && versionRes.version) {
           setInstalledVersion(versionRes.version);
@@ -65,7 +65,7 @@ export function useAgentInstall(
       try {
         const res = await window.electron.invoke(
           "agent:install",
-          `${selectedPlugin.packageSpec}@latest`
+          `${selectedPlugin.packageSpec}@latest`,
         );
         if (res.success) {
           setInstallStatus("installed");
@@ -80,7 +80,7 @@ export function useAgentInstall(
         setInstallStatus("not-installed");
       }
     },
-    [selectedPlugin, checkInstall, onCommandChange]
+    [selectedPlugin, checkInstall, onCommandChange],
   );
 
   const install = useCallback(() => installLatest("install"), [installLatest]);

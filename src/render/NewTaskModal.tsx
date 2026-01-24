@@ -5,11 +5,7 @@ import { AGENT_PLUGINS, getAgentPlugin } from "./agents/registry";
 interface NewTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (payload: {
-    title: string;
-    workspace: string;
-    agentCommand: string;
-  }) => void;
+  onCreate: (payload: { title: string; workspace: string; agentCommand: string }) => void;
   initialWorkspace: string | null;
   initialAgentCommand: string;
   defaultQwenCommand?: string;
@@ -32,26 +28,26 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
     if (!isOpen) return;
     setTitle("New Task");
     setWorkspacePath(initialWorkspace || "");
-    
+
     // Determine plugin from initial command
     let found = false;
     for (const plugin of AGENT_PLUGINS) {
-        const heuristic = plugin.checkCommand || plugin.defaultCommand.split(" ")[0];
-        if (initialAgentCommand.includes(heuristic)) {
-             setSelectedPluginId(plugin.id);
-             // If the command is exactly the default, we might just set it, but user might have modified arguments.
-             // We can store the custom command anyway, but UI will show the plugin's default if a plugin is selected.
-             // Wait, if I select a plugin, the input is disabled and shows the default command.
-             // If the user had a slightly modified Qwen command, and I select "Qwen Plugin", they lose their modification in the UI view.
-             // However, for "New Task", we usually start fresh or from previous settings.
-             // If the previous setting matches Qwen, we select Qwen.
-             found = true;
-             break;
-        }
+      const heuristic = plugin.checkCommand || plugin.defaultCommand.split(" ")[0];
+      if (initialAgentCommand.includes(heuristic)) {
+        setSelectedPluginId(plugin.id);
+        // If the command is exactly the default, we might just set it, but user might have modified arguments.
+        // We can store the custom command anyway, but UI will show the plugin's default if a plugin is selected.
+        // Wait, if I select a plugin, the input is disabled and shows the default command.
+        // If the user had a slightly modified Qwen command, and I select "Qwen Plugin", they lose their modification in the UI view.
+        // However, for "New Task", we usually start fresh or from previous settings.
+        // If the previous setting matches Qwen, we select Qwen.
+        found = true;
+        break;
+      }
     }
     if (!found) {
-        setSelectedPluginId("custom");
-        setCustomCommand(initialAgentCommand);
+      setSelectedPluginId("custom");
+      setCustomCommand(initialAgentCommand);
     }
   }, [isOpen, initialWorkspace, initialAgentCommand]);
 
@@ -84,19 +80,17 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   };
 
   const selectedPlugin = getAgentPlugin(selectedPluginId);
-  const resolvedCommand = selectedPlugin
-    ? selectedPlugin.defaultCommand
-    : customCommand.trim();
+  const resolvedCommand = selectedPlugin ? selectedPlugin.defaultCommand : customCommand.trim();
 
   const canCreate = Boolean(workspacePath && resolvedCommand);
 
   const handlePluginChange = (pluginId: string) => {
     setSelectedPluginId(pluginId);
     if (pluginId === "custom") {
-        // If switching to custom, maybe pre-fill with the last used command or empty
-        if (!customCommand) {
-             setCustomCommand(""); 
-        }
+      // If switching to custom, maybe pre-fill with the last used command or empty
+      if (!customCommand) {
+        setCustomCommand("");
+      }
     }
   };
 
@@ -107,9 +101,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
       <div ref={modalRef} className="modal-content large">
         <div className="modal-header" style={{ display: "block" }}>
           <div className="modal-title">Create New Task</div>
-          <div className="modal-subtitle">
-            Choose a workspace folder and agent to start.
-          </div>
+          <div className="modal-subtitle">Choose a workspace folder and agent to start.</div>
         </div>
 
         <div className="modal-section">
@@ -126,17 +118,11 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
         <div className="modal-section">
           <label className="modal-label">Workspace Folder</label>
           <div className="input-group">
-            <button
-              type="button"
-              onClick={handlePickFolder}
-              className="btn-secondary"
-            >
+            <button type="button" onClick={handlePickFolder} className="btn-secondary">
               Select Folder
             </button>
             <div
-              className={`input-group-text ${
-                workspacePath ? "" : "placeholder"
-              }`}
+              className={`input-group-text ${workspacePath ? "" : "placeholder"}`}
               title={workspacePath}
             >
               {workspacePath || "No folder selected"}
@@ -146,7 +132,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
 
         <div className="modal-section">
           <label className="modal-label">Agent</label>
-          <div className="preset-buttons" style={{ marginBottom: "12px", flexWrap: 'wrap' }}>
+          <div className="preset-buttons" style={{ marginBottom: "12px", flexWrap: "wrap" }}>
             <button
               type="button"
               onClick={() => handlePluginChange("custom")}
@@ -155,14 +141,14 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
               Custom
             </button>
             {AGENT_PLUGINS.map((plugin) => (
-                <button
-                    key={plugin.id}
-                    type="button"
-                    onClick={() => handlePluginChange(plugin.id)}
-                    className={`preset-button ${selectedPluginId === plugin.id ? "active" : ""}`}
-                >
-                    {plugin.name}
-                </button>
+              <button
+                key={plugin.id}
+                type="button"
+                onClick={() => handlePluginChange(plugin.id)}
+                className={`preset-button ${selectedPluginId === plugin.id ? "active" : ""}`}
+              >
+                {plugin.name}
+              </button>
             ))}
           </div>
 
@@ -183,11 +169,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
         </div>
 
         <div className="modal-footer">
-          <button
-            type="button"
-            onClick={onClose}
-            className="btn-secondary"
-          >
+          <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
           </button>
           <button

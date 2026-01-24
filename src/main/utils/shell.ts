@@ -1,7 +1,7 @@
-import path from "node:path";
+import { exec } from "node:child_process";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
-import { exec } from "node:child_process";
+import path from "node:path";
 import { promisify } from "node:util";
 import { app } from "electron";
 

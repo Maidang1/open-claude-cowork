@@ -1,6 +1,6 @@
 import path from "node:path";
-import { app } from "electron";
 import Database from "better-sqlite3";
+import { app } from "electron";
 
 let db: Database.Database | null = null;
 
@@ -44,9 +44,7 @@ export const initDB = () => {
 export const setSetting = (key: string, value: string) => {
   if (!db) return;
   try {
-    const stmt = db.prepare(
-      "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-    );
+    const stmt = db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
     stmt.run(key, value);
   } catch (e) {
     console.error(`[DB] Failed to set setting ${key}:`, e);
@@ -107,9 +105,7 @@ const normalizeTaskRow = (row: any): TaskRecord => ({
 export const listTasks = (): TaskRecord[] => {
   if (!db) return [];
   try {
-    const stmt = db.prepare(
-      "SELECT * FROM tasks ORDER BY last_active_at DESC, created_at DESC",
-    );
+    const stmt = db.prepare("SELECT * FROM tasks ORDER BY last_active_at DESC, created_at DESC");
     const rows = stmt.all() as any[];
     return rows.map(normalizeTaskRow);
   } catch (e) {
@@ -185,30 +181,21 @@ export const updateTask = (
 
   if (updates.title !== undefined) setField("title", updates.title);
   if (updates.workspace !== undefined) setField("workspace", updates.workspace);
-  if (updates.agentCommand !== undefined)
-    setField("agent_command", updates.agentCommand);
-  if (updates.agentEnv !== undefined)
-    setField("agent_env", JSON.stringify(updates.agentEnv ?? {}));
-  if (updates.messages !== undefined)
-    setField("messages", JSON.stringify(updates.messages ?? []));
-  if (updates.sessionId !== undefined)
-    setField("session_id", updates.sessionId);
+  if (updates.agentCommand !== undefined) setField("agent_command", updates.agentCommand);
+  if (updates.agentEnv !== undefined) setField("agent_env", JSON.stringify(updates.agentEnv ?? {}));
+  if (updates.messages !== undefined) setField("messages", JSON.stringify(updates.messages ?? []));
+  if (updates.sessionId !== undefined) setField("session_id", updates.sessionId);
   if (updates.modelId !== undefined) setField("model_id", updates.modelId);
   if (updates.tokenUsage !== undefined)
     setField("token_usage", JSON.stringify(updates.tokenUsage ?? null));
-  if (updates.createdAt !== undefined)
-    setField("created_at", updates.createdAt);
-  if (updates.updatedAt !== undefined)
-    setField("updated_at", updates.updatedAt);
-  if (updates.lastActiveAt !== undefined)
-    setField("last_active_at", updates.lastActiveAt);
+  if (updates.createdAt !== undefined) setField("created_at", updates.createdAt);
+  if (updates.updatedAt !== undefined) setField("updated_at", updates.updatedAt);
+  if (updates.lastActiveAt !== undefined) setField("last_active_at", updates.lastActiveAt);
 
   if (fields.length === 0) return;
 
   try {
-    const stmt = db.prepare(
-      `UPDATE tasks SET ${fields.join(", ")} WHERE id = ?`,
-    );
+    const stmt = db.prepare(`UPDATE tasks SET ${fields.join(", ")} WHERE id = ?`);
     stmt.run(...values, id);
   } catch (e) {
     console.error(`[DB] Failed to update task ${id}:`, e);

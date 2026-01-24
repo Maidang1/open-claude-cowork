@@ -1,12 +1,12 @@
 import { ipcMain } from "electron";
 import {
-  getSetting,
-  setSetting,
-  listTasks,
-  getTask,
   createTask,
-  updateTask,
   deleteTask,
+  getSetting,
+  getTask,
+  listTasks,
+  setSetting,
+  updateTask,
 } from "../db/store";
 
 export const registerDbHandlers = () => {

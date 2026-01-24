@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn, exec } from "node:child_process";
+import { type ChildProcess, exec, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { Readable, Writable } from "node:stream";
@@ -83,15 +83,10 @@ const extractTokenUsage = (payload: any): AgentTokenUsage | null => {
     }
 
     const promptTokens =
-      candidate.promptTokens ??
-      candidate.prompt_tokens ??
-      candidate.input_tokens;
+      candidate.promptTokens ?? candidate.prompt_tokens ?? candidate.input_tokens;
     const completionTokens =
-      candidate.completionTokens ??
-      candidate.completion_tokens ??
-      candidate.output_tokens;
-    const totalTokens =
-      candidate.totalTokens ?? candidate.total_tokens ?? candidate.total;
+      candidate.completionTokens ?? candidate.completion_tokens ?? candidate.output_tokens;
+    const totalTokens = candidate.totalTokens ?? candidate.total_tokens ?? candidate.total;
 
     if (
       typeof promptTokens === "number" ||
@@ -99,10 +94,8 @@ const extractTokenUsage = (payload: any): AgentTokenUsage | null => {
       typeof totalTokens === "number"
     ) {
       return {
-        promptTokens:
-          typeof promptTokens === "number" ? promptTokens : undefined,
-        completionTokens:
-          typeof completionTokens === "number" ? completionTokens : undefined,
+        promptTokens: typeof promptTokens === "number" ? promptTokens : undefined,
+        completionTokens: typeof completionTokens === "number" ? completionTokens : undefined,
         totalTokens: typeof totalTokens === "number" ? totalTokens : undefined,
       };
     }
@@ -150,9 +143,7 @@ export class ACPClient {
 
     this.cwd = cwd || process.cwd();
 
-    console.log(
-      `[Client] Spawning agent: ${command} ${args.join(" ")} in ${this.cwd}`,
-    );
+    console.log(`[Client] Spawning agent: ${command} ${args.join(" ")} in ${this.cwd}`);
     this.process = spawn(command, args, {
       stdio: ["pipe", "pipe", "pipe"],
       shell: true,
@@ -279,9 +270,7 @@ export class ACPClient {
           }
           // Config Options Update (e.g., models)
           else if (update.sessionUpdate === "config_option_update") {
-            const modelUpdate = normalizeModelsFromConfigOptions(
-              update.configOptions,
-            );
+            const modelUpdate = normalizeModelsFromConfigOptions(update.configOptions);
             if (modelUpdate) {
               this.onMessageCallback?.({
                 type: "agent_info",
@@ -306,10 +295,7 @@ export class ACPClient {
             text: `Reading file: ${params.path}`,
           });
           try {
-            const content = await fs.readFile(
-              path.resolve(this.cwd, params.path),
-              "utf-8",
-            );
+            const content = await fs.readFile(path.resolve(this.cwd, params.path), "utf-8");
             return { content };
           } catch (e: any) {
             throw new Error(`Failed to read file: ${e.message}`);
@@ -322,11 +308,7 @@ export class ACPClient {
             text: `Writing file: ${params.path}`,
           });
           try {
-            await fs.writeFile(
-              path.resolve(this.cwd, params.path),
-              params.content,
-              "utf-8",
-            );
+            await fs.writeFile(path.resolve(this.cwd, params.path), params.content, "utf-8");
             return {};
           } catch (e: any) {
             throw new Error(`Failed to write file: ${e.message}`);
@@ -392,7 +374,7 @@ export class ACPClient {
             readTextFile: true,
             writeTextFile: true,
           },
-          // @ts-ignore - Assuming protocol extension allows this or custom handling
+          // @ts-expect-error - Assuming protocol extension allows this or custom handling
           runShellCommand: true,
         },
         clientInfo: { name: "test-client", version: "1.0.0" },
@@ -432,9 +414,7 @@ export class ACPClient {
         },
       });
     } else if (sessionResult?.configOptions?.length) {
-      const modelUpdate = normalizeModelsFromConfigOptions(
-        sessionResult.configOptions,
-      );
+      const modelUpdate = normalizeModelsFromConfigOptions(sessionResult.configOptions);
       if (modelUpdate) {
         this.onMessageCallback?.({ type: "agent_info", info: modelUpdate });
       }
@@ -452,9 +432,7 @@ export class ACPClient {
     this.activeSessionId = sessionResult.sessionId;
     this.onMessageCallback?.({
       type: "system",
-      text: isInitial
-        ? "System: Connected and Session Created."
-        : "System: Session Created.",
+      text: isInitial ? "System: Connected and Session Created." : "System: Session Created.",
     });
     this.handleSessionInitUpdate(sessionResult);
     return sessionResult.sessionId;
@@ -506,16 +484,34 @@ export class ACPClient {
     return this.agentCapabilities;
   }
 
-  async sendMessage(text: string) {
+  async sendMessage(text: string, images?: Array<{ mimeType: string; dataUrl: string }>) {
     if (!this.connection || !this.activeSessionId) {
       throw new Error("Not connected");
+    }
+
+    // Build prompt content
+    const prompt: Array<{ type: string; text?: string; mimeType?: string; data?: string }> = [
+      { type: "text", text: text },
+    ];
+
+    // Add images to prompt
+    if (images && images.length > 0) {
+      for (const image of images) {
+        // Extract base64 data from data URL (remove data:image/png;base64, prefix)
+        const base64Data = image.dataUrl.replace(/^data:[^;]+;base64,/, "");
+        prompt.push({
+          type: "image",
+          mimeType: image.mimeType,
+          data: base64Data,
+        });
+      }
     }
 
     // Send Prompt
     try {
       const response = await this.connection.prompt({
         sessionId: this.activeSessionId,
-        prompt: [{ type: "text", text: text }],
+        prompt: prompt,
       });
       const usage = extractTokenUsage(response);
       if (usage) {

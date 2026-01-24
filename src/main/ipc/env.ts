@@ -1,17 +1,17 @@
-import { ipcMain, shell, clipboard, BrowserWindow } from "electron";
 import { exec } from "node:child_process";
-import { promisify } from "node:util";
 import { existsSync } from "node:fs";
+import { promisify } from "node:util";
+import { type BrowserWindow, clipboard, ipcMain, shell } from "electron";
 import { getSetting, setSetting } from "../db/store";
-import { shellQuote, resolveSystemCommand } from "../utils/shell";
 import {
-  getCustomNodePath,
-  resolveNodeRuntime,
-  getNodeRuntimePreference,
-  setNodeRuntimePreference,
-  normalizeNodeRuntimePreference,
   enrichPathFromLoginShell,
+  getCustomNodePath,
+  getNodeRuntimePreference,
+  normalizeNodeRuntimePreference,
+  resolveNodeRuntime,
+  setNodeRuntimePreference,
 } from "../utils/node-runtime";
+import { resolveSystemCommand, shellQuote } from "../utils/shell";
 
 const execAsync = promisify(exec);
 
@@ -36,7 +36,7 @@ export const registerEnvHandlers = (_mainWindow: BrowserWindow | null) => {
         result.node.path = nodeRuntime.file;
       } else {
         const { stdout: nodeVersion } = await execAsync(
-          `${shellQuote(nodeRuntime.file)} --version`
+          `${shellQuote(nodeRuntime.file)} --version`,
         );
         result.node.installed = true;
         result.node.version = nodeVersion.trim();
@@ -162,10 +162,13 @@ export const registerEnvHandlers = (_mainWindow: BrowserWindow | null) => {
           reject(err);
         });
 
-        setTimeout(() => {
-          child.kill();
-          reject(new Error("Installation timed out after 5 minutes"));
-        }, 5 * 60 * 1000);
+        setTimeout(
+          () => {
+            child.kill();
+            reject(new Error("Installation timed out after 5 minutes"));
+          },
+          5 * 60 * 1000,
+        );
       });
     } catch (e: any) {
       console.error(`[Install] Error:`, e);

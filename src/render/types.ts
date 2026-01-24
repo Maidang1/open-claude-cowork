@@ -32,6 +32,14 @@ export interface AgentInfoState {
   tokenUsage: TokenUsage | null;
 }
 
+export interface ImageAttachment {
+  id: string;
+  filename: string;
+  mimeType: string;
+  dataUrl: string; // Base64 编码的图片数据
+  size: number;
+}
+
 export interface Message {
   id: string;
   sender: "user" | "agent" | "system";
@@ -41,6 +49,7 @@ export interface Message {
   tokenUsage?: TokenUsage;
   permissionId?: string;
   options?: any[];
+  images?: ImageAttachment[];
 }
 
 export interface IncomingMessage {

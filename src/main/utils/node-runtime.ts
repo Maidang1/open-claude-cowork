@@ -1,6 +1,6 @@
-import path from "node:path";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
+import path from "node:path";
 import { getSetting, setSetting } from "../db/store";
 import { getLocalAgentBin, parseCommandLine } from "./shell";
 
@@ -30,7 +30,7 @@ let pathEnrichedFromShell = false;
 let lastCustomNodePathApplied: string | null = null;
 
 export const normalizeNodeRuntimePreference = (
-  value: string | null
+  value: string | null,
 ): NodeRuntimePreference | null => {
   if (value === "bundled" || value === "custom") return value;
   return null;
@@ -111,10 +111,7 @@ export const resolveActualJsEntry = async (binPath: string): Promise<ResolvedEnt
       return { path: realPath, isNodeScript: true };
     }
     const content = await fs.readFile(binPath, "utf-8");
-    if (
-      content.startsWith("#!/usr/bin/env node") ||
-      content.startsWith("#!/usr/bin/node")
-    ) {
+    if (content.startsWith("#!/usr/bin/env node") || content.startsWith("#!/usr/bin/node")) {
       return { path: binPath, isNodeScript: true };
     }
     const wrapperEntry = resolveEntryFromWrapper(binPath, content);
@@ -165,9 +162,7 @@ export const enrichPathFromLoginShell = async () => {
     const loginPath = stdout.trim();
     if (loginPath) {
       const current = process.env[PATH_KEY] || "";
-      const merged = [
-        ...new Set([...loginPath.split(":"), ...current.split(":")]),
-      ]
+      const merged = [...new Set([...loginPath.split(":"), ...current.split(":")])]
         .filter(Boolean)
         .join(":");
       (process.env as Record<string, string>)[PATH_KEY] = merged;
