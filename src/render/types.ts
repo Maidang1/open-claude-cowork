@@ -1,3 +1,13 @@
+import type {
+  AgentCommandInfo,
+  AgentInfoState,
+  AgentModelInfo,
+  IncomingMessage,
+  TokenUsage,
+} from "@src/types/acpTypes";
+
+export type { AgentCommandInfo, AgentInfoState, AgentModelInfo, IncomingMessage, TokenUsage };
+
 // Shared types between main and render processes
 
 export interface ToolCall {
@@ -9,30 +19,6 @@ export interface ToolCall {
     rawInput?: any;
     rawOutput?: any;
   };
-}
-
-export interface AgentModelInfo {
-  modelId: string;
-  name: string;
-  description?: string | null;
-}
-
-export interface AgentCommandInfo {
-  name: string;
-  description?: string | null;
-}
-
-export interface TokenUsage {
-  promptTokens?: number;
-  completionTokens?: number;
-  totalTokens?: number;
-}
-
-export interface AgentInfoState {
-  models: AgentModelInfo[];
-  currentModelId: string | null;
-  commands: AgentCommandInfo[];
-  tokenUsage: TokenUsage | null;
 }
 
 export interface ImageAttachment {
@@ -53,30 +39,6 @@ export interface Message {
   permissionId?: string;
   options?: any[];
   images?: ImageAttachment[];
-}
-
-export interface IncomingMessage {
-  type:
-    | "agent_text"
-    | "agent_thought"
-    | "agent_info"
-    | "tool_call"
-    | "tool_call_update"
-    | "tool_log"
-    | "system"
-    | "permission_request"
-    | "agent_plan";
-  text?: string;
-  toolCallId?: string;
-  id?: string;
-  name?: string;
-  kind?: string;
-  status?: string;
-  options?: any[];
-  tool?: string;
-  info?: Partial<AgentInfoState>;
-  sessionId?: string;
-  plan?: any;
 }
 
 export interface Task {

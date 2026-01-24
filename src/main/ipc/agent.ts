@@ -3,14 +3,13 @@ import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import { promisify } from "node:util";
 import { type BrowserWindow, ipcMain } from "electron";
-import { ACPClient } from "../acp/Client";
+import { AcpAgentManager } from "../acp/AcpAgentManager";
+import { acpDetector } from "../acp/AcpDetector";
 import {
   enrichPathFromLoginShell,
   getCustomNodePath,
   getNodeRuntimePreference,
-  resolveActualJsEntry,
   resolveAuthCommand,
-  resolveNodeRuntime,
 } from "../utils/node-runtime";
 import {
   buildCommandString,
@@ -26,8 +25,7 @@ import {
 
 const execAsync = promisify(exec);
 
-let acpClient: ACPClient | null = null;
-let activeConnectionKey: string | null = null;
+let acpManager: AcpAgentManager | null = null;
 
 type PackageManager = {
   kind: "npm";
@@ -53,79 +51,14 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
       options?: { reuseIfSame?: boolean; createSession?: boolean },
     ) => {
       try {
-        if (!acpClient) {
-          acpClient = new ACPClient((msg) => {
+        if (!acpManager) {
+          acpManager = new AcpAgentManager((msg) => {
             if (mainWindow && !mainWindow.isDestroyed()) {
               mainWindow.webContents.send("agent:message", msg);
             }
           });
         }
-
-        const parts = command.split(" ");
-        let cmd = parts[0];
-        const args = parts.slice(1);
-        let resolvedEnv = env;
-
-        const localBin = getLocalAgentBin(cmd);
-        if (localBin) {
-          console.log(`[Main] Using local agent binary: ${localBin}`);
-          if (process.platform !== "win32") {
-            try {
-              await fs.chmod(localBin, 0o755);
-            } catch (e) {
-              console.error(`[Main] Failed to chmod local bin: ${e}`);
-            }
-          }
-
-          const actualEntry = await resolveActualJsEntry(localBin);
-          const shouldUseNode = actualEntry?.isNodeScript ?? false;
-
-          if (shouldUseNode) {
-            const jsPath = actualEntry?.path || localBin;
-            console.log(`[Main] Resolved JS entry: ${jsPath}`);
-            args.unshift(shellQuote(jsPath));
-
-            const nodeRuntime = await resolveNodeRuntime();
-            cmd = shellQuote(nodeRuntime.file);
-            if (nodeRuntime.env) {
-              resolvedEnv = { ...(resolvedEnv || {}), ...nodeRuntime.env };
-            }
-            console.log(
-              `[Main] Using ${nodeRuntime.source === "custom" ? "custom" : "bundled"} node runtime: ${cmd}`,
-            );
-          } else {
-            cmd = shellQuote(localBin);
-          }
-        }
-
-        const connectionKey = JSON.stringify({
-          cmd,
-          args,
-          cwd: cwd || process.cwd(),
-          env: resolvedEnv || null,
-        });
-
-        try {
-          if (
-            options?.reuseIfSame &&
-            acpClient.isConnected() &&
-            activeConnectionKey === connectionKey
-          ) {
-            return { success: true, reused: true, sessionId: null };
-          }
-          const result = await acpClient.connect(cmd, args, cwd, resolvedEnv, {
-            createSession: options?.createSession ?? true,
-          });
-          activeConnectionKey = connectionKey;
-          return {
-            success: true,
-            reused: false,
-            sessionId: result?.sessionId ?? null,
-          };
-        } catch (e: any) {
-          console.error("Connect error:", e);
-          return { success: false, error: e.message };
-        }
+        return await acpManager.connect(command, cwd, env, options);
       } catch (e: any) {
         console.error("Connect error:", e);
         return { success: false, error: e.message || "Connection failed" };
@@ -157,6 +90,14 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
     } catch {
       return { installed: false };
     }
+  });
+
+  ipcMain.handle("agent:get-available-agents", async () => {
+    return await acpDetector.getAvailableAgents();
+  });
+
+  ipcMain.handle("agent:detect-cli-path", async (_, command: string) => {
+    return await acpDetector.detectCliPath(command);
   });
 
   ipcMain.handle("agent:get-package-version", async (_, packageName: string) => {
@@ -247,11 +188,14 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
   });
 
   ipcMain.handle("agent:auth-terminal", async (_, command: string, cwd?: string) => {
-    let resolved;
+    let resolved: Awaited<ReturnType<typeof resolveAuthCommand>> | null = null;
     try {
       resolved = await resolveAuthCommand(command);
     } catch (e: any) {
-      return { success: false, error: e.message || "Failed to resolve command" };
+      return {
+        success: false,
+        error: e.message || "Failed to resolve command",
+      };
     }
     if (!resolved) {
       return { success: false, error: "Invalid command" };
@@ -290,64 +234,57 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
   });
 
   ipcMain.handle("agent:permission-response", (_, id: string, response: any) => {
-    if (acpClient) {
-      acpClient.resolvePermission(id, response);
-    }
+    acpManager?.resolvePermission(id, response);
   });
 
-  ipcMain.handle("agent:send", async (_, message: string, images?: Array<{ mimeType: string; dataUrl: string }>) => {
-    if (acpClient) {
-      await acpClient.sendMessage(message, images);
-    } else {
-      throw new Error("Agent not connected");
-    }
-  });
+  ipcMain.handle(
+    "agent:send",
+    async (_, message: string, images?: Array<{ mimeType: string; dataUrl: string }>) => {
+      if (!acpManager) {
+        throw new Error("Agent not connected");
+      }
+      await acpManager.sendMessage(message, images);
+    },
+  );
 
   ipcMain.handle("agent:get-capabilities", async () => {
-    if (!acpClient) {
-      return null;
-    }
-    return acpClient.getCapabilities();
+    return acpManager?.getCapabilities() ?? null;
   });
 
   ipcMain.handle("agent:new-session", async (_, cwd?: string) => {
-    if (!acpClient) {
+    if (!acpManager) {
       throw new Error("Agent not connected");
     }
-    const sessionId = await acpClient.createSession(cwd);
-    return { success: true, sessionId };
+    return await acpManager.createSession(cwd);
   });
 
   ipcMain.handle("agent:load-session", async (_, sessionId: string, cwd?: string) => {
-    if (!acpClient) {
+    if (!acpManager) {
       throw new Error("Agent not connected");
     }
-    await acpClient.loadSession(sessionId, cwd);
-    return { success: true };
+    return await acpManager.loadSession(sessionId, cwd);
   });
 
   ipcMain.handle("agent:resume-session", async (_, sessionId: string, cwd?: string) => {
-    if (!acpClient) {
+    if (!acpManager) {
       throw new Error("Agent not connected");
     }
-    await acpClient.resumeSession(sessionId, cwd);
-    return { success: true };
+    return await acpManager.resumeSession(sessionId, cwd);
   });
 
-  ipcMain.handle("agent:set-active-session", async (_, sessionId: string) => {
-    if (!acpClient) {
+  ipcMain.handle("agent:set-active-session", async (_, sessionId: string, cwd?: string) => {
+    if (!acpManager) {
       throw new Error("Agent not connected");
     }
-    acpClient.setActiveSession(sessionId);
-    return { success: true };
+    return await acpManager.setActiveSession(sessionId, cwd);
   });
 
   ipcMain.handle("agent:set-model", async (_, modelId: string) => {
     try {
-      if (!acpClient) {
+      if (!acpManager) {
         throw new Error("Agent not connected");
       }
-      return await acpClient.setModel(modelId);
+      return await acpManager.setModel(modelId);
     } catch (e: any) {
       console.error("Set model error:", e);
       return { success: false, error: e.message };
@@ -355,18 +292,18 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
   });
 
   ipcMain.handle("agent:disconnect", async () => {
-    if (acpClient) {
-      await acpClient.disconnect();
-      acpClient = null;
-      activeConnectionKey = null;
+    if (!acpManager) {
+      return { success: true };
     }
-    return { success: true };
+    const result = await acpManager.disconnect();
+    acpManager = null;
+    return result;
   });
 
   ipcMain.handle("agent:stop", async () => {
-    if (acpClient) {
-      await acpClient.stopCurrentRequest();
+    if (!acpManager) {
+      return { success: true };
     }
-    return { success: true };
+    return await acpManager.stopCurrentRequest();
   });
 };

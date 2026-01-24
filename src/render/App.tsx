@@ -24,7 +24,10 @@ declare const DEBUG: string | undefined;
 
 const LOCAL_COMMANDS: AgentCommandInfo[] = [];
 
-const mergeCommands = (agentCommands: AgentCommandInfo[], localCommands: AgentCommandInfo[]) => {
+const mergeCommands = (
+  agentCommands: AgentCommandInfo[],
+  localCommands: AgentCommandInfo[],
+) => {
   const merged = new Map<string, AgentCommandInfo>();
   for (const cmd of localCommands) {
     merged.set(cmd.name, cmd);
@@ -43,7 +46,9 @@ const App = () => {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
   const [inputImages, setInputImages] = useState<ImageAttachment[]>([]);
-  const [agentCommand, setAgentCommand] = useState(getDefaultAgentPlugin().defaultCommand);
+  const [agentCommand, setAgentCommand] = useState(
+    getDefaultAgentPlugin().defaultCommand,
+  );
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
   const [agentInfo, setAgentInfo] = useState<AgentInfoState>({
     models: [],
@@ -60,7 +65,8 @@ const App = () => {
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const [agentCapabilities, setAgentCapabilities] = useState<any | null>(null);
   const [agentMessageLog, setAgentMessageLog] = useState<string[]>([]);
-  const showDebug = String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
+  const showDebug =
+    String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     state: "disconnected",
@@ -72,7 +78,9 @@ const App = () => {
 
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined" && window.matchMedia) {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
     }
     return "light";
   });
@@ -98,18 +106,21 @@ const App = () => {
   const activeTask = tasks.find((task) => task.id === activeTaskId) || null;
   const messages = activeTask?.messages ?? [];
 
-  const persistTaskUpdates = useCallback((taskId: string, updates: Partial<Task>) => {
-    window.electron.invoke("db:update-task", taskId, updates);
-  }, []);
+  const persistTaskUpdates = useCallback(
+    (taskId: string, updates: Partial<Task>) => {
+      window.electron.invoke("db:update-task", taskId, updates);
+    },
+    [],
+  );
 
   const applyTaskUpdates = useCallback(
     (taskId: string, updates: Partial<Task>) => {
       setTasks((prev) => {
-        const next = prev.map((task) => (task.id === taskId ? { ...task, ...updates } : task));
-        if (updates.lastActiveAt !== undefined) {
-          return [...next].sort((a, b) => b.lastActiveAt - a.lastActiveAt);
-        }
-        return next;
+        const next = prev.map((task) =>
+          task.id === taskId ? { ...task, ...updates } : task,
+        );
+        // 永远按照创建时间倒序排序
+        return [...next].sort((a, b) => b.createdAt - a.createdAt);
       });
       persistTaskUpdates(taskId, updates);
     },
@@ -151,7 +162,11 @@ const App = () => {
       const response = optionId
         ? { outcome: { outcome: "selected", optionId } }
         : { outcome: { outcome: "cancelled" } };
-      await window.electron.invoke("agent:permission-response", permissionId, response);
+      await window.electron.invoke(
+        "agent:permission-response",
+        permissionId,
+        response,
+      );
     },
     [],
   );
@@ -258,17 +273,20 @@ const App = () => {
       };
       if (data.type === "agent_info") {
         const resolvedTaskId = data.sessionId
-          ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)?.id ??
-            activeTaskIdSnapshot)
+          ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)
+              ?.id ?? activeTaskIdSnapshot)
           : activeTaskIdSnapshot;
         const nextUsage = data.info?.tokenUsage ?? null;
         const baseUsage = activeTaskSnapshot?.tokenUsage ?? null;
         const mergedUsage = nextUsage
           ? {
-              promptTokens: (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
+              promptTokens:
+                (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
               completionTokens:
-                (baseUsage?.completionTokens ?? 0) + (nextUsage.completionTokens ?? 0),
-              totalTokens: (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
+                (baseUsage?.completionTokens ?? 0) +
+                (nextUsage.completionTokens ?? 0),
+              totalTokens:
+                (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
             }
           : baseUsage;
         if (nextUsage) {
@@ -326,7 +344,10 @@ const App = () => {
       // System Messages
       if (data.type === "system") {
         const content = data.text || "";
-        if (content.includes("Agent disconnected") || content.includes("Agent process error")) {
+        if (
+          content.includes("Agent disconnected") ||
+          content.includes("Agent process error")
+        ) {
           setIsConnected(false);
           clearAllSessionIds();
           sessionLoadInFlight.current = false;
@@ -361,7 +382,8 @@ const App = () => {
 
       if (data.type === "permission_request") {
         const updatedAt = Date.now();
-        const resolvedTaskId = resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
+        const resolvedTaskId =
+          resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
         const targetTask = resolvedTaskId
           ? tasksSnapshot.find((task) => task.id === resolvedTaskId)
           : null;
@@ -406,16 +428,22 @@ const App = () => {
       // Agent Messages
       setTasks((prev) => {
         const resolvedTaskId = resolveTaskId(prev);
-        const targetTask = resolvedTaskId ? prev.find((task) => task.id === resolvedTaskId) : null;
+        const targetTask = resolvedTaskId
+          ? prev.find((task) => task.id === resolvedTaskId)
+          : null;
         if (!targetTask) return prev;
         const lastMsg = targetTask.messages[targetTask.messages.length - 1];
         const isAgentGenerating =
-          lastMsg && lastMsg.sender === "agent" && currentAgentMsgId.current === lastMsg.id;
+          lastMsg &&
+          lastMsg.sender === "agent" &&
+          currentAgentMsgId.current === lastMsg.id;
 
         if (data.type === "agent_text") {
           if (isAgentGenerating) {
             const nextMessages = targetTask.messages.map((m) =>
-              m.id === lastMsg.id ? { ...m, content: m.content + (data.text || "") } : m,
+              m.id === lastMsg.id
+                ? { ...m, content: m.content + (data.text || "") }
+                : m,
             );
             const updatedAt = Date.now();
             if (resolvedTaskId) {
@@ -466,7 +494,9 @@ const App = () => {
         if (data.type === "agent_thought") {
           if (isAgentGenerating) {
             const nextMessages = targetTask.messages.map((m) =>
-              m.id === lastMsg.id ? { ...m, thought: (m.thought || "") + (data.text || "") } : m,
+              m.id === lastMsg.id
+                ? { ...m, thought: (m.thought || "") + (data.text || "") }
+                : m,
             );
             const updatedAt = Date.now();
             if (resolvedTaskId) {
@@ -522,7 +552,9 @@ const App = () => {
         if (data.type === "tool_call") {
           if (isAgentGenerating) {
             const newTool: ToolCall = {
-              id: data.toolCallId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+              id:
+                data.toolCallId ||
+                `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
               name: data.name || "Unknown Tool",
               kind: data.kind,
               status: (data.status as any) || "in_progress",
@@ -532,7 +564,9 @@ const App = () => {
               },
             };
             const nextMessages = targetTask.messages.map((m) =>
-              m.id === lastMsg.id ? { ...m, toolCalls: [...(m.toolCalls || []), newTool] } : m,
+              m.id === lastMsg.id
+                ? { ...m, toolCalls: [...(m.toolCalls || []), newTool] }
+                : m,
             );
             const updatedAt = Date.now();
             if (resolvedTaskId) {
@@ -557,7 +591,9 @@ const App = () => {
             const newId = Date.now().toString();
             currentAgentMsgId.current = newId;
             const newTool: ToolCall = {
-              id: data.toolCallId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+              id:
+                data.toolCallId ||
+                `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
               name: data.name || "Unknown Tool",
               kind: data.kind,
               status: (data.status as any) || "in_progress",
@@ -568,7 +604,12 @@ const App = () => {
             };
             const nextMessages = [
               ...targetTask.messages,
-              { id: newId, sender: "agent" as const, content: "", toolCalls: [newTool] },
+              {
+                id: newId,
+                sender: "agent" as const,
+                content: "",
+                toolCalls: [newTool],
+              },
             ];
             const updatedAt = Date.now();
             if (resolvedTaskId) {
@@ -594,7 +635,9 @@ const App = () => {
         if (data.type === "tool_call_update") {
           // 查找包含指定 toolCallId 的代理消息
           const targetMsgIndex = targetTask.messages.findIndex(
-            (m) => m.sender === "agent" && m.toolCalls?.some((t) => t.id === data.toolCallId),
+            (m) =>
+              m.sender === "agent" &&
+              m.toolCalls?.some((t) => t.id === data.toolCallId),
           );
 
           if (targetMsgIndex !== -1) {
@@ -602,15 +645,23 @@ const App = () => {
             const nextMessages = [...targetTask.messages];
             const targetMsg = { ...nextMessages[targetMsgIndex] };
             targetMsg.toolCalls = targetMsg.toolCalls?.map((t) =>
-              t.id === data.toolCallId ? {
-                ...t,
-                status: data.status as any,
-                result: {
-                  ...t.result,
-                  rawInput: data.rawInput !== undefined ? data.rawInput : t.result?.rawInput,
-                  rawOutput: data.rawOutput !== undefined ? data.rawOutput : t.result?.rawOutput,
-                }
-              } : t,
+              t.id === data.toolCallId
+                ? {
+                    ...t,
+                    status: data.status as any,
+                    result: {
+                      ...t.result,
+                      rawInput:
+                        data.rawInput !== undefined
+                          ? data.rawInput
+                          : t.result?.rawInput,
+                      rawOutput:
+                        data.rawOutput !== undefined
+                          ? data.rawOutput
+                          : t.result?.rawOutput,
+                    },
+                  }
+                : t,
             );
             nextMessages[targetMsgIndex] = targetMsg;
 
@@ -637,9 +688,11 @@ const App = () => {
             const newId = Date.now().toString();
             currentAgentMsgId.current = newId;
             const newTool: ToolCall = {
-              id: data.toolCallId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+              id:
+                data.toolCallId ||
+                `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
               name: "Unknown Tool",
-              status: data.status as any || "in_progress",
+              status: (data.status as any) || "in_progress",
               result: {
                 rawInput: data.rawInput,
                 rawOutput: data.rawOutput,
@@ -647,7 +700,12 @@ const App = () => {
             };
             const nextMessages = [
               ...targetTask.messages,
-              { id: newId, sender: "agent" as const, content: "", toolCalls: [newTool] },
+              {
+                id: newId,
+                sender: "agent" as const,
+                content: "",
+                toolCalls: [newTool],
+              },
             ];
             const updatedAt = Date.now();
             if (resolvedTaskId) {
@@ -683,16 +741,22 @@ const App = () => {
     if (!window.electron) {
       return;
     }
-    const removeListener = window.electron.on("agent:message", (msg: IncomingMessage | string) => {
-      const data: IncomingMessage =
-        typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
-      console.log("[agent:message]", data);
-      setAgentMessageLog((prev) => {
-        const next = [`[${new Date().toISOString()}] ${JSON.stringify(data)}`, ...prev];
-        return next.slice(0, 50);
-      });
-      handleIncomingMessage(data);
-    });
+    const removeListener = window.electron.on(
+      "agent:message",
+      (msg: IncomingMessage | string) => {
+        const data: IncomingMessage =
+          typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
+        console.log("[agent:message]", data);
+        setAgentMessageLog((prev) => {
+          const next = [
+            `[${new Date().toISOString()}] ${JSON.stringify(data)}`,
+            ...prev,
+          ];
+          return next.slice(0, 50);
+        });
+        handleIncomingMessage(data);
+      },
+    );
 
     const loadInitialState = async () => {
       const [storedTasks, storedActiveTaskId, lastWs] = await Promise.all([
@@ -711,15 +775,20 @@ const App = () => {
             tokenUsage: task.tokenUsage ?? null,
           }))
         : [];
-      setTasks(loadedTasks);
+      // 按创建时间倒序排序
+      setTasks([...loadedTasks].sort((a, b) => b.createdAt - a.createdAt));
 
-      const resolvedActiveId = loadedTasks.find((task) => task.id === storedActiveTaskId)
+      const resolvedActiveId = loadedTasks.find(
+        (task) => task.id === storedActiveTaskId,
+      )
         ? storedActiveTaskId
         : (loadedTasks[0]?.id ?? null);
 
       if (resolvedActiveId) {
         setActiveTaskId(resolvedActiveId);
-        const nextTask = loadedTasks.find((task) => task.id === resolvedActiveId);
+        const nextTask = loadedTasks.find(
+          (task) => task.id === resolvedActiveId,
+        );
         if (nextTask) {
           syncActiveTaskState(nextTask);
         }
@@ -741,7 +810,9 @@ const App = () => {
     }
     autoConnectAttempted.current = true;
     sessionLoadInFlight.current = false;
-    setIsConnected(false);
+    if (!isConnected) {
+      setIsConnected(false);
+    }
     setConnectionStatus({
       state: "connecting",
       message: `Connecting to: ${task.agentCommand}...`,
@@ -758,7 +829,10 @@ const App = () => {
         return null;
       }
       if (!commandName.includes("/") && !commandName.startsWith(".")) {
-        const check = await window.electron.invoke("agent:check-command", commandName);
+        const check = await window.electron.invoke(
+          "agent:check-command",
+          commandName,
+        );
         if (!check.installed) {
           setConnectionStatus({
             state: "error",
@@ -794,14 +868,22 @@ const App = () => {
 
       if (connectResult.reused && sessionId) {
         try {
-          await window.electron.invoke("agent:set-active-session", sessionId);
+          await window.electron.invoke(
+            "agent:set-active-session",
+            sessionId,
+            task.workspace,
+          );
         } catch {
           sessionId = null;
         }
       } else if (task.sessionId && (canResume || canLoad)) {
         try {
           if (canResume) {
-            await window.electron.invoke("agent:resume-session", task.sessionId, task.workspace);
+            await window.electron.invoke(
+              "agent:resume-session",
+              task.sessionId,
+              task.workspace,
+            );
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -809,7 +891,11 @@ const App = () => {
             });
           } else if (canLoad) {
             sessionLoadInFlight.current = true;
-            await window.electron.invoke("agent:load-session", task.sessionId, task.workspace);
+            await window.electron.invoke(
+              "agent:load-session",
+              task.sessionId,
+              task.workspace,
+            );
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -824,7 +910,10 @@ const App = () => {
       }
 
       if (!sessionId) {
-        const sessionResult = await window.electron.invoke("agent:new-session", task.workspace);
+        const sessionResult = await window.electron.invoke(
+          "agent:new-session",
+          task.workspace,
+        );
         sessionId = sessionResult.sessionId;
         applyTaskUpdates(task.id, {
           sessionId,
@@ -845,7 +934,9 @@ const App = () => {
 
       return sessionId;
     } catch (e: any) {
-      setIsConnected(false);
+      if (!isConnected) {
+        setIsConnected(false);
+      }
       setConnectionStatus({
         state: "error",
         message: `Connection failed: ${e.message}`,
@@ -932,7 +1023,8 @@ const App = () => {
     };
 
     setIsNewTaskOpen(false);
-    setTasks((prev) => [newTask, ...prev]);
+    // 按创建时间倒序排序，新任务会自动在最前面
+    setTasks((prev) => [...prev, newTask].sort((a, b) => b.createdAt - a.createdAt));
     window.electron.invoke("db:create-task", newTask);
     setActiveTaskId(newTask.id);
     syncActiveTaskState(newTask);
@@ -955,8 +1047,14 @@ const App = () => {
     await ensureTaskSession(task);
   };
 
+  const handleRenameTask = (taskId: string, newTitle: string) => {
+    applyTaskUpdates(taskId, { title: newTitle, updatedAt: Date.now() });
+  };
+
   const handleDeleteTask = async (taskId: string) => {
-    const confirmed = window.confirm("Delete this task? This cannot be undone.");
+    const confirmed = window.confirm(
+      "Delete this task? This cannot be undone.",
+    );
     if (!confirmed) {
       return;
     }
@@ -1127,7 +1225,9 @@ const App = () => {
     () => mergeCommands(agentInfo.commands, LOCAL_COMMANDS),
     [agentInfo.commands],
   );
-  const commandQuery = inputText.startsWith("/") ? inputText.slice(1).trim().toLowerCase() : "";
+  const commandQuery = inputText.startsWith("/")
+    ? inputText.slice(1).trim().toLowerCase()
+    : "";
   const filteredCommands = mergedCommands.filter((cmd) =>
     commandQuery ? cmd.name.toLowerCase().includes(commandQuery) : true,
   );
@@ -1208,7 +1308,10 @@ const App = () => {
   return (
     <ConfigProvider
       theme={{
-        algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        algorithm:
+          theme === "dark"
+            ? antdTheme.darkAlgorithm
+            : antdTheme.defaultAlgorithm,
         token: {
           colorPrimary: "#f97316",
         },
@@ -1240,6 +1343,7 @@ const App = () => {
           onNewTask={handleNewTask}
           onSelectTask={handleSelectTask}
           onDeleteTask={handleDeleteTask}
+          onRenameTask={handleRenameTask}
           onOpenSettings={() => setIsSettingsOpen(true)}
           theme={theme}
           onToggleTheme={toggleTheme}

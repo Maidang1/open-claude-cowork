@@ -63,8 +63,8 @@ const ToolCallItem = ({ tool }: { tool: ToolCall }) => {
         <Collapse
           size="small"
           ghost
-          defaultActiveKey={[]}
           className="tool-call-collapse"
+          defaultActiveKey={[]}
           expandIconPosition="end"
           expandIcon={({ isActive }) => (
             <RightOutlined
@@ -76,7 +76,7 @@ const ToolCallItem = ({ tool }: { tool: ToolCall }) => {
             {
               key: "tool",
               label: (
-                <div className="flex items-center gap-2.5 text-xs">
+                <div className="tool-call-header-content">
                   {config.icon}
                   <span className="font-mono font-medium">{tool.name}</span>
                   <Tag style={{ margin: 0, fontSize: "11px" }}>
@@ -98,8 +98,8 @@ const ToolCallItem = ({ tool }: { tool: ToolCall }) => {
                           borderRadius: "8px",
                           fontSize: "0.75rem",
                           margin: 0,
-                          maxWidth: "720px",
-                          width: "100%",
+                          maxWidth: "100%",
+                          overflowX: "auto",
                         }}
                       >
                         {formatJson(tool.result.rawInput)}
@@ -118,8 +118,8 @@ const ToolCallItem = ({ tool }: { tool: ToolCall }) => {
                           borderRadius: "8px",
                           fontSize: "0.75rem",
                           margin: 0,
-                          maxWidth: "720px",
-                          width: "100%",
+                          maxWidth: "100%",
+                          overflowX: "auto",
                         }}
                       >
                         {formatJson(tool.result.rawOutput)}
@@ -162,8 +162,6 @@ const MarkdownContent = ({ content }: { content: string }) => {
                   borderRadius: "8px",
                   fontSize: "0.85em",
                   margin: 0,
-                  maxWidth: "720px",
-                  width: "100%",
                 }}
               >
                 {String(children).replace(/\n$/, "")}

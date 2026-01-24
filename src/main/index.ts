@@ -1,5 +1,6 @@
 import path from "node:path";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { initializeAcpDetector } from "./acp/AcpDetector";
 import { initDB } from "./db/store";
 import {
   registerAgentHandlers,
@@ -65,6 +66,7 @@ app.on("ready", async () => {
   initDB();
   onCreateMainWindow();
   initIpc();
+  await initializeAcpDetector();
 });
 
 app.on("window-all-closed", () => {
