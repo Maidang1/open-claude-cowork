@@ -1,5 +1,11 @@
 # open-claude-cowork
 
+## 0.1.0
+
+### Minor Changes
+
+- 完成基本功能
+
 ## 0.0.10
 
 ### Patch Changes
