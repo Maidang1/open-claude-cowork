@@ -23,6 +23,7 @@ import { MessageComposer } from "./utils/messageComposer";
 import {
   transformIncomingMessage,
   transformMessages,
+  transformToLegacyMessages,
 } from "./utils/messageTransformer";
 import { isWallpaperGradient, wallpaperUrl } from "./utils/wallpaper";
 import WorkspaceWelcome from "./WorkspaceWelcome";
@@ -102,6 +103,8 @@ const App = () => {
   const tasksRef = useRef<Task[]>([]);
   const activeTaskIdRef = useRef<string | null>(null);
   const composerRef = useRef<MessageComposer | null>(null);
+  const agentTextMsgIdRef = useRef<string | null>(null);
+  const agentThoughtMsgIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     tasksRef.current = tasks;
@@ -469,20 +472,33 @@ const App = () => {
           : null;
         if (!targetTask) return prev;
 
-        const newMessage = transformIncomingMessage(data, resolvedTaskId);
+        let msgId: string | undefined;
+        if (data.type === "agent_text") {
+          if (!agentTextMsgIdRef.current) {
+            agentTextMsgIdRef.current = Date.now().toString();
+          }
+          msgId = agentTextMsgIdRef.current;
+        } else if (data.type === "agent_thought") {
+          if (!agentThoughtMsgIdRef.current) {
+            agentThoughtMsgIdRef.current = Date.now().toString();
+          }
+          msgId = agentThoughtMsgIdRef.current;
+        }
+
+        const newMessage = transformIncomingMessage(data, resolvedTaskId, {
+          msgId,
+        });
         const composer = new MessageComposer(
           transformMessages(targetTask.messages, resolvedTaskId),
         );
         composer.addMessage(newMessage);
         const updatedMessages = composer.getMessages();
 
-        // 暂时保留原始数据结构以便兼容性
-        const oldFormatMessages = targetTask.messages.map((msg) => ({
-          ...msg,
-        }));
-
-        // 这里可以添加逻辑来将新格式消息转换回旧格式
-        // 为了保持兼容性，暂时保留原始消息结构
+        // Convert back to legacy message shape for storage/rendering.
+        const oldFormatMessages = transformToLegacyMessages(
+          updatedMessages,
+          targetTask.messages,
+        );
 
         const updatedAt = Date.now();
         if (resolvedTaskId) {
@@ -737,6 +753,8 @@ const App = () => {
       setIsConnected(false);
       clearAllSessionIds();
       sessionLoadInFlight.current = false;
+      agentTextMsgIdRef.current = null;
+      agentThoughtMsgIdRef.current = null;
       setAgentInfo({
         models: [],
         currentModelId: null,
@@ -928,6 +946,8 @@ const App = () => {
 
     // Set loading state after scroll to ensure the loading bubble is visible
     setIsWaitingForResponse(true);
+    agentTextMsgIdRef.current = null;
+    agentThoughtMsgIdRef.current = null;
 
     try {
       await window.electron.invoke("agent:send", text, images);

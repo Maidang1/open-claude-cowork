@@ -1,4 +1,5 @@
-import { X } from "lucide-react";
+import { Think } from "@ant-design/x";
+import { Button } from "antd";
 import { useEffect, useState } from "react";
 
 interface ThoughtDisplayProps {
@@ -46,38 +47,31 @@ export const ThoughtDisplay = ({
     }
   };
 
-  const containerClass = style === "compact" ? "p-3 rounded-lg" : "p-4 rounded-xl";
-
   return (
-    <div
-      className={`bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 border border-blue-200 dark:border-blue-800 ${containerClass} relative`}
-      onKeyDown={handleKeyDown}
-      tabIndex={0}
-    >
-      <div className="flex items-start gap-3">
-        <div className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2 animate-pulse" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100">AI is thinking</h3>
-            {running && (
-              <span className="text-xs text-blue-600 dark:text-blue-400">
-                {formatTime(elapsed)}
-              </span>
-            )}
+    <div onKeyDown={handleKeyDown} tabIndex={0}>
+      <Think
+        title="AI is thinking"
+        icon={
+          <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+        }
+        className={style === "compact" ? "p-3" : "p-4"}
+      >
+        <div className="space-y-2">
+          {running && (
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              {formatTime(elapsed)}
+            </div>
+          )}
+          <div className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+            {thought}
           </div>
-          <p className="text-sm text-blue-800 dark:text-blue-200 whitespace-pre-wrap">{thought}</p>
+          {running && (
+            <Button size="small" danger onClick={onStop}>
+              Stop
+            </Button>
+          )}
         </div>
-        {running && (
-          <button
-            type="button"
-            onClick={onStop}
-            className="flex-shrink-0 w-6 h-6 flex items-center justify-center text-blue-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-full transition-colors"
-            title="Stop (ESC)"
-          >
-            <X size={14} />
-          </button>
-        )}
-      </div>
+      </Think>
     </div>
   );
 };

@@ -26,7 +26,11 @@ export function buildMessageIndex(list: TMessage[]): MessageIndex {
 }
 
 // 替换消息
-export function replaceMessage(list: TMessage[], index: number, updated: TMessage): TMessage[] {
+export function replaceMessage(
+  list: TMessage[],
+  index: number,
+  updated: TMessage,
+): TMessage[] {
   const newList = [...list];
   newList[index] = updated;
   return newList;
@@ -38,7 +42,9 @@ export function composeMessage(list: TMessage[], newMsg: TMessage): TMessage[] {
 
   // ACP工具调用更新
   if (newMsg.type === "acp_tool_call" && newMsg.content?.update?.toolCallId) {
-    const existingIdx = index.toolCallIdIndex.get(newMsg.content.update.toolCallId);
+    const existingIdx = index.toolCallIdIndex.get(
+      newMsg.content.update.toolCallId,
+    );
     if (existingIdx !== undefined) {
       const existingMsg = list[existingIdx];
       const merged = { ...existingMsg.content, ...newMsg.content };
@@ -63,6 +69,26 @@ export function composeMessage(list: TMessage[], newMsg: TMessage): TMessage[] {
     const existingIdx = index.msgIdIndex.get(newMsg.msg_id);
     if (existingIdx !== undefined) {
       const existingMsg = list[existingIdx];
+      if (existingMsg.type === "text" && newMsg.type === "text") {
+        const merged = {
+          ...existingMsg.content,
+          ...newMsg.content,
+          text: `${existingMsg.content.text || ""}${newMsg.content.text || ""}`,
+        };
+        const updated = { ...existingMsg, content: merged };
+        return replaceMessage(list, existingIdx, updated);
+      }
+
+      if (existingMsg.type === "thought" && newMsg.type === "thought") {
+        const merged = {
+          ...existingMsg.content,
+          ...newMsg.content,
+          thought: `${existingMsg.content.thought || ""}${newMsg.content.thought || ""}`,
+        };
+        const updated = { ...existingMsg, content: merged };
+        return replaceMessage(list, existingIdx, updated);
+      }
+
       const merged = { ...existingMsg.content, ...newMsg.content };
       const updated = { ...existingMsg, content: merged };
       return replaceMessage(list, existingIdx, updated);

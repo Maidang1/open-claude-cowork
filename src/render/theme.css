@@ -42,10 +42,10 @@
     --bg-input: #ffffff;
 
     /* 主要颜色 */
-    --primary-3: 200;
-    --primary-5: #007aff;
-    --primary-hover: #0051d5;
-    --primary-light: rgba(0, 122, 255, 0.1);
+    --primary-3: 24;
+    --primary-5: #f97316;
+    --primary-hover: #ea580c;
+    --primary-light: rgba(249, 115, 22, 0.1);
 
     /* 文字颜色 */
     --text-primary: #000000;

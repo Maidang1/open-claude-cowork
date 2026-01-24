@@ -1,4 +1,4 @@
-import type { Message } from "../types";
+import type { Message, ToolCall } from "../types";
 import type {
   TAcpPermissionMessage,
   TAcpToolCallMessage,
@@ -9,11 +9,15 @@ import type {
 } from "../types/messageTypes";
 
 // 将现有消息类型转换为新的统一消息类型
-export function transformToNewMessage(msg: Message, conversationId: string): TMessage {
+export function transformToNewMessage(
+  msg: Message,
+  conversationId: string,
+): TMessage {
   // 权限请求消息
   if (msg.permissionId) {
     const acpPermissionMsg: TAcpPermissionMessage = {
       id: msg.id,
+      msg_id: msg.msgId,
       conversation_id: conversationId,
       type: "acp_permission",
       content: {
@@ -30,6 +34,7 @@ export function transformToNewMessage(msg: Message, conversationId: string): TMe
   if (msg.sender === "system") {
     const systemMsg: TSystemMessage = {
       id: msg.id,
+      msg_id: msg.msgId,
       conversation_id: conversationId,
       type: "system",
       content: {
@@ -44,6 +49,7 @@ export function transformToNewMessage(msg: Message, conversationId: string): TMe
   if (msg.sender === "user") {
     const textMsg: TTextMessage = {
       id: msg.id,
+      msg_id: msg.msgId,
       conversation_id: conversationId,
       type: "text",
       content: {
@@ -59,9 +65,14 @@ export function transformToNewMessage(msg: Message, conversationId: string): TMe
   // AI消息 - 根据内容类型进行转换
   if (msg.sender === "agent") {
     // 只有思考过程的消息
-    if (msg.thought && !msg.content && (!msg.toolCalls || msg.toolCalls.length === 0)) {
+    if (
+      msg.thought &&
+      !msg.content &&
+      (!msg.toolCalls || msg.toolCalls.length === 0)
+    ) {
       const thoughtMsg: TThoughtMessage = {
         id: msg.id,
+        msg_id: msg.msgId,
         conversation_id: conversationId,
         type: "thought",
         content: {
@@ -73,9 +84,15 @@ export function transformToNewMessage(msg: Message, conversationId: string): TMe
     }
 
     // 只有工具调用的消息
-    if (msg.toolCalls && msg.toolCalls.length > 0 && !msg.content && !msg.thought) {
+    if (
+      msg.toolCalls &&
+      msg.toolCalls.length > 0 &&
+      !msg.content &&
+      !msg.thought
+    ) {
       const toolCallMsg: TAcpToolCallMessage = {
         id: msg.id,
+        msg_id: msg.msgId,
         conversation_id: conversationId,
         type: "acp_tool_call",
         content: {
@@ -94,6 +111,7 @@ export function transformToNewMessage(msg: Message, conversationId: string): TMe
     // 默认文本消息
     const textMsg: TTextMessage = {
       id: msg.id,
+      msg_id: msg.msgId,
       conversation_id: conversationId,
       type: "text",
       content: {
@@ -108,6 +126,7 @@ export function transformToNewMessage(msg: Message, conversationId: string): TMe
   // 默认文本消息
   const defaultMsg: TTextMessage = {
     id: msg.id,
+    msg_id: msg.msgId,
     conversation_id: conversationId,
     type: "text",
     content: {
@@ -120,7 +139,10 @@ export function transformToNewMessage(msg: Message, conversationId: string): TMe
 }
 
 // 批量转换消息
-export function transformMessages(messages: Message[], conversationId: string): TMessage[] {
+export function transformMessages(
+  messages: Message[],
+  conversationId: string,
+): TMessage[] {
   return messages.map((msg) => transformToNewMessage(msg, conversationId));
 }
 
@@ -128,12 +150,15 @@ export function transformMessages(messages: Message[], conversationId: string): 
 export function transformIncomingMessage(
   incomingMsg: any,
   conversationId: string,
-  msgId?: string,
+  options?: { id?: string; msgId?: string },
 ): TMessage {
+  const id = options?.id || Date.now().toString();
+  const msgId = options?.msgId;
   switch (incomingMsg.type) {
     case "agent_text":
       return {
-        id: msgId || Date.now().toString(),
+        id,
+        msg_id: msgId,
         conversation_id: conversationId,
         type: "text",
         content: {
@@ -145,7 +170,8 @@ export function transformIncomingMessage(
 
     case "agent_thought":
       return {
-        id: msgId || Date.now().toString(),
+        id,
+        msg_id: msgId,
         conversation_id: conversationId,
         type: "thought",
         content: {
@@ -156,12 +182,14 @@ export function transformIncomingMessage(
 
     case "tool_call":
       return {
-        id: msgId || Date.now().toString(),
+        id,
+        msg_id: msgId,
         conversation_id: conversationId,
         type: "acp_tool_call",
         content: {
           toolCallId:
-            incomingMsg.toolCallId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+            incomingMsg.toolCallId ||
+            `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
           name: incomingMsg.name || "Unknown Tool",
           kind: incomingMsg.kind,
           status: incomingMsg.status || "in_progress",
@@ -173,7 +201,8 @@ export function transformIncomingMessage(
 
     case "tool_call_update":
       return {
-        id: msgId || Date.now().toString(),
+        id,
+        msg_id: msgId,
         conversation_id: conversationId,
         type: "acp_tool_call",
         content: {
@@ -189,7 +218,8 @@ export function transformIncomingMessage(
 
     case "permission_request":
       return {
-        id: msgId || Date.now().toString(),
+        id,
+        msg_id: msgId,
         conversation_id: conversationId,
         type: "acp_permission",
         content: {
@@ -207,7 +237,8 @@ export function transformIncomingMessage(
 
     case "system":
       return {
-        id: msgId || Date.now().toString(),
+        id,
+        msg_id: msgId,
         conversation_id: conversationId,
         type: "system",
         content: {
@@ -218,7 +249,8 @@ export function transformIncomingMessage(
 
     default:
       return {
-        id: msgId || Date.now().toString(),
+        id,
+        msg_id: msgId,
         conversation_id: conversationId,
         type: "text",
         content: {
@@ -228,4 +260,150 @@ export function transformIncomingMessage(
         position: "center",
       };
   }
+}
+
+const resolveSender = (msg: TMessage, fallback?: Message) => {
+  if (msg.type === "text" && msg.content?.sender) {
+    return msg.content.sender;
+  }
+  if (fallback?.sender) {
+    return fallback.sender;
+  }
+  if (msg.position === "right") return "user";
+  if (msg.position === "left") return "agent";
+  return "system";
+};
+
+const toToolCallStatus = (status?: string): ToolCall["status"] => {
+  if (
+    status === "pending" ||
+    status === "in_progress" ||
+    status === "completed" ||
+    status === "failed"
+  ) {
+    return status;
+  }
+  return "in_progress";
+};
+
+export function transformToLegacyMessages(
+  messages: TMessage[],
+  previousLegacy: Message[] = [],
+): Message[] {
+  const prevById = new Map(previousLegacy.map((msg) => [msg.id, msg]));
+
+  return messages.map((msg) => {
+    const prev = prevById.get(msg.id);
+
+    if (msg.type === "system") {
+      return {
+        id: msg.id,
+        msgId: msg.msg_id ?? prev?.msgId,
+        sender: "system",
+        content: msg.content.text || "",
+      };
+    }
+
+    if (msg.type === "acp_permission") {
+      return {
+        id: msg.id,
+        msgId: msg.msg_id ?? prev?.msgId,
+        sender: "system",
+        content:
+          msg.content.content || msg.content.tool || "Permission request",
+        permissionId: msg.content.id || prev?.permissionId,
+        options: msg.content.options || prev?.options,
+      };
+    }
+
+    if (msg.type === "thought") {
+      return {
+        id: msg.id,
+        msgId: msg.msg_id ?? prev?.msgId,
+        sender: "agent",
+        content: "",
+        thought: msg.content.thought || "",
+        tokenUsage: prev?.tokenUsage,
+      };
+    }
+
+    if (msg.type === "acp_tool_call") {
+      const fallbackTool = prev?.toolCalls?.[0];
+      const toolCallId =
+        msg.content.toolCallId || msg.content.update?.toolCallId;
+      const tool: ToolCall = {
+        id: toolCallId || fallbackTool?.id || msg.id,
+        name:
+          msg.content.name ||
+          msg.content.title ||
+          fallbackTool?.name ||
+          "Unknown Tool",
+        kind: msg.content.kind || fallbackTool?.kind,
+        status: toToolCallStatus(
+          msg.content.status || msg.content.update?.status,
+        ),
+        result: {
+          rawInput:
+            msg.content.rawInput ??
+            msg.content.update?.rawInput ??
+            fallbackTool?.result?.rawInput,
+          rawOutput:
+            msg.content.rawOutput ??
+            msg.content.update?.rawOutput ??
+            fallbackTool?.result?.rawOutput,
+        },
+      };
+      return {
+        id: msg.id,
+        msgId: msg.msg_id ?? prev?.msgId,
+        sender: "agent",
+        content: "",
+        toolCalls: [tool],
+        tokenUsage: prev?.tokenUsage,
+      };
+    }
+
+    if (msg.type === "tool_call") {
+      const fallbackTool = prev?.toolCalls?.[0];
+      const tool: ToolCall = {
+        id: msg.content.callId || fallbackTool?.id || msg.id,
+        name: msg.content.name || fallbackTool?.name || "Unknown Tool",
+        status: toToolCallStatus(msg.content.status || fallbackTool?.status),
+        result: {
+          rawInput:
+            msg.content.result?.rawInput ?? fallbackTool?.result?.rawInput,
+          rawOutput:
+            msg.content.result?.rawOutput ?? fallbackTool?.result?.rawOutput,
+        },
+      };
+      return {
+        id: msg.id,
+        msgId: msg.msg_id ?? prev?.msgId,
+        sender: "agent",
+        content: "",
+        toolCalls: [tool],
+        tokenUsage: prev?.tokenUsage,
+      };
+    }
+
+    if (msg.type === "text") {
+      const sender = resolveSender(msg, prev);
+      return {
+        id: msg.id,
+        msgId: msg.msg_id ?? prev?.msgId,
+        sender,
+        content: msg.content.text || "",
+        images: msg.content.images,
+        tokenUsage: prev?.tokenUsage,
+      };
+    }
+
+    return {
+      id: msg.id,
+      msgId: msg.msg_id ?? prev?.msgId,
+      sender: prev?.sender || "system",
+      content: (msg.content as any)?.text || "",
+      tokenUsage: prev?.tokenUsage,
+    };
+  });
 }
