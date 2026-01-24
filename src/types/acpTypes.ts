@@ -13,6 +13,7 @@ export interface AgentPlugin {
   defaultCommand: string;
   checkCommand?: string;
   defaultEnv?: Record<string, string>;
+  icon?: string; // 新增图标属性
 }
 
 export const ACP_BACKENDS_ALL: AgentPlugin[] = [
@@ -24,6 +25,7 @@ export const ACP_BACKENDS_ALL: AgentPlugin[] = [
     defaultCommand: "qwen --acp --allowed-tools all,run_shell_command --experimental-skills",
     checkCommand: "qwen",
     defaultEnv: {},
+    icon: "🧠",
   },
   {
     id: "claude",
@@ -33,6 +35,7 @@ export const ACP_BACKENDS_ALL: AgentPlugin[] = [
     defaultCommand: "npx @zed-industries/codex-acp",
     checkCommand: "npx",
     defaultEnv: {},
+    icon: "🤖",
   },
   {
     id: "codex",
@@ -42,6 +45,7 @@ export const ACP_BACKENDS_ALL: AgentPlugin[] = [
     defaultCommand: "npx @zed-industries/codex-acp",
     checkCommand: "npx",
     defaultEnv: {},
+    icon: "💻",
   },
   {
     id: "gemini",
@@ -51,6 +55,7 @@ export const ACP_BACKENDS_ALL: AgentPlugin[] = [
     defaultCommand: "gemini --acp --allowed-tools all,run_shell_command --experimental-skills",
     checkCommand: "gemini",
     defaultEnv: {},
+    icon: "🌟",
   },
 ];
 

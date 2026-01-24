@@ -107,6 +107,20 @@ export const registerEnvHandlers = (_mainWindow: BrowserWindow | null) => {
     return { success: true };
   });
 
+  ipcMain.handle("env:get-wallpaper", async () => {
+    return getSetting("wallpaper_path");
+  });
+
+  ipcMain.handle("env:set-wallpaper", async (_, wallpaperPath: string) => {
+    setSetting("wallpaper_path", wallpaperPath);
+    return { success: true };
+  });
+
+  ipcMain.handle("env:clear-wallpaper", async () => {
+    setSetting("wallpaper_path", "");
+    return { success: true };
+  });
+
   ipcMain.handle("env:run-install-command", async (_, command: string) => {
     console.log(`[Install] Running command: ${command}`);
 

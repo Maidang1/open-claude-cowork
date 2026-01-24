@@ -173,6 +173,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
                 className={`preset-button ${selectedPluginId === plugin.id ? "active" : ""}`}
               >
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  {plugin.icon && <span style={{ fontSize: "18px" }}>{plugin.icon}</span>}
                   <span>{plugin.name}</span>
                   {pluginInstallStatuses[plugin.id] === "installed" && (
                     <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)" }}>
@@ -180,9 +181,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
                     </span>
                   )}
                   {pluginInstallStatuses[plugin.id] === "not-installed" && (
-                    <span style={{ fontSize: "0.7rem", color: "var(--error)" }}>
-                      (未安装)
-                    </span>
+                    <span style={{ fontSize: "0.7rem", color: "var(--error)" }}>(未安装)</span>
                   )}
                 </div>
               </button>

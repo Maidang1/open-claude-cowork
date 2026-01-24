@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AgentPlugin } from "../agents/types";
 
-export type InstallStatus =
-  | "checking"
-  | "installed"
-  | "not-installed"
-  | "installing";
+export type InstallStatus = "checking" | "installed" | "not-installed" | "installing";
 
 interface AgentInstallState {
   installStatus: InstallStatus;

@@ -1,5 +1,6 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, protocol } from "electron";
 import { initializeAcpDetector } from "./acp/AcpDetector";
 import { initDB } from "./db/store";
 import {
@@ -15,6 +16,10 @@ export const isDev = !app.isPackaged;
 const loadUrl: string = isDev
   ? `http://localhost:${process.env._PORT}`
   : `file://${path.resolve(__dirname, "../render/index.html")}`;
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: "wallpaper", privileges: { secure: true, standard: true } },
+]);
 
 const initIpc = () => {
   ipcMain.on("ping", () => {
@@ -32,6 +37,53 @@ const initIpc = () => {
   registerDialogHandlers(mainWindow);
   registerDbHandlers();
   registerAgentHandlers(mainWindow);
+};
+
+const registerWallpaperProtocol = () => {
+  protocol.registerFileProtocol("wallpaper", (request, callback) => {
+    try {
+      const url = new URL(request.url);
+      const encodedPath = url.pathname.startsWith("/")
+        ? url.pathname.slice(1)
+        : url.pathname;
+      const decodedPath = decodeURIComponent(encodedPath);
+      if (!decodedPath) {
+        callback({ error: -6 });
+        return;
+      }
+      const normalizedPath = path.normalize(decodedPath);
+      if (path.isAbsolute(normalizedPath)) {
+        callback({ path: normalizedPath });
+        return;
+      }
+
+      const baseCandidates = [
+        app.getAppPath(),
+        path.resolve(app.getAppPath(), ".."),
+        path.resolve(app.getAppPath(), "..", "render"),
+        path.resolve(app.getAppPath(), "render"),
+        process.cwd(),
+      ];
+      const relativeCandidates = [
+        normalizedPath,
+        path.join("public", normalizedPath),
+      ];
+
+      for (const base of baseCandidates) {
+        for (const relPath of relativeCandidates) {
+          const candidate = path.resolve(base, relPath);
+          if (existsSync(candidate)) {
+            callback({ path: candidate });
+            return;
+          }
+        }
+      }
+
+      callback({ error: -6 });
+    } catch {
+      callback({ error: -324 });
+    }
+  });
 };
 
 const onCreateMainWindow = () => {
@@ -64,6 +116,7 @@ const onCreateMainWindow = () => {
 
 app.on("ready", async () => {
   initDB();
+  registerWallpaperProtocol();
   onCreateMainWindow();
   initIpc();
   await initializeAcpDetector();

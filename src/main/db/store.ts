@@ -44,9 +44,7 @@ export const initDB = () => {
 export const setSetting = (key: string, value: string) => {
   if (!db) return;
   try {
-    const stmt = db.prepare(
-      "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-    );
+    const stmt = db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
     stmt.run(key, value);
   } catch (e) {
     console.error(`[DB] Failed to set setting ${key}:`, e);
@@ -183,30 +181,21 @@ export const updateTask = (
 
   if (updates.title !== undefined) setField("title", updates.title);
   if (updates.workspace !== undefined) setField("workspace", updates.workspace);
-  if (updates.agentCommand !== undefined)
-    setField("agent_command", updates.agentCommand);
-  if (updates.agentEnv !== undefined)
-    setField("agent_env", JSON.stringify(updates.agentEnv ?? {}));
-  if (updates.messages !== undefined)
-    setField("messages", JSON.stringify(updates.messages ?? []));
-  if (updates.sessionId !== undefined)
-    setField("session_id", updates.sessionId);
+  if (updates.agentCommand !== undefined) setField("agent_command", updates.agentCommand);
+  if (updates.agentEnv !== undefined) setField("agent_env", JSON.stringify(updates.agentEnv ?? {}));
+  if (updates.messages !== undefined) setField("messages", JSON.stringify(updates.messages ?? []));
+  if (updates.sessionId !== undefined) setField("session_id", updates.sessionId);
   if (updates.modelId !== undefined) setField("model_id", updates.modelId);
   if (updates.tokenUsage !== undefined)
     setField("token_usage", JSON.stringify(updates.tokenUsage ?? null));
-  if (updates.createdAt !== undefined)
-    setField("created_at", updates.createdAt);
-  if (updates.updatedAt !== undefined)
-    setField("updated_at", updates.updatedAt);
-  if (updates.lastActiveAt !== undefined)
-    setField("last_active_at", updates.lastActiveAt);
+  if (updates.createdAt !== undefined) setField("created_at", updates.createdAt);
+  if (updates.updatedAt !== undefined) setField("updated_at", updates.updatedAt);
+  if (updates.lastActiveAt !== undefined) setField("last_active_at", updates.lastActiveAt);
 
   if (fields.length === 0) return;
 
   try {
-    const stmt = db.prepare(
-      `UPDATE tasks SET ${fields.join(", ")} WHERE id = ?`,
-    );
+    const stmt = db.prepare(`UPDATE tasks SET ${fields.join(", ")} WHERE id = ?`);
     stmt.run(...values, id);
   } catch (e) {
     console.error(`[DB] Failed to update task ${id}:`, e);

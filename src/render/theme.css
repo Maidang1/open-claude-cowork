@@ -1,0 +1,238 @@
+/* 主题系统 */
+
+/* 壁纸样式 */
+.bg-wallpaper {
+    position: relative;
+}
+
+.bg-wallpaper::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--wallpaper);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: -1;
+    opacity: 0.3;
+    transition: opacity var(--transition-normal);
+}
+
+.bg-wallpaper,
+.bg-wallpaper body,
+.bg-wallpaper #root {
+    background-color: transparent;
+}
+
+[data-theme="dark"] .bg-wallpaper::before {
+    opacity: 0.2;
+}
+
+/* 基础变量 */
+:root {
+    /* 背景颜色 */
+    --bg-1: #ffffff;
+    --bg-2: #f5f5f5;
+    --bg-3: #e5e5e5;
+    --bg-app: #ffffff;
+    --bg-surface: #ffffff;
+    --bg-input: #ffffff;
+
+    /* 主要颜色 */
+    --primary-3: 200;
+    --primary-5: #007aff;
+    --primary-hover: #0051d5;
+    --primary-light: rgba(0, 122, 255, 0.1);
+
+    /* 文字颜色 */
+    --text-primary: #000000;
+    --text-secondary: #6e6e73;
+    --text-tertiary: #a0a0a0;
+
+    /* 边框颜色 */
+    --border-color: #e5e5e5;
+    --color: #e5e5e5;
+
+    /* 阴影 */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+
+    /* 间距 */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
+
+    /* 圆角 */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+
+    /* 过渡 */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.3s ease;
+    --transition-slow: 0.5s ease;
+}
+
+/* 深色主题 */
+[data-theme="dark"] {
+    /* 背景颜色 */
+    --bg-1: #000000;
+    --bg-2: #1a1a1a;
+    --bg-3: #2c2c2c;
+    --bg-app: #000000;
+    --bg-surface: #1a1a1a;
+    --bg-input: #2c2c2c;
+
+    /* 文字颜色 */
+    --text-primary: #ffffff;
+    --text-secondary: #a1a1aa;
+    --text-tertiary: #71717a;
+
+    /* 边框颜色 */
+    --border-color: #3f3f46;
+    --color: #3f3f46;
+
+    /* 阴影 */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    :root {
+        --spacing-md: 12px;
+        --spacing-lg: 16px;
+        --spacing-xl: 24px;
+    }
+}
+
+@media (max-width: 480px) {
+    :root {
+        --spacing-sm: 6px;
+        --spacing-md: 10px;
+        --spacing-lg: 14px;
+        --spacing-xl: 18px;
+    }
+}
+
+/* 主题切换动画 */
+* {
+    transition:
+        background-color var(--transition-normal),
+        color var(--transition-normal),
+        border-color var(--transition-normal);
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-2);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--text-tertiary);
+    border-radius: var(--radius-sm);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* 深色主题滚动条 */
+[data-theme="dark"] ::-webkit-scrollbar-track {
+    background: var(--bg-2);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: var(--text-tertiary);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+    background: var(--text-secondary);
+}
+
+/* 常用工具类 */
+.bg-app {
+    background-color: var(--bg-app);
+}
+
+/* 有壁纸时透明化背景 */
+.bg-wallpaper .bg-app {
+    background-color: transparent;
+}
+
+.bg-surface {
+    background-color: var(--bg-surface);
+}
+
+.bg-input {
+    background-color: var(--bg-input);
+}
+
+.text-primary {
+    color: var(--text-primary);
+}
+
+.text-secondary {
+    color: var(--text-secondary);
+}
+
+.text-tertiary {
+    color: var(--text-tertiary);
+}
+
+.border-color {
+    border-color: var(--border-color);
+}
+
+.shadow-sm {
+    box-shadow: var(--shadow-sm);
+}
+
+.shadow-md {
+    box-shadow: var(--shadow-md);
+}
+
+.shadow-lg {
+    box-shadow: var(--shadow-lg);
+}
+
+.rounded-sm {
+    border-radius: var(--radius-sm);
+}
+
+.rounded-md {
+    border-radius: var(--radius-md);
+}
+
+.rounded-lg {
+    border-radius: var(--radius-lg);
+}
+
+.rounded-xl {
+    border-radius: var(--radius-xl);
+}
+
+.transition-fast {
+    transition: all var(--transition-fast);
+}
+
+.transition-normal {
+    transition: all var(--transition-normal);
+}
+
+.transition-slow {
+    transition: all var(--transition-slow);
+}

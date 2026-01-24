@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react";
-import type { Task } from "../types";
 import { useState } from "react";
+import type { Task } from "../types";
 
 interface SidebarProps {
   tasks: Task[];
@@ -45,11 +45,7 @@ export const Sidebar = ({
     setEditingTaskId(null);
   };
 
-  const handleKeyDown = (
-    e: React.KeyboardEvent,
-    taskId: string,
-    originalTitle: string,
-  ) => {
+  const handleKeyDown = (e: React.KeyboardEvent, taskId: string, originalTitle: string) => {
     if (e.key === "Enter") {
       handleSaveRename(taskId);
     } else if (e.key === "Escape") {
@@ -71,9 +67,7 @@ export const Sidebar = ({
 
       <div className="flex-1 overflow-y-auto flex flex-col gap-1 -mr-2 pr-2">
         {tasks.length === 0 ? (
-          <div className="p-5 text-center text-text-tertiary text-sm italic">
-            No tasks yet.
-          </div>
+          <div className="p-5 text-center text-text-tertiary text-sm italic">No tasks yet.</div>
         ) : (
           tasks.map((task) => (
             <div

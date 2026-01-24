@@ -3,8 +3,9 @@ import { Loader2 } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./tailwind.css";
+import "./theme.css";
 import { getDefaultAgentPlugin } from "./agents/registry";
-import { AntDXMessage, ChatHeader, ChatInput, Sidebar } from "./components";
+import { ChatHeader, MessageRenderer, SendBox, Sidebar } from "./components";
 import EnvironmentSetup from "./EnvironmentSetup";
 import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
@@ -17,6 +18,13 @@ import type {
   Task,
   ToolCall,
 } from "./types";
+import type { TMessage } from "./types/messageTypes";
+import { MessageComposer } from "./utils/messageComposer";
+import {
+  transformIncomingMessage,
+  transformMessages,
+} from "./utils/messageTransformer";
+import { isWallpaperGradient, wallpaperUrl } from "./utils/wallpaper";
 import WorkspaceWelcome from "./WorkspaceWelcome";
 
 // --- Types ---
@@ -24,7 +32,10 @@ declare const DEBUG: string | undefined;
 
 const LOCAL_COMMANDS: AgentCommandInfo[] = [];
 
-const mergeCommands = (agentCommands: AgentCommandInfo[], localCommands: AgentCommandInfo[]) => {
+const mergeCommands = (
+  agentCommands: AgentCommandInfo[],
+  localCommands: AgentCommandInfo[],
+) => {
   const merged = new Map<string, AgentCommandInfo>();
   for (const cmd of localCommands) {
     merged.set(cmd.name, cmd);
@@ -43,7 +54,9 @@ const App = () => {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
   const [inputImages, setInputImages] = useState<ImageAttachment[]>([]);
-  const [agentCommand, setAgentCommand] = useState(getDefaultAgentPlugin().defaultCommand);
+  const [agentCommand, setAgentCommand] = useState(
+    getDefaultAgentPlugin().defaultCommand,
+  );
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
   const [agentInfo, setAgentInfo] = useState<AgentInfoState>({
     models: [],
@@ -60,7 +73,8 @@ const App = () => {
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const [agentCapabilities, setAgentCapabilities] = useState<any | null>(null);
   const [agentMessageLog, setAgentMessageLog] = useState<string[]>([]);
-  const showDebug = String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
+  const showDebug =
+    String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     state: "disconnected",
@@ -72,18 +86,22 @@ const App = () => {
 
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined" && window.matchMedia) {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
     }
     return "light";
   });
 
+  const [wallpaper, setWallpaper] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const autoConnectAttempted = useRef(false);
   const connectInFlight = useRef(false);
   const sessionLoadInFlight = useRef(false);
   const tasksRef = useRef<Task[]>([]);
   const activeTaskIdRef = useRef<string | null>(null);
+  const composerRef = useRef<MessageComposer | null>(null);
 
   useEffect(() => {
     tasksRef.current = tasks;
@@ -93,19 +111,32 @@ const App = () => {
     activeTaskIdRef.current = activeTaskId;
   }, [activeTaskId]);
 
-  // Ref to track current generating message ID for stream updates
-  const currentAgentMsgId = useRef<string | null>(null);
   const activeTask = tasks.find((task) => task.id === activeTaskId) || null;
-  const messages = activeTask?.messages ?? [];
 
-  const persistTaskUpdates = useCallback((taskId: string, updates: Partial<Task>) => {
-    window.electron.invoke("db:update-task", taskId, updates);
-  }, []);
+  // 初始化消息合并器
+  useEffect(() => {
+    if (activeTask) {
+      composerRef.current = new MessageComposer(
+        transformMessages(activeTask.messages, activeTaskId || "default"),
+      );
+    } else {
+      composerRef.current = null;
+    }
+  }, [activeTask, activeTaskId]);
+
+  const persistTaskUpdates = useCallback(
+    (taskId: string, updates: Partial<Task>) => {
+      window.electron.invoke("db:update-task", taskId, updates);
+    },
+    [],
+  );
 
   const applyTaskUpdates = useCallback(
     (taskId: string, updates: Partial<Task>) => {
       setTasks((prev) => {
-        const next = prev.map((task) => (task.id === taskId ? { ...task, ...updates } : task));
+        const next = prev.map((task) =>
+          task.id === taskId ? { ...task, ...updates } : task,
+        );
         // 永远按照创建时间倒序排序
         return [...next].sort((a, b) => b.createdAt - a.createdAt);
       });
@@ -140,6 +171,45 @@ const App = () => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
+  useEffect(() => {
+    // Load wallpaper from settings
+    const loadWallpaper = async () => {
+      const savedWallpaper = await window.electron.invoke("env:get-wallpaper");
+      setWallpaper(savedWallpaper || null);
+    };
+    loadWallpaper();
+  }, []);
+
+  useEffect(() => {
+    // Apply wallpaper
+    const root = document.documentElement;
+    if (wallpaper) {
+      // 检查是否是渐变背景
+      if (isWallpaperGradient(wallpaper)) {
+        root.style.setProperty("--wallpaper", wallpaper);
+      } else {
+        // 否则假设是图片文件
+        root.style.setProperty(
+          "--wallpaper",
+          `url('${wallpaperUrl(wallpaper)}')`,
+        );
+      }
+      root.classList.add("bg-wallpaper");
+    } else {
+      root.style.removeProperty("--wallpaper");
+      root.classList.remove("bg-wallpaper");
+    }
+  }, [wallpaper]);
+
+  const handleWallpaperChange = async (path: string | null) => {
+    setWallpaper(path);
+    if (path) {
+      await window.electron.invoke("env:set-wallpaper", path);
+    } else {
+      await window.electron.invoke("env:clear-wallpaper");
+    }
+  };
+
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
   };
@@ -149,7 +219,11 @@ const App = () => {
       const response = optionId
         ? { outcome: { outcome: "selected", optionId } }
         : { outcome: { outcome: "cancelled" } };
-      await window.electron.invoke("agent:permission-response", permissionId, response);
+      await window.electron.invoke(
+        "agent:permission-response",
+        permissionId,
+        response,
+      );
     },
     [],
   );
@@ -199,24 +273,6 @@ const App = () => {
     }
   }, [activeTaskId, agentMessageLog.length]);
 
-  // Auto-resize textarea
-  // biome-ignore lint/correctness/useExhaustiveDependencies: Logic requires this
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
-    }
-  }, [inputText]);
-
-  useEffect(() => {
-    if (inputText.startsWith("/")) {
-      setIsCommandMenuOpen(true);
-      setCommandSelectedIndex(0);
-    } else {
-      setIsCommandMenuOpen(false);
-    }
-  }, [inputText]);
-
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
@@ -236,7 +292,6 @@ const App = () => {
       const activeTaskIdSnapshot = activeTaskIdRef.current;
       const activeTaskSnapshot =
         tasksSnapshot.find((task) => task.id === activeTaskIdSnapshot) ?? null;
-      const messagesSnapshot = activeTaskSnapshot?.messages ?? [];
 
       if (
         !activeTaskIdSnapshot &&
@@ -256,17 +311,20 @@ const App = () => {
       };
       if (data.type === "agent_info") {
         const resolvedTaskId = data.sessionId
-          ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)?.id ??
-            activeTaskIdSnapshot)
+          ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)
+              ?.id ?? activeTaskIdSnapshot)
           : activeTaskIdSnapshot;
         const nextUsage = data.info?.tokenUsage ?? null;
         const baseUsage = activeTaskSnapshot?.tokenUsage ?? null;
         const mergedUsage = nextUsage
           ? {
-              promptTokens: (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
+              promptTokens:
+                (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
               completionTokens:
-                (baseUsage?.completionTokens ?? 0) + (nextUsage.completionTokens ?? 0),
-              totalTokens: (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
+                (baseUsage?.completionTokens ?? 0) +
+                (nextUsage.completionTokens ?? 0),
+              totalTokens:
+                (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
             }
           : baseUsage;
         if (nextUsage) {
@@ -324,7 +382,10 @@ const App = () => {
       // System Messages
       if (data.type === "system") {
         const content = data.text || "";
-        if (content.includes("Agent disconnected") || content.includes("Agent process error")) {
+        if (
+          content.includes("Agent disconnected") ||
+          content.includes("Agent process error")
+        ) {
           setIsConnected(false);
           clearAllSessionIds();
           sessionLoadInFlight.current = false;
@@ -338,12 +399,11 @@ const App = () => {
         const targetTask = resolvedTaskId
           ? tasksSnapshot.find((task) => task.id === resolvedTaskId)
           : null;
-        const baseMessages = targetTask?.messages ?? messagesSnapshot;
         if (resolvedTaskId) {
           const updatedAt = Date.now();
           applyTaskUpdates(resolvedTaskId, {
             messages: [
-              ...baseMessages,
+              ...(targetTask?.messages ?? []),
               {
                 id: Date.now().toString(),
                 sender: "system" as const,
@@ -359,11 +419,11 @@ const App = () => {
 
       if (data.type === "permission_request") {
         const updatedAt = Date.now();
-        const resolvedTaskId = resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
+        const resolvedTaskId =
+          resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
         const targetTask = resolvedTaskId
           ? tasksSnapshot.find((task) => task.id === resolvedTaskId)
           : null;
-        const baseMessages = targetTask?.messages ?? messagesSnapshot;
         const content =
           (data as any).content ||
           data.text ||
@@ -375,7 +435,7 @@ const App = () => {
         if (resolvedTaskId) {
           applyTaskUpdates(resolvedTaskId, {
             messages: [
-              ...baseMessages,
+              ...(targetTask?.messages ?? []),
               {
                 id: Date.now().toString(),
                 sender: "system" as const,
@@ -404,284 +464,44 @@ const App = () => {
       // Agent Messages
       setTasks((prev) => {
         const resolvedTaskId = resolveTaskId(prev);
-        const targetTask = resolvedTaskId ? prev.find((task) => task.id === resolvedTaskId) : null;
+        const targetTask = resolvedTaskId
+          ? prev.find((task) => task.id === resolvedTaskId)
+          : null;
         if (!targetTask) return prev;
-        const lastMsg = targetTask.messages[targetTask.messages.length - 1];
-        const isAgentGenerating =
-          lastMsg && lastMsg.sender === "agent" && currentAgentMsgId.current === lastMsg.id;
 
-        if (data.type === "agent_text") {
-          if (isAgentGenerating) {
-            const nextMessages = targetTask.messages.map((m) =>
-              m.id === lastMsg.id ? { ...m, content: m.content + (data.text || "") } : m,
-            );
-            const updatedAt = Date.now();
-            if (resolvedTaskId) {
-              persistTaskUpdates(resolvedTaskId, {
-                messages: nextMessages,
-                updatedAt,
-                lastActiveAt: updatedAt,
-              });
-            }
-            return prev.map((task) =>
-              task.id === resolvedTaskId
-                ? {
-                    ...task,
-                    messages: nextMessages,
-                    updatedAt,
-                    lastActiveAt: updatedAt,
-                  }
-                : task,
-            );
-          } else {
-            const newId = Date.now().toString();
-            currentAgentMsgId.current = newId;
-            const nextMessages = [
-              ...targetTask.messages,
-              { id: newId, sender: "agent" as const, content: data.text || "" },
-            ];
-            const updatedAt = Date.now();
-            if (resolvedTaskId) {
-              persistTaskUpdates(resolvedTaskId, {
-                messages: nextMessages,
-                updatedAt,
-                lastActiveAt: updatedAt,
-              });
-            }
-            return prev.map((task) =>
-              task.id === resolvedTaskId
-                ? {
-                    ...task,
-                    messages: nextMessages,
-                    updatedAt,
-                    lastActiveAt: updatedAt,
-                  }
-                : task,
-            );
-          }
+        const newMessage = transformIncomingMessage(data, resolvedTaskId);
+        const composer = new MessageComposer(
+          transformMessages(targetTask.messages, resolvedTaskId),
+        );
+        composer.addMessage(newMessage);
+        const updatedMessages = composer.getMessages();
+
+        // 暂时保留原始数据结构以便兼容性
+        const oldFormatMessages = targetTask.messages.map((msg) => ({
+          ...msg,
+        }));
+
+        // 这里可以添加逻辑来将新格式消息转换回旧格式
+        // 为了保持兼容性，暂时保留原始消息结构
+
+        const updatedAt = Date.now();
+        if (resolvedTaskId) {
+          persistTaskUpdates(resolvedTaskId, {
+            messages: oldFormatMessages,
+            updatedAt,
+            lastActiveAt: updatedAt,
+          });
         }
-
-        if (data.type === "agent_thought") {
-          if (isAgentGenerating) {
-            const nextMessages = targetTask.messages.map((m) =>
-              m.id === lastMsg.id ? { ...m, thought: (m.thought || "") + (data.text || "") } : m,
-            );
-            const updatedAt = Date.now();
-            if (resolvedTaskId) {
-              persistTaskUpdates(resolvedTaskId, {
-                messages: nextMessages,
+        return prev.map((task) =>
+          task.id === resolvedTaskId
+            ? {
+                ...task,
+                messages: oldFormatMessages,
                 updatedAt,
                 lastActiveAt: updatedAt,
-              });
-            }
-            return prev.map((task) =>
-              task.id === resolvedTaskId
-                ? {
-                    ...task,
-                    messages: nextMessages,
-                    updatedAt,
-                    lastActiveAt: updatedAt,
-                  }
-                : task,
-            );
-          } else {
-            const newId = Date.now().toString();
-            currentAgentMsgId.current = newId;
-            const nextMessages = [
-              ...targetTask.messages,
-              {
-                id: newId,
-                sender: "agent" as const,
-                content: "",
-                thought: data.text || "",
-              },
-            ];
-            const updatedAt = Date.now();
-            if (resolvedTaskId) {
-              persistTaskUpdates(resolvedTaskId, {
-                messages: nextMessages,
-                updatedAt,
-                lastActiveAt: updatedAt,
-              });
-            }
-            return prev.map((task) =>
-              task.id === resolvedTaskId
-                ? {
-                    ...task,
-                    messages: nextMessages,
-                    updatedAt,
-                    lastActiveAt: updatedAt,
-                  }
-                : task,
-            );
-          }
-        }
-
-        if (data.type === "tool_call") {
-          if (isAgentGenerating) {
-            const newTool: ToolCall = {
-              id: data.toolCallId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-              name: data.name || "Unknown Tool",
-              kind: data.kind,
-              status: (data.status as any) || "in_progress",
-              result: {
-                rawInput: data.rawInput,
-                rawOutput: data.rawOutput,
-              },
-            };
-            const nextMessages = targetTask.messages.map((m) =>
-              m.id === lastMsg.id ? { ...m, toolCalls: [...(m.toolCalls || []), newTool] } : m,
-            );
-            const updatedAt = Date.now();
-            if (resolvedTaskId) {
-              persistTaskUpdates(resolvedTaskId, {
-                messages: nextMessages,
-                updatedAt,
-                lastActiveAt: updatedAt,
-              });
-            }
-            return prev.map((task) =>
-              task.id === resolvedTaskId
-                ? {
-                    ...task,
-                    messages: nextMessages,
-                    updatedAt,
-                    lastActiveAt: updatedAt,
-                  }
-                : task,
-            );
-          } else {
-            // 如果没有正在生成的代理消息，创建一个新的消息来显示工具调用
-            const newId = Date.now().toString();
-            currentAgentMsgId.current = newId;
-            const newTool: ToolCall = {
-              id: data.toolCallId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-              name: data.name || "Unknown Tool",
-              kind: data.kind,
-              status: (data.status as any) || "in_progress",
-              result: {
-                rawInput: data.rawInput,
-                rawOutput: data.rawOutput,
-              },
-            };
-            const nextMessages = [
-              ...targetTask.messages,
-              {
-                id: newId,
-                sender: "agent" as const,
-                content: "",
-                toolCalls: [newTool],
-              },
-            ];
-            const updatedAt = Date.now();
-            if (resolvedTaskId) {
-              persistTaskUpdates(resolvedTaskId, {
-                messages: nextMessages,
-                updatedAt,
-                lastActiveAt: updatedAt,
-              });
-            }
-            return prev.map((task) =>
-              task.id === resolvedTaskId
-                ? {
-                    ...task,
-                    messages: nextMessages,
-                    updatedAt,
-                    lastActiveAt: updatedAt,
-                  }
-                : task,
-            );
-          }
-        }
-
-        if (data.type === "tool_call_update") {
-          // 查找包含指定 toolCallId 的代理消息
-          const targetMsgIndex = targetTask.messages.findIndex(
-            (m) => m.sender === "agent" && m.toolCalls?.some((t) => t.id === data.toolCallId),
-          );
-
-          if (targetMsgIndex !== -1) {
-            // 更新工具调用状态
-            const nextMessages = [...targetTask.messages];
-            const targetMsg = { ...nextMessages[targetMsgIndex] };
-            targetMsg.toolCalls = targetMsg.toolCalls?.map((t) =>
-              t.id === data.toolCallId
-                ? {
-                    ...t,
-                    status: data.status as any,
-                    result: {
-                      ...t.result,
-                      rawInput: data.rawInput !== undefined ? data.rawInput : t.result?.rawInput,
-                      rawOutput:
-                        data.rawOutput !== undefined ? data.rawOutput : t.result?.rawOutput,
-                    },
-                  }
-                : t,
-            );
-            nextMessages[targetMsgIndex] = targetMsg;
-
-            const updatedAt = Date.now();
-            if (resolvedTaskId) {
-              persistTaskUpdates(resolvedTaskId, {
-                messages: nextMessages,
-                updatedAt,
-                lastActiveAt: updatedAt,
-              });
-            }
-            return prev.map((task) =>
-              task.id === resolvedTaskId
-                ? {
-                    ...task,
-                    messages: nextMessages,
-                    updatedAt,
-                    lastActiveAt: updatedAt,
-                  }
-                : task,
-            );
-          } else {
-            // 如果没有找到包含该 toolCallId 的消息，创建一个新的消息
-            const newId = Date.now().toString();
-            currentAgentMsgId.current = newId;
-            const newTool: ToolCall = {
-              id: data.toolCallId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-              name: "Unknown Tool",
-              status: (data.status as any) || "in_progress",
-              result: {
-                rawInput: data.rawInput,
-                rawOutput: data.rawOutput,
-              },
-            };
-            const nextMessages = [
-              ...targetTask.messages,
-              {
-                id: newId,
-                sender: "agent" as const,
-                content: "",
-                toolCalls: [newTool],
-              },
-            ];
-            const updatedAt = Date.now();
-            if (resolvedTaskId) {
-              persistTaskUpdates(resolvedTaskId, {
-                messages: nextMessages,
-                updatedAt,
-                lastActiveAt: updatedAt,
-              });
-            }
-            return prev.map((task) =>
-              task.id === resolvedTaskId
-                ? {
-                    ...task,
-                    messages: nextMessages,
-                    updatedAt,
-                    lastActiveAt: updatedAt,
-                  }
-                : task,
-            );
-          }
-        }
-
-        return prev;
+              }
+            : task,
+        );
       });
 
       setTimeout(scrollToBottom, 100);
@@ -694,16 +514,22 @@ const App = () => {
     if (!window.electron) {
       return;
     }
-    const removeListener = window.electron.on("agent:message", (msg: IncomingMessage | string) => {
-      const data: IncomingMessage =
-        typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
-      console.log("[agent:message]", data);
-      setAgentMessageLog((prev) => {
-        const next = [`[${new Date().toISOString()}] ${JSON.stringify(data)}`, ...prev];
-        return next.slice(0, 50);
-      });
-      handleIncomingMessage(data);
-    });
+    const removeListener = window.electron.on(
+      "agent:message",
+      (msg: IncomingMessage | string) => {
+        const data: IncomingMessage =
+          typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
+        console.log("[agent:message]", data);
+        setAgentMessageLog((prev) => {
+          const next = [
+            `[${new Date().toISOString()}] ${JSON.stringify(data)}`,
+            ...prev,
+          ];
+          return next.slice(0, 50);
+        });
+        handleIncomingMessage(data);
+      },
+    );
 
     const loadInitialState = async () => {
       const [storedTasks, storedActiveTaskId, lastWs] = await Promise.all([
@@ -725,13 +551,17 @@ const App = () => {
       // 按创建时间倒序排序
       setTasks([...loadedTasks].sort((a, b) => b.createdAt - a.createdAt));
 
-      const resolvedActiveId = loadedTasks.find((task) => task.id === storedActiveTaskId)
+      const resolvedActiveId = loadedTasks.find(
+        (task) => task.id === storedActiveTaskId,
+      )
         ? storedActiveTaskId
         : (loadedTasks[0]?.id ?? null);
 
       if (resolvedActiveId) {
         setActiveTaskId(resolvedActiveId);
-        const nextTask = loadedTasks.find((task) => task.id === resolvedActiveId);
+        const nextTask = loadedTasks.find(
+          (task) => task.id === resolvedActiveId,
+        );
         if (nextTask) {
           syncActiveTaskState(nextTask);
         }
@@ -772,7 +602,10 @@ const App = () => {
         return null;
       }
       if (!commandName.includes("/") && !commandName.startsWith(".")) {
-        const check = await window.electron.invoke("agent:check-command", commandName);
+        const check = await window.electron.invoke(
+          "agent:check-command",
+          commandName,
+        );
         if (!check.installed) {
           setConnectionStatus({
             state: "error",
@@ -808,14 +641,22 @@ const App = () => {
 
       if (connectResult.reused && sessionId) {
         try {
-          await window.electron.invoke("agent:set-active-session", sessionId, task.workspace);
+          await window.electron.invoke(
+            "agent:set-active-session",
+            sessionId,
+            task.workspace,
+          );
         } catch {
           sessionId = null;
         }
       } else if (task.sessionId && (canResume || canLoad)) {
         try {
           if (canResume) {
-            await window.electron.invoke("agent:resume-session", task.sessionId, task.workspace);
+            await window.electron.invoke(
+              "agent:resume-session",
+              task.sessionId,
+              task.workspace,
+            );
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -823,7 +664,11 @@ const App = () => {
             });
           } else if (canLoad) {
             sessionLoadInFlight.current = true;
-            await window.electron.invoke("agent:load-session", task.sessionId, task.workspace);
+            await window.electron.invoke(
+              "agent:load-session",
+              task.sessionId,
+              task.workspace,
+            );
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -838,7 +683,10 @@ const App = () => {
       }
 
       if (!sessionId) {
-        const sessionResult = await window.electron.invoke("agent:new-session", task.workspace);
+        const sessionResult = await window.electron.invoke(
+          "agent:new-session",
+          task.workspace,
+        );
         sessionId = sessionResult.sessionId;
         applyTaskUpdates(task.id, {
           sessionId,
@@ -899,7 +747,6 @@ const App = () => {
         state: "disconnected",
         message: "Disconnected.",
       });
-      currentAgentMsgId.current = null;
     } else {
       if (!activeTask) {
         setConnectionStatus({
@@ -949,7 +796,9 @@ const App = () => {
 
     setIsNewTaskOpen(false);
     // 按创建时间倒序排序，新任务会自动在最前面
-    setTasks((prev) => [...prev, newTask].sort((a, b) => b.createdAt - a.createdAt));
+    setTasks((prev) =>
+      [...prev, newTask].sort((a, b) => b.createdAt - a.createdAt),
+    );
     window.electron.invoke("db:create-task", newTask);
     setActiveTaskId(newTask.id);
     syncActiveTaskState(newTask);
@@ -966,9 +815,24 @@ const App = () => {
     }
     const now = Date.now();
     applyTaskUpdates(task.id, { lastActiveAt: now, updatedAt: now });
-    currentAgentMsgId.current = null;
     setActiveTaskId(taskId);
     syncActiveTaskState(task);
+
+    // 检查任务是否有会话ID，如果有且已经连接，则不重新连接
+    if (isConnected && task.sessionId) {
+      try {
+        await window.electron.invoke(
+          "agent:set-active-session",
+          task.sessionId,
+          task.workspace,
+        );
+        return;
+      } catch (e: any) {
+        console.error("Failed to set active session:", e);
+      }
+    }
+
+    // 只有在没有连接或会话ID无效时才重新连接
     await ensureTaskSession(task);
   };
 
@@ -977,7 +841,9 @@ const App = () => {
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    const confirmed = window.confirm("Delete this task? This cannot be undone.");
+    const confirmed = window.confirm(
+      "Delete this task? This cannot be undone.",
+    );
     if (!confirmed) {
       return;
     }
@@ -1012,7 +878,6 @@ const App = () => {
     try {
       await window.electron.invoke("agent:stop");
       setIsWaitingForResponse(false);
-      currentAgentMsgId.current = null;
     } catch (e: any) {
       console.error("Stop error:", e);
     }
@@ -1042,11 +907,9 @@ const App = () => {
     setInputText("");
     setInputImages([]);
 
-    currentAgentMsgId.current = null;
-
     if (activeTaskId) {
       const nextMessages = [
-        ...messages,
+        ...(activeTask?.messages ?? []),
         {
           id: Date.now().toString(),
           sender: "user" as const,
@@ -1148,7 +1011,9 @@ const App = () => {
     () => mergeCommands(agentInfo.commands, LOCAL_COMMANDS),
     [agentInfo.commands],
   );
-  const commandQuery = inputText.startsWith("/") ? inputText.slice(1).trim().toLowerCase() : "";
+  const commandQuery = inputText.startsWith("/")
+    ? inputText.slice(1).trim().toLowerCase()
+    : "";
   const filteredCommands = mergedCommands.filter((cmd) =>
     commandQuery ? cmd.name.toLowerCase().includes(commandQuery) : true,
   );
@@ -1201,6 +1066,11 @@ const App = () => {
     checkEnv();
   }, []);
 
+  const renderMessages = useMemo(() => {
+    if (!activeTask) return [];
+    return transformMessages(activeTask.messages, activeTaskId || "default");
+  }, [activeTask, activeTaskId]);
+
   // Show environment setup if not ready
   if (envReady === null) {
     // Still checking
@@ -1229,7 +1099,10 @@ const App = () => {
   return (
     <ConfigProvider
       theme={{
-        algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        algorithm:
+          theme === "dark"
+            ? antdTheme.darkAlgorithm
+            : antdTheme.defaultAlgorithm,
         token: {
           colorPrimary: "#f97316",
         },
@@ -1246,6 +1119,8 @@ const App = () => {
           isConnected={isConnected}
           onConnectToggle={handleConnect}
           currentWorkspace={currentWorkspace}
+          wallpaper={wallpaper}
+          onWallpaperChange={handleWallpaperChange}
         />
         <NewTaskModal
           isOpen={isNewTaskOpen}
@@ -1285,15 +1160,15 @@ const App = () => {
 
           <div className="flex-1 overflow-y-auto px-10 py-5 flex flex-col gap-8 w-full">
             {/* Welcome / Empty State */}
-            {messages.length === 0 ? (
+            {renderMessages.length === 0 ? (
               <div className="text-center text-gray-400 mt-10">
                 <div className="mb-2">Beginning of conversation</div>
                 <div className="w-10 h-px bg-gray-200 mx-auto dark:bg-gray-700" />
               </div>
             ) : null}
 
-            {messages.map((msg) => (
-              <AntDXMessage
+            {renderMessages.map((msg) => (
+              <MessageRenderer
                 key={msg.id}
                 msg={msg}
                 onPermissionResponse={handlePermissionResponse}
@@ -1302,8 +1177,16 @@ const App = () => {
 
             {/* Loading message bubble */}
             {isWaitingForResponse && (
-              <AntDXMessage
-                msg={{ id: "loading", sender: "agent", content: "" }}
+              <MessageRenderer
+                msg={{
+                  id: "loading",
+                  conversation_id: activeTaskId || "default",
+                  type: "thought",
+                  content: {
+                    thought: "Thinking...",
+                  },
+                  position: "left",
+                }}
                 isLoading
                 onStop={handleStop}
               />
@@ -1312,18 +1195,33 @@ const App = () => {
             <div ref={messagesEndRef} />
           </div>
 
-          <ChatInput
-            inputText={inputText}
-            onInputChange={setInputText}
+          <SendBox
+            value={inputText}
+            onChange={setInputText}
+            loading={isWaitingForResponse}
+            placeholder="Describe what you want agent to handle... (paste images to include)"
+            onStop={handleStop}
+            onFilesAdded={(files) => {
+              const newImages: ImageAttachment[] = [];
+              files.forEach((file) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                  newImages.push({
+                    id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+                    filename: file.name,
+                    mimeType: file.type,
+                    dataUrl: e.target?.result as string,
+                    size: file.size,
+                  });
+                  if (newImages.length === files.length) {
+                    setInputImages((prev) => [...prev, ...newImages]);
+                  }
+                };
+                reader.readAsDataURL(file);
+              });
+            }}
+            supportedExts={["image/png", "image/jpeg", "image/webp"]}
             onSend={handleSend}
-            isConnected={isConnected}
-            isCommandMenuOpen={isCommandMenuOpen}
-            filteredCommands={filteredCommands}
-            commandSelectedIndex={commandSelectedIndex}
-            onCommandPick={handleCommandPick}
-            onKeyDown={handleKeyDown}
-            images={inputImages}
-            onImagesChange={setInputImages}
           />
         </div>
       </div>

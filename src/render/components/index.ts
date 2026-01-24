@@ -1,5 +1,13 @@
+export { AionModal } from "./AionModal";
 export { AntDXMessage } from "./AntDXMessage";
 export { ChatHeader } from "./ChatHeader";
 export { ChatInput } from "./ChatInput";
+export { Diff2Html } from "./Diff2Html";
+export { MessageAcpPermission } from "./MessageAcpPermission";
+export { MessageAcpToolCall } from "./MessageAcpToolCall";
 export { MessageBubble } from "./MessageBubble";
+export { MessageRenderer } from "./MessageRenderer";
+export { MessageText } from "./MessageText";
+export { SendBox } from "./SendBox";
 export { Sidebar } from "./Sidebar";
+export { ThoughtDisplay } from "./ThoughtDisplay";
