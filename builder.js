@@ -52,7 +52,7 @@ const config = {
     },
   ],
   icon: resolve(__dirname, `./public/assets/icons/icon.icns`),
-  asarUnpack: "**\\*.{node,dll}",
+  asarUnpack: "**\\*.{node,dll}**node_modules/cytoscape-fcose/node_modules**",
   mac: {
     icon: resolve(__dirname, `./public/assets/icons/icon.icns`),
     bundleVersion: bundleVersion,

@@ -158,13 +158,15 @@ const App = () => {
 
   // Save last workspace when it changes
   useEffect(() => {
-    if (currentWorkspace) {
+    if (currentWorkspace && window.electron) {
       window.electron.invoke("db:set-last-workspace", currentWorkspace);
     }
   }, [currentWorkspace]);
 
   useEffect(() => {
-    window.electron.invoke("db:set-active-task", activeTaskId);
+    if (window.electron) {
+      window.electron.invoke("db:set-active-task", activeTaskId);
+    }
   }, [activeTaskId]);
 
   useEffect(() => {
@@ -185,10 +187,12 @@ const App = () => {
       setAgentCapabilities(null);
       return;
     }
-    window.electron
-      .invoke("agent:get-capabilities")
-      .then((caps) => setAgentCapabilities(caps))
-      .catch(() => setAgentCapabilities(null));
+    if (window.electron) {
+      window.electron
+        .invoke("agent:get-capabilities")
+        .then((caps) => setAgentCapabilities(caps))
+        .catch(() => setAgentCapabilities(null));
+    }
   }, [isConnected]);
 
   useEffect(() => {
@@ -518,10 +522,14 @@ const App = () => {
         if (data.type === "tool_call") {
           if (isAgentGenerating) {
             const newTool: ToolCall = {
-              id: data.toolCallId || "",
+              id: data.toolCallId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
               name: data.name || "Unknown Tool",
               kind: data.kind,
               status: (data.status as any) || "in_progress",
+              result: {
+                rawInput: data.rawInput,
+                rawOutput: data.rawOutput,
+              },
             };
             const nextMessages = targetTask.messages.map((m) =>
               m.id === lastMsg.id ? { ...m, toolCalls: [...(m.toolCalls || []), newTool] } : m,
@@ -544,20 +552,103 @@ const App = () => {
                   }
                 : task,
             );
+          } else {
+            // 如果没有正在生成的代理消息，创建一个新的消息来显示工具调用
+            const newId = Date.now().toString();
+            currentAgentMsgId.current = newId;
+            const newTool: ToolCall = {
+              id: data.toolCallId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+              name: data.name || "Unknown Tool",
+              kind: data.kind,
+              status: (data.status as any) || "in_progress",
+              result: {
+                rawInput: data.rawInput,
+                rawOutput: data.rawOutput,
+              },
+            };
+            const nextMessages = [
+              ...targetTask.messages,
+              { id: newId, sender: "agent" as const, content: "", toolCalls: [newTool] },
+            ];
+            const updatedAt = Date.now();
+            if (resolvedTaskId) {
+              persistTaskUpdates(resolvedTaskId, {
+                messages: nextMessages,
+                updatedAt,
+                lastActiveAt: updatedAt,
+              });
+            }
+            return prev.map((task) =>
+              task.id === resolvedTaskId
+                ? {
+                    ...task,
+                    messages: nextMessages,
+                    updatedAt,
+                    lastActiveAt: updatedAt,
+                  }
+                : task,
+            );
           }
         }
 
         if (data.type === "tool_call_update") {
-          if (isAgentGenerating) {
-            const nextMessages = targetTask.messages.map((m) => {
-              if (m.id !== lastMsg.id) return m;
-              return {
-                ...m,
-                toolCalls: m.toolCalls?.map((t) =>
-                  t.id === data.toolCallId ? { ...t, status: data.status as any } : t,
-                ),
-              };
-            });
+          // 查找包含指定 toolCallId 的代理消息
+          const targetMsgIndex = targetTask.messages.findIndex(
+            (m) => m.sender === "agent" && m.toolCalls?.some((t) => t.id === data.toolCallId),
+          );
+
+          if (targetMsgIndex !== -1) {
+            // 更新工具调用状态
+            const nextMessages = [...targetTask.messages];
+            const targetMsg = { ...nextMessages[targetMsgIndex] };
+            targetMsg.toolCalls = targetMsg.toolCalls?.map((t) =>
+              t.id === data.toolCallId ? {
+                ...t,
+                status: data.status as any,
+                result: {
+                  ...t.result,
+                  rawInput: data.rawInput !== undefined ? data.rawInput : t.result?.rawInput,
+                  rawOutput: data.rawOutput !== undefined ? data.rawOutput : t.result?.rawOutput,
+                }
+              } : t,
+            );
+            nextMessages[targetMsgIndex] = targetMsg;
+
+            const updatedAt = Date.now();
+            if (resolvedTaskId) {
+              persistTaskUpdates(resolvedTaskId, {
+                messages: nextMessages,
+                updatedAt,
+                lastActiveAt: updatedAt,
+              });
+            }
+            return prev.map((task) =>
+              task.id === resolvedTaskId
+                ? {
+                    ...task,
+                    messages: nextMessages,
+                    updatedAt,
+                    lastActiveAt: updatedAt,
+                  }
+                : task,
+            );
+          } else {
+            // 如果没有找到包含该 toolCallId 的消息，创建一个新的消息
+            const newId = Date.now().toString();
+            currentAgentMsgId.current = newId;
+            const newTool: ToolCall = {
+              id: data.toolCallId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+              name: "Unknown Tool",
+              status: data.status as any || "in_progress",
+              result: {
+                rawInput: data.rawInput,
+                rawOutput: data.rawOutput,
+              },
+            };
+            const nextMessages = [
+              ...targetTask.messages,
+              { id: newId, sender: "agent" as const, content: "", toolCalls: [newTool] },
+            ];
             const updatedAt = Date.now();
             if (resolvedTaskId) {
               persistTaskUpdates(resolvedTaskId, {
@@ -589,6 +680,9 @@ const App = () => {
 
   useEffect(() => {
     // Listen for agent messages
+    if (!window.electron) {
+      return;
+    }
     const removeListener = window.electron.on("agent:message", (msg: IncomingMessage | string) => {
       const data: IncomingMessage =
         typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
@@ -893,6 +987,16 @@ const App = () => {
     }
   };
 
+  const handleStop = async () => {
+    try {
+      await window.electron.invoke("agent:stop");
+      setIsWaitingForResponse(false);
+      currentAgentMsgId.current = null;
+    } catch (e: any) {
+      console.error("Stop error:", e);
+    }
+  };
+
   const handleSend = async () => {
     if (!inputText.trim() && inputImages.length === 0) return;
     if (!isConnected) {
@@ -1176,7 +1280,11 @@ const App = () => {
 
             {/* Loading message bubble */}
             {isWaitingForResponse && (
-              <AntDXMessage msg={{ id: "loading", sender: "agent", content: "" }} isLoading />
+              <AntDXMessage
+                msg={{ id: "loading", sender: "agent", content: "" }}
+                isLoading
+                onStop={handleStop}
+              />
             )}
 
             <div ref={messagesEndRef} />

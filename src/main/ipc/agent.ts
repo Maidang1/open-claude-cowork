@@ -362,4 +362,11 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
     }
     return { success: true };
   });
+
+  ipcMain.handle("agent:stop", async () => {
+    if (acpClient) {
+      await acpClient.stopCurrentRequest();
+    }
+    return { success: true };
+  });
 };

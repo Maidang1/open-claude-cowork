@@ -1,6 +1,11 @@
-import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined } from "@ant-design/icons";
+import {
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  LoadingOutlined,
+  RightOutlined,
+} from "@ant-design/icons";
 import { Bubble, type BubbleItemType, Think } from "@ant-design/x";
-import { Button, Space, Tag } from "antd";
+import { Button, Collapse, Space, Tag } from "antd";
 import Markdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -9,8 +14,12 @@ import type { Message, ToolCall } from "../types";
 
 interface AntDXMessageProps {
   msg: Message;
-  onPermissionResponse?: (permissionId: string, optionId: string | null) => void;
+  onPermissionResponse?: (
+    permissionId: string,
+    optionId: string | null,
+  ) => void;
   isLoading?: boolean;
+  onStop?: () => void;
 }
 
 const ToolCallItem = ({ tool }: { tool: ToolCall }) => {
@@ -33,53 +42,146 @@ const ToolCallItem = ({ tool }: { tool: ToolCall }) => {
     },
   };
 
-  const config = statusConfig[tool.status];
+  const config = statusConfig[tool.status || "pending"];
+
+  const hasInputOutput = tool.result?.rawInput || tool.result?.rawOutput;
+
+  const formatJson = (value: unknown) => {
+    if (typeof value === "string") {
+      try {
+        return JSON.stringify(JSON.parse(value), null, 2);
+      } catch {
+        return value;
+      }
+    }
+    return JSON.stringify(value, null, 2);
+  };
 
   return (
-    <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md border text-xs bg-slate-50/50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200">
-      {config.icon}
-      <span className="font-mono font-medium">{tool.name}</span>
-      <Tag style={{ margin: 0, fontSize: "11px" }}>{config.status}</Tag>
+    <div className="mb-1">
+      {hasInputOutput ? (
+        <Collapse
+          size="small"
+          ghost
+          defaultActiveKey={[]}
+          className="tool-call-collapse"
+          expandIconPosition="end"
+          expandIcon={({ isActive }) => (
+            <RightOutlined
+              className="text-slate-400"
+              style={{ transform: isActive ? "rotate(90deg)" : "rotate(0deg)" }}
+            />
+          )}
+          items={[
+            {
+              key: "tool",
+              label: (
+                <div className="flex items-center gap-2.5 text-xs">
+                  {config.icon}
+                  <span className="font-mono font-medium">{tool.name}</span>
+                  <Tag style={{ margin: 0, fontSize: "11px" }}>
+                    {config.status}
+                  </Tag>
+                </div>
+              ),
+              children: (
+                <div className="ml-2 mt-1 space-y-2">
+                  {tool.result?.rawInput && (
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+                        Input
+                      </div>
+                      <SyntaxHighlighter
+                        language="json"
+                        style={vscDarkPlus}
+                        customStyle={{
+                          borderRadius: "8px",
+                          fontSize: "0.75rem",
+                          margin: 0,
+                          maxWidth: "720px",
+                          width: "100%",
+                        }}
+                      >
+                        {formatJson(tool.result.rawInput)}
+                      </SyntaxHighlighter>
+                    </div>
+                  )}
+                  {tool.result?.rawOutput && (
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1">
+                        Output
+                      </div>
+                      <SyntaxHighlighter
+                        language="json"
+                        style={vscDarkPlus}
+                        customStyle={{
+                          borderRadius: "8px",
+                          fontSize: "0.75rem",
+                          margin: 0,
+                          maxWidth: "720px",
+                          width: "100%",
+                        }}
+                      >
+                        {formatJson(tool.result.rawOutput)}
+                      </SyntaxHighlighter>
+                    </div>
+                  )}
+                </div>
+              ),
+            },
+          ]}
+        />
+      ) : (
+        <div className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md border text-xs bg-slate-50/50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700 dark:text-slate-200">
+          {config.icon}
+          <span className="font-mono font-medium">{tool.name}</span>
+          <Tag style={{ margin: 0, fontSize: "11px" }}>{config.status}</Tag>
+        </div>
+      )}
     </div>
   );
 };
 
 const MarkdownContent = ({ content }: { content: string }) => {
   return (
-    <Markdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        code(props) {
-          const { children, className, node, ...rest } = props;
-          const match = /language-(\w+)/.exec(className || "");
-          return match ? (
-            // @ts-expect-error
-            <SyntaxHighlighter
-              {...rest}
-              PreTag="div"
-              language={match[1]}
-              style={vscDarkPlus}
-              customStyle={{
-                borderRadius: "8px",
-                fontSize: "0.85em",
-                margin: 0,
-              }}
-            >
-              {String(children).replace(/\n$/, "")}
-            </SyntaxHighlighter>
-          ) : (
-            <code
-              {...rest}
-              className="px-1 py-0.5 rounded font-mono text-[0.9em] bg-orange-50 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300"
-            >
-              {children}
-            </code>
-          );
-        },
-      }}
-    >
-      {content}
-    </Markdown>
+    <div className="markdown-content">
+      <Markdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code(props) {
+            const { children, className, node, ...rest } = props;
+            const match = /language-(\w+)/.exec(className || "");
+            return match ? (
+              // @ts-expect-error
+              <SyntaxHighlighter
+                {...rest}
+                PreTag="div"
+                language={match[1]}
+                style={vscDarkPlus}
+                customStyle={{
+                  borderRadius: "8px",
+                  fontSize: "0.85em",
+                  margin: 0,
+                  maxWidth: "720px",
+                  width: "100%",
+                }}
+              >
+                {String(children).replace(/\n$/, "")}
+              </SyntaxHighlighter>
+            ) : (
+              <code
+                {...rest}
+                className="px-1 py-0.5 rounded font-mono text-[0.9em] bg-orange-50 text-orange-700 dark:bg-orange-500/20 dark:text-orange-300"
+              >
+                {children}
+              </code>
+            );
+          },
+        }}
+      >
+        {content}
+      </Markdown>
+    </div>
   );
 };
 
@@ -92,7 +194,8 @@ const TokenUsage = ({ tokenUsage }: { tokenUsage: any }) => {
 
   return (
     <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-      Tokens: {promptTokens} prompt, {completionTokens} completion, {totalTokens} total
+      Tokens: {promptTokens} prompt, {completionTokens} completion,{" "}
+      {totalTokens} total
     </div>
   );
 };
@@ -101,6 +204,7 @@ export const AntDXMessage = ({
   msg,
   onPermissionResponse,
   isLoading = false,
+  onStop,
 }: AntDXMessageProps) => {
   const isUser = msg.sender === "user";
   const isSystem = msg.sender === "system";
@@ -204,7 +308,14 @@ export const AntDXMessage = ({
           contentRender={() => (
             <div className="flex items-center gap-2 py-2">
               <LoadingOutlined spin style={{ color: "#f97316" }} />
-              <span className="text-slate-500 dark:text-slate-400">Thinking...</span>
+              <span className="text-slate-500 dark:text-slate-400">
+                Thinking...
+              </span>
+              {onStop && (
+                <Button size="small" danger onClick={onStop} className="ml-2">
+                  Stop
+                </Button>
+              )}
             </div>
           )}
         />
@@ -246,7 +357,9 @@ export const AntDXMessage = ({
           placement="start"
           content={msg.content}
           variant="borderless"
-          contentRender={(content: string) => <MarkdownContent content={content} />}
+          contentRender={(content: string) => (
+            <MarkdownContent content={content} />
+          )}
           footer={() => <TokenUsage tokenUsage={msg.tokenUsage} />}
         />
       )}

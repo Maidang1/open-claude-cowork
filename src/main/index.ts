@@ -41,13 +41,24 @@ const onCreateMainWindow = () => {
     minHeight: 700,
     icon: path.resolve(__dirname, "../../../../assets/icons/256x256.png"),
     webPreferences: {
-      devTools: isDev,
+      devTools: true, // 始终启用开发者工具
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.resolve(__dirname, "./preload.js"),
     },
   });
   mainWindow.loadURL(loadUrl);
+
+  // 打开开发者工具（可选，默认关闭）
+  // mainWindow.webContents.openDevTools();
+
+  // 添加快捷键打开开发者工具（Ctrl+Shift+I）
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.control && input.shift && input.key.toLowerCase() === "i") {
+      mainWindow?.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
 };
 
 app.on("ready", async () => {

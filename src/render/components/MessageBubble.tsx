@@ -106,6 +106,8 @@ export const MessageBubble = ({ msg }: MessageBubbleProps) => {
                           borderRadius: "8px",
                           fontSize: "0.85em",
                           margin: 0,
+                          maxWidth: "720px",
+                          width: "100%",
                         }}
                       >
                         {String(children).replace(/\n$/, "")}

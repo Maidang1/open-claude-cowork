@@ -115,6 +115,8 @@ export class ACPClient {
   private agentCapabilities: any | null = null;
 
   private pendingPermissions = new Map<string, (response: any) => void>();
+  private currentPromptPromise: Promise<any> | null = null;
+  private promptAbortController: AbortController | null = null;
 
   constructor(onMessage: (msg: any) => void) {
     this.onMessageCallback = onMessage;
@@ -247,6 +249,8 @@ export class ACPClient {
               name: update.title,
               kind: update.kind,
               status: update.status,
+              rawInput: update.rawInput,
+              rawOutput: update.rawOutput,
             });
           }
           // Tool Call Update
@@ -256,6 +260,8 @@ export class ACPClient {
               sessionId,
               toolCallId: update.toolCallId,
               status: update.status,
+              rawInput: update.rawInput,
+              rawOutput: update.rawOutput,
             });
           }
           // Available Commands Update
@@ -507,12 +513,18 @@ export class ACPClient {
       }
     }
 
+    // Create abort controller for this prompt
+    this.promptAbortController = new AbortController();
+    const signal = this.promptAbortController.signal;
+
     // Send Prompt
     try {
-      const response = await this.connection.prompt({
+      this.currentPromptPromise = this.connection.prompt({
         sessionId: this.activeSessionId,
         prompt: prompt,
       });
+
+      const response = await this.currentPromptPromise;
       const usage = extractTokenUsage(response);
       if (usage) {
         this.onMessageCallback?.({
@@ -523,11 +535,29 @@ export class ACPClient {
       // Response is handled via sessionUpdate
     } catch (err: any) {
       console.error("Prompt error", err);
-      this.onMessageCallback?.({
-        type: "system",
-        text: `System Error: ${err.message}`,
-      });
+      if (err.name !== "AbortError") {
+        this.onMessageCallback?.({
+          type: "system",
+          text: `System Error: ${err.message}`,
+        });
+      } else {
+        this.onMessageCallback?.({
+          type: "system",
+          text: "System: Request canceled by user.",
+        });
+      }
+    } finally {
+      this.currentPromptPromise = null;
+      this.promptAbortController = null;
     }
+  }
+
+  async stopCurrentRequest() {
+    if (this.promptAbortController) {
+      this.promptAbortController.abort();
+      this.promptAbortController = null;
+    }
+    this.currentPromptPromise = null;
   }
 
   async setModel(modelId: string) {

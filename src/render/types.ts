@@ -5,7 +5,10 @@ export interface ToolCall {
   name: string;
   kind?: string;
   status: "pending" | "in_progress" | "completed" | "failed";
-  result?: any;
+  result?: {
+    rawInput?: any;
+    rawOutput?: any;
+  };
 }
 
 export interface AgentModelInfo {
