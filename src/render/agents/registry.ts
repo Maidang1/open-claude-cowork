@@ -1,9 +1,14 @@
 import { QwenAgent } from "./qwen";
+import { ClaudeAgent } from "./claude";
+import { CodexAgent } from "./codex";
+import { GeminiAgent } from "./gemini";
 import type { AgentPlugin } from "./types";
 
 export const AGENT_PLUGINS: AgentPlugin[] = [
   QwenAgent,
-  // Add more agents here
+  ClaudeAgent,
+  CodexAgent,
+  GeminiAgent,
 ];
 
 export const getAgentPlugin = (id: string): AgentPlugin | undefined => {

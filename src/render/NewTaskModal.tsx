@@ -23,6 +23,31 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   const [workspacePath, setWorkspacePath] = useState(initialWorkspace || "");
   const [selectedPluginId, setSelectedPluginId] = useState<string>("custom");
   const [customCommand, setCustomCommand] = useState(initialAgentCommand);
+  const [pluginInstallStatuses, setPluginInstallStatuses] = useState<Record<string, string>>({});
+
+  // Check install status for all plugins
+  useEffect(() => {
+    const checkAllPlugins = async () => {
+      const statuses: Record<string, string> = {};
+      for (const plugin of AGENT_PLUGINS) {
+        try {
+          if (plugin.checkCommand) {
+            const res = await window.electron.invoke("agent:check-command", plugin.checkCommand);
+            statuses[plugin.id] = res.installed ? "installed" : "not-installed";
+          } else {
+            statuses[plugin.id] = "installed";
+          }
+        } catch {
+          statuses[plugin.id] = "not-installed";
+        }
+      }
+      setPluginInstallStatuses(statuses);
+    };
+
+    if (isOpen) {
+      checkAllPlugins();
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -147,7 +172,19 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
                 onClick={() => handlePluginChange(plugin.id)}
                 className={`preset-button ${selectedPluginId === plugin.id ? "active" : ""}`}
               >
-                {plugin.name}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <span>{plugin.name}</span>
+                  {pluginInstallStatuses[plugin.id] === "installed" && (
+                    <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)" }}>
+                      (已安装)
+                    </span>
+                  )}
+                  {pluginInstallStatuses[plugin.id] === "not-installed" && (
+                    <span style={{ fontSize: "0.7rem", color: "var(--error)" }}>
+                      (未安装)
+                    </span>
+                  )}
+                </div>
               </button>
             ))}
           </div>

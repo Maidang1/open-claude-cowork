@@ -5,9 +5,7 @@ export type InstallStatus =
   | "checking"
   | "installed"
   | "not-installed"
-  | "installing"
-  | "updating"
-  | "uninstalling";
+  | "installing";
 
 interface AgentInstallState {
   installStatus: InstallStatus;
@@ -17,8 +15,6 @@ interface AgentInstallState {
 interface AgentInstallActions {
   checkInstall: (plugin: AgentPlugin) => Promise<void>;
   install: () => Promise<void>;
-  update: () => Promise<void>;
-  uninstall: () => Promise<void>;
 }
 
 export function useAgentInstall(
@@ -57,53 +53,28 @@ export function useAgentInstall(
     }
   }, []);
 
-  const installLatest = useCallback(
-    async (mode: "install" | "update") => {
-      if (!selectedPlugin?.packageSpec) return;
-
-      setInstallStatus(mode === "install" ? "installing" : "updating");
-      try {
-        const res = await window.electron.invoke(
-          "agent:install",
-          `${selectedPlugin.packageSpec}@latest`,
-        );
-        if (res.success) {
-          setInstallStatus("installed");
-          setInstalledVersion(null);
-          checkInstall(selectedPlugin);
-          onCommandChange(selectedPlugin.defaultCommand);
-        } else {
-          alert(`Installation failed: ${res.error}`);
-          setInstallStatus("not-installed");
-        }
-      } catch {
-        setInstallStatus("not-installed");
-      }
-    },
-    [selectedPlugin, checkInstall, onCommandChange],
-  );
-
-  const install = useCallback(() => installLatest("install"), [installLatest]);
-  const update = useCallback(() => installLatest("update"), [installLatest]);
-
-  const uninstall = useCallback(async () => {
+  const install = useCallback(async () => {
     if (!selectedPlugin?.packageSpec) return;
 
-    setInstallStatus("uninstalling");
+    setInstallStatus("installing");
     try {
-      const res = await window.electron.invoke("agent:uninstall", selectedPlugin.packageSpec);
+      const res = await window.electron.invoke(
+        "agent:install",
+        `${selectedPlugin.packageSpec}@latest`,
+      );
       if (res.success) {
-        setInstallStatus("not-installed");
-        setInstalledVersion(null);
-      } else {
-        alert(`Uninstall failed: ${res.error}`);
         setInstallStatus("installed");
+        setInstalledVersion(null);
+        checkInstall(selectedPlugin);
+        onCommandChange(selectedPlugin.defaultCommand);
+      } else {
+        alert(`Installation failed: ${res.error}`);
+        setInstallStatus("not-installed");
       }
-    } catch (e) {
-      alert(`Uninstall failed: ${(e as Error).message}`);
-      setInstallStatus("installed");
+    } catch {
+      setInstallStatus("not-installed");
     }
-  }, [selectedPlugin]);
+  }, [selectedPlugin, checkInstall, onCommandChange]);
 
   useEffect(() => {
     if (selectedPlugin && isOpen && selectedPlugin.packageSpec) {
@@ -116,7 +87,5 @@ export function useAgentInstall(
     installedVersion,
     checkInstall,
     install,
-    update,
-    uninstall,
   };
 }
