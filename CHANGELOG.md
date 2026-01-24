@@ -1,5 +1,11 @@
 # open-claude-cowork
 
+## 0.1.1
+
+### Patch Changes
+
+- 修复一些体验问题
+
 ## 0.1.0
 
 ### Minor Changes
