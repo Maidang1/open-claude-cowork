@@ -9,6 +9,7 @@ interface ChatHeaderProps {
   isModelMenuOpen: boolean;
   onToggleModelMenu: () => void;
   onModelPick: (modelId: string) => void;
+  title?: string;
   showDebug?: boolean;
   agentInfo?: any;
   agentCapabilities?: any;
@@ -23,6 +24,7 @@ export const ChatHeader = ({
   isModelMenuOpen,
   onToggleModelMenu,
   onModelPick,
+  title,
   showDebug,
   agentInfo,
   agentCapabilities,
@@ -32,81 +34,79 @@ export const ChatHeader = ({
 
   return (
     <>
-      <div className="px-6 h-14 flex items-center justify-between bg-app border-b border-color z-10">
-        <div className="flex items-center gap-3">
-          <div
-            className={`flex items-center gap-2 text-sm text-text-secondary py-1 ${
-              connectionStatus.state
-            }`}
-            title={`Status: ${connectionStatus.state}`}
-          >
-            <div className="relative flex items-center justify-center w-3 h-3">
-              <div
-                className={`w-2 h-2 rounded-full z-2 transition-all ${
-                  connectionStatus.state === "connected"
-                    ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94.0.6),0_0_4px_rgba(34,197,94,0.8)_inset] animate-pulse-green"
-                    : connectionStatus.state === "connecting"
-                      ? "bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.8)] animate-pulse-orange"
-                      : connectionStatus.state === "error"
-                        ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-pulse-red"
-                        : "bg-slate-400"
-                }`}
-              />
-              {connectionStatus.state === "connected" && (
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full rounded-full opacity-0 z-1 pointer-events-none bg-green-500/30 animate-ripple-green" />
-              )}
-              {connectionStatus.state === "connecting" && (
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full rounded-full opacity-0 z-1 pointer-events-none bg-orange-500/40 animate-ripple-orange" />
-              )}
-            </div>
-            <span className="font-medium">
+      <div className="group relative flex h-12 items-center justify-between border-b border-ink-900/10 bg-surface-cream px-6 z-10">
+        <div className="flex items-center gap-3 text-xs text-ink-600 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto">
+          <div className="flex items-center gap-2" title={`Status: ${connectionStatus.state}`}>
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                connectionStatus.state === "connected"
+                  ? "bg-success"
+                  : connectionStatus.state === "connecting"
+                    ? "bg-accent"
+                    : connectionStatus.state === "error"
+                      ? "bg-error"
+                      : "bg-ink-400"
+              }`}
+            />
+            <span>
               {connectionStatus.state === "connected"
-                ? "System Connected"
+                ? "Connected"
                 : connectionStatus.state === "connecting"
-                  ? "Connecting..."
+                  ? "Connecting"
                   : "Disconnected"}
             </span>
           </div>
-
           {currentWorkspace && (
-            <>
-              <div className="w-px h-4 bg-color" />
-              <div className="flex items-center gap-2 text-sm text-text-secondary">
-                <span className="opacity-70">📂</span>
-                <span className="font-mono font-medium text-text-primary" title={currentWorkspace}>
-                  {currentWorkspace.split("/").pop()}
-                </span>
-              </div>
-            </>
+            <div className="flex items-center gap-2 text-xs text-ink-600">
+              <span className="text-ink-400">/</span>
+              <span className="font-mono text-ink-700" title={currentWorkspace}>
+                {currentWorkspace.split("/").pop()}
+              </span>
+            </div>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div
+          className="absolute left-1/2 -translate-x-1/2 text-sm font-medium text-ink-700 select-none"
+          style={{ WebkitAppRegion: "drag" }}
+        >
+          {title || "Agent Cowork"}
+        </div>
+        <div className="pointer-events-none absolute right-6 flex items-center gap-1 text-ink-400/60 opacity-100 transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
+          <span className="h-1 w-1 rounded-full bg-current" />
+          <span className="h-1 w-1 rounded-full bg-current" />
+          <span className="h-1 w-1 rounded-full bg-current" />
+        </div>
+
+        <div
+          className="flex items-center gap-3 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
+          style={{ WebkitAppRegion: "no-drag" }}
+        >
           {models.length > 0 && (
             <div className="relative inline-flex flex-col gap-1.5">
               <button
                 type="button"
-                className="border border-color bg-surface transition-all py-1.5 px-3 rounded-md flex items-center justify-between gap-2 cursor-pointer font-medium text-text-primary min-w-[140px] text-sm hover:bg-surface-hover hover:border-hover"
+                className="flex items-center justify-between gap-2 rounded-xl border border-ink-900/10 bg-surface px-3 py-1.5 text-xs font-medium text-ink-700 transition-colors hover:bg-surface-tertiary hover:border-ink-900/20"
                 onClick={onToggleModelMenu}
               >
-                <span className="max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap">
+                <span className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap">
                   {currentModel?.name || currentModelId || "Unknown"}
                 </span>
-                <ChevronDown size={14} className="text-text-tertiary" />
+                <ChevronDown size={12} className="text-ink-500" />
               </button>
               {isModelMenuOpen && (
-                <div className="absolute top-[calc(100%+6px)] right-0 w-60 bg-surface border border-color shadow-lg rounded-xl z-50 p-1 max-h-72 overflow-y-auto">
+                <div className="absolute top-[calc(100%+6px)] right-0 w-60 rounded-xl border border-ink-900/10 bg-surface p-1 shadow-card z-50 max-h-72 overflow-y-auto">
                   {models.map((model) => (
                     <button
                       key={model.modelId}
                       type="button"
-                      className={`w-full p-2 flex flex-col gap-0.5 border-none text-left bg-none cursor-pointer rounded)md ${
-                        model.modelId === currentModelId ? "active" : ""
-                      } hover:bg-surface-hover`}
+                      className={`w-full rounded-lg px-3 py-2 text-left transition hover:bg-ink-900/5 ${
+                        model.modelId === currentModelId ? "bg-accent/10 text-ink-800" : "text-ink-700"
+                      }`}
                       onClick={() => onModelPick(model.modelId)}
                     >
-                      <span className="font-semibold text-text-primary text-sm">{model.name}</span>
-                      <span className="text-text-secondary text-xs">
+                      <span className="block text-sm font-semibold">{model.name}</span>
+                      <span className="block text-xs text-ink-500">
                         {model.description || model.modelId}
                       </span>
                     </button>

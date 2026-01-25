@@ -14,7 +14,10 @@ import type { Message, ToolCall } from "../types";
 
 interface AntDXMessageProps {
   msg: Message;
-  onPermissionResponse?: (permissionId: string, optionId: string | null) => void;
+  onPermissionResponse?: (
+    permissionId: string,
+    optionId: string | null,
+  ) => void;
   isLoading?: boolean;
   onStop?: () => void;
 }
@@ -76,7 +79,9 @@ const ToolCallItem = ({ tool }: { tool: ToolCall }) => {
                 <div className="tool-call-header-content">
                   {config.icon}
                   <span className="font-mono font-medium">{tool.name}</span>
-                  <Tag style={{ margin: 0, fontSize: "11px" }}>{config.status}</Tag>
+                  <Tag style={{ margin: 0, fontSize: "11px" }}>
+                    {config.status}
+                  </Tag>
                 </div>
               ),
               children: (
@@ -187,7 +192,8 @@ const TokenUsage = ({ tokenUsage }: { tokenUsage: any }) => {
 
   return (
     <div className="mt-3 text-xs text-slate-500 dark:text-slate-400">
-      Tokens: {promptTokens} prompt, {completionTokens} completion, {totalTokens} total
+      Tokens: {promptTokens} prompt, {completionTokens} completion,{" "}
+      {totalTokens} total
     </div>
   );
 };
@@ -300,7 +306,9 @@ export const AntDXMessage = ({
           contentRender={() => (
             <div className="flex items-center gap-2 py-2">
               <LoadingOutlined spin style={{ color: "#f97316" }} />
-              <span className="text-slate-500 dark:text-slate-400">Thinking...</span>
+              <span className="text-slate-500 dark:text-slate-400">
+                Thinking...
+              </span>
               {onStop && (
                 <Button size="small" danger onClick={onStop} className="ml-2">
                   Stop
@@ -324,7 +332,7 @@ export const AntDXMessage = ({
       {/* Thought Process (streaming) */}
       {hasThought && (
         <div className="mt-5 mb-2 text-xs ml-0.5">
-          <Think title="Thinking Process" icon={<></>}>
+          <Think title="Thinking Process" icon={<></>} className="p-0 m-0">
             <Markdown>{msg.thought}</Markdown>
           </Think>
         </div>
@@ -347,7 +355,9 @@ export const AntDXMessage = ({
           placement="start"
           content={msg.content}
           variant="borderless"
-          contentRender={(content: string) => <MarkdownContent content={content} />}
+          contentRender={(content: string) => (
+            <MarkdownContent content={content} />
+          )}
           footer={() => <TokenUsage tokenUsage={msg.tokenUsage} />}
         />
       )}

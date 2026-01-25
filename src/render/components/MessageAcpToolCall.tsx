@@ -9,7 +9,7 @@ interface MessageAcpToolCallProps {
 export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
   const [copied, setCopied] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [isOutputExpanded, setIsOutputExpanded] = useState(true);
+  const [isOutputExpanded, setIsOutputExpanded] = useState(false);
 
   const mergedContent = useMemo(
     () => ({
@@ -19,7 +19,8 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
     [msg.content],
   );
 
-  const { toolCallId, name, kind, title, description, rawInput, rawOutput } = mergedContent;
+  const { toolCallId, name, kind, title, description, rawInput, rawOutput } =
+    mergedContent;
 
   const handleCopy = async (text: string, key: string) => {
     try {
@@ -47,7 +48,12 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
         if (parts.length > 0) return parts.join(" ");
       }
       const candidate =
-        input.command || input.cmd || input.input || input.query || input.prompt || input.script;
+        input.command ||
+        input.cmd ||
+        input.input ||
+        input.query ||
+        input.prompt ||
+        input.script;
       if (typeof candidate === "string") return candidate;
       try {
         return JSON.stringify(input);
@@ -61,6 +67,40 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
   const outputText = useMemo(() => {
     if (rawOutput === undefined || rawOutput === null) return "";
     if (typeof rawOutput === "string") return rawOutput.trimEnd();
+    const asObject = rawOutput as Record<string, any>;
+    const formatted =
+      asObject.formatted_output ||
+      asObject.formattedOutput ||
+      asObject.output ||
+      asObject.result ||
+      asObject.text ||
+      asObject.message ||
+      asObject.data?.formatted_output ||
+      asObject.data?.formattedOutput ||
+      asObject.data?.output;
+    if (typeof formatted === "string" && formatted.trim()) {
+      const duration =
+        asObject.duration ??
+        asObject.duration_ms ??
+        asObject.elapsed ??
+        asObject.time_ms ??
+        asObject.metrics?.duration ??
+        asObject.metrics?.duration_ms;
+      const formatDuration = (value: any) => {
+        if (typeof value !== "number" || Number.isNaN(value)) return null;
+        if (value < 1000) return `${value} ms`;
+        const seconds = value / 1000;
+        if (seconds < 60) return `${seconds.toFixed(1)} s`;
+        const minutes = Math.floor(seconds / 60);
+        const rest = Math.round(seconds % 60);
+        return `${minutes}m ${rest}s`;
+      };
+      const durationLabel = formatDuration(duration);
+      if (durationLabel) {
+        return `Duration: ${durationLabel}\n\n${formatted.trimEnd()}`;
+      }
+      return formatted.trimEnd();
+    }
     try {
       return JSON.stringify(rawOutput, null, 2);
     } catch {
@@ -75,31 +115,47 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
 
   const maxPreviewLines = 6;
   const hasHiddenLines = outputLines.length > maxPreviewLines;
-  const visibleLines = isOutputExpanded ? outputLines : outputLines.slice(0, maxPreviewLines);
+  const visibleLines = isOutputExpanded
+    ? outputLines
+    : outputLines.slice(0, maxPreviewLines);
   const hiddenLineCount = Math.max(outputLines.length - visibleLines.length, 0);
 
-  const rawToolLabel = name || title || "Tool";
+  const rawToolLabel = kind || name || title || "Tool";
+  const rawToolParts = rawToolLabel.split(/\s+/).filter(Boolean);
+  const rawToolName = rawToolParts[0] || rawToolLabel;
   const toolLabel =
-    rawToolLabel.length > 0
-      ? rawToolLabel.charAt(0).toUpperCase() + rawToolLabel.slice(1)
-      : rawToolLabel;
-  const commandLabel = getCommandLabel(rawInput);
+    rawToolName.length > 0
+      ? rawToolName.charAt(0).toUpperCase() + rawToolName.slice(1)
+      : rawToolName;
+  const commandLabelRaw = getCommandLabel(rawInput);
+  const titleRemainder = rawToolParts.slice(1).join(" ").trim();
+  const normalizedCommand = commandLabelRaw
+    .replace(new RegExp(`^${rawToolName}\\s+`, "i"), "")
+    .replace(new RegExp(`^${toolLabel}\\s+`, "i"), "")
+    .trim();
+  const commandLabel = normalizedCommand || titleRemainder || "";
   const outputLabel = "Output";
 
   return (
     <div className="max-w-[720px] w-full">
-      <div className="rounded-full bg-surface-tertiary px-4 py-2 text-[12px] font-medium text-text-primary border border-color shadow-card">
+      <div className="rounded-[8px] bg-surface-secondary px-3 py-2 text-[14px] font-medium text-text-primary shadow-soft">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-success" />
-          <span className="text-accent">{toolLabel}</span>
-          {commandLabel && <span className="truncate text-text-secondary">{commandLabel}</span>}
+          <span className="text-accent font-semibold">{toolLabel}</span>
+          {commandLabel && (
+            <span className="truncate font-mono text-ink-600">
+              {commandLabel}
+            </span>
+          )}
         </div>
       </div>
 
       {rawOutput !== undefined && (
-        <div className="mt-3">
-          <div className="text-[13px] font-medium text-accent mb-2">{outputLabel}</div>
-          <div className="rounded-xl border border-color bg-surface-tertiary px-4 py-3 text-xs leading-relaxed text-text-secondary shadow-card">
+        <div className="mt-2">
+          <div className="text-[14px] font-medium text-accent my-2 ">
+            {outputLabel}
+          </div>
+          <div className="rounded-[8px] bg-surface-secondary px-4 py-2 text-[14px] leading-relaxed text-text-secondary shadow-soft">
             <pre className="whitespace-pre-wrap font-mono">
               {visibleLines.length > 0 ? visibleLines.join("\n") : ""}
             </pre>
@@ -125,7 +181,11 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
             onClick={() => setShowDetails(!showDetails)}
             className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary"
           >
-            {showDetails ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {showDetails ? (
+              <ChevronDown size={14} />
+            ) : (
+              <ChevronRight size={14} />
+            )}
             {showDetails ? "Hide details" : "Show details"}
           </button>
         </div>
@@ -133,28 +193,44 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
 
       {showDetails && (
         <div className="mt-3 space-y-3">
-          {description && <div className="text-xs text-text-secondary">{description}</div>}
-          {kind && <div className="text-xs text-text-secondary">Kind: {kind}</div>}
+          {description && (
+            <div className="text-xs text-text-secondary">{description}</div>
+          )}
+          {kind && (
+            <div className="text-xs text-text-secondary">Kind: {kind}</div>
+          )}
           {rawInput !== undefined && (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <h4 className="text-[11px] font-medium text-text-secondary uppercase">Input</h4>
+                <h4 className="text-[11px] font-medium text-text-secondary uppercase">
+                  Input
+                </h4>
                 <button
                   type="button"
-                  onClick={() => handleCopy(JSON.stringify(rawInput, null, 2), "input")}
+                  onClick={() =>
+                    handleCopy(JSON.stringify(rawInput, null, 2), "input")
+                  }
                   className="flex items-center gap-1 text-[11px] text-text-secondary hover:text-text-primary"
                 >
-                  {copied === "input" ? <Check size={12} /> : <Copy size={12} />}
+                  {copied === "input" ? (
+                    <Check size={12} />
+                  ) : (
+                    <Copy size={12} />
+                  )}
                   {copied === "input" ? "Copied" : "Copy"}
                 </button>
               </div>
-              <pre className="rounded-lg border border-color bg-input px-3 py-2 text-[11px] text-text-secondary">
-                {typeof rawInput === "string" ? rawInput : JSON.stringify(rawInput, null, 2)}
+              <pre className="rounded-lg bg-input px-3 py-2 text-[11px] text-text-secondary shadow-soft">
+                {typeof rawInput === "string"
+                  ? rawInput
+                  : JSON.stringify(rawInput, null, 2)}
               </pre>
             </div>
           )}
           {toolCallId && (
-            <div className="text-[11px] text-text-tertiary">Tool Call ID: {toolCallId}</div>
+            <div className="text-[11px] text-text-tertiary">
+              Tool Call ID: {toolCallId}
+            </div>
           )}
         </div>
       )}

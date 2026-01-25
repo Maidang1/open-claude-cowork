@@ -1,4 +1,4 @@
-import { Check, X } from "lucide-react";
+import { Check } from "lucide-react";
 import type { TAcpPermissionMessage } from "../types/messageTypes";
 
 interface MessageAcpPermissionProps {
@@ -22,62 +22,53 @@ export const MessageAcpPermission = ({ msg, onPermissionResponse }: MessageAcpPe
   };
 
   return (
-    <div className="bg-surface border border-color rounded-lg p-4">
-      {/* 权限请求头部 */}
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-8 h-8 rounded-full bg-yellow-500 text-white flex items-center justify-center">
-          ⚠️
-        </div>
-        <div>
-          <h3 className="font-semibold text-text-primary text-sm">Permission Request</h3>
-          {tool && <p className="text-xs text-text-secondary">Tool: {tool}</p>}
-        </div>
+    <div className="rounded-2xl bg-surface-secondary px-4 py-3 text-ink-700 shadow-soft">
+      <div className="flex items-center gap-2">
+        <div className="h-2.5 w-2.5 rounded-full bg-accent" />
+        <h3 className="text-sm font-semibold text-ink-800">Permission Request</h3>
+        {tool && <span className="text-xs text-ink-500">({tool})</span>}
       </div>
 
-      {/* 权限请求内容 */}
-      <p className="text-sm text-text-primary mb-4">
+      <p className="mt-2 text-sm text-ink-700">
         {content || "Requesting permission to perform this action"}
       </p>
 
-      {/* 命令显示 */}
       {command && (
-        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-4">
-          <h4 className="text-xs font-medium text-text-secondary uppercase mb-1">Command</h4>
-          <pre className="text-xs font-mono text-text-primary overflow-x-auto">{command}</pre>
+        <div className="mt-3 rounded-xl bg-surface px-3 py-2 text-xs text-ink-700 shadow-soft">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-500">
+            Command
+          </div>
+          <pre className="mt-1 whitespace-pre-wrap font-mono">{command}</pre>
         </div>
       )}
 
-      {/* 选项选择 */}
       {options && options.length > 0 && (
-        <div className="mb-4">
-          <h4 className="text-xs font-medium text-text-secondary uppercase mb-2">Options</h4>
-          <div className="space-y-2">
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-500">
+            Options
+          </div>
+          <div className="mt-2 space-y-2">
             {options.map((option) => (
               <button
                 key={option.optionId}
                 type="button"
                 onClick={() => handleAccept(option.optionId)}
-                className="w-full text-left px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="flex w-full items-center justify-between rounded-xl bg-surface px-3 py-2 text-left text-sm text-ink-800 shadow-soft transition-colors hover:bg-surface-tertiary"
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-text-primary">
-                    {option.label || option.name || option.kind || option.optionId}
-                  </span>
-                  <Check size={16} className="text-green-500" />
-                </div>
+                <span>{option.label || option.name || option.kind || option.optionId}</span>
+                <Check size={16} className="text-success" />
               </button>
             ))}
           </div>
         </div>
       )}
 
-      {/* 操作按钮 */}
-      <div className="flex gap-2">
+      <div className="mt-3 flex gap-2">
         {options && options.length > 0 ? (
           <button
             type="button"
             onClick={handleCancel}
-            className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+            className="rounded-xl border border-ink-900/10 bg-surface px-4 py-2 text-sm text-ink-700 transition-colors hover:bg-surface-tertiary"
           >
             Cancel
           </button>
@@ -86,14 +77,14 @@ export const MessageAcpPermission = ({ msg, onPermissionResponse }: MessageAcpPe
             <button
               type="button"
               onClick={() => handleAccept(null)}
-              className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm"
+              className="rounded-xl bg-accent px-4 py-2 text-sm text-white transition-colors hover:bg-accent-hover"
             >
               Allow
             </button>
             <button
               type="button"
               onClick={handleCancel}
-              className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
+              className="rounded-xl border border-ink-900/10 bg-surface px-4 py-2 text-sm text-ink-700 transition-colors hover:bg-surface-tertiary"
             >
               Deny
             </button>

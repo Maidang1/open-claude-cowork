@@ -15,9 +15,10 @@ interface MessageTextProps {
     size: number;
   }>;
   sender?: "user" | "agent" | "system";
+  align?: "left" | "right";
 }
 
-export const MessageText = ({ content, images = [], sender }: MessageTextProps) => {
+export const MessageText = ({ content, images = [], sender, align }: MessageTextProps) => {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const handleCopyCode = async (code: string) => {
@@ -31,9 +32,10 @@ export const MessageText = ({ content, images = [], sender }: MessageTextProps) 
   };
 
   const isUser = sender === "user";
+  const alignment = align ?? (isUser ? "right" : "left");
 
   return (
-    <div className={`${isUser ? "text-right" : "text-left"}`}>
+    <div className={`${alignment === "right" ? "text-right" : "text-left"}`}>
       <div className="prose prose-sm max-w-none text-text-primary">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -76,7 +78,7 @@ export const MessageText = ({ content, images = [], sender }: MessageTextProps) 
 
               return (
                 <code
-                  className={`inline-block px-1.5 py-0.5 bg-gray-100 dark:bg-gray-800 rounded text-sm font-mono ${className}`}
+                  className={`inline-block px-1.5 py-0.5 bg-accent-subtle text-accent rounded text-sm font-mono ${className}`}
                   {...props}
                 >
                   {children}
@@ -145,7 +147,9 @@ export const MessageText = ({ content, images = [], sender }: MessageTextProps) 
 
       {/* 图片显示 */}
       {images.length > 0 && (
-        <div className={`flex flex-wrap gap-2 mt-3 ${isUser ? "justify-end" : "justify-start"}`}>
+        <div
+          className={`flex flex-wrap gap-2 mt-3 ${alignment === "right" ? "justify-end" : "justify-start"}`}
+        >
           {images.map((image) => (
             <div key={image.id} className="relative group">
               <img

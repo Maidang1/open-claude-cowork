@@ -1,4 +1,4 @@
-import { Paperclip, Send, X } from "lucide-react";
+import { Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ImageAttachment } from "../types";
 
@@ -117,66 +117,59 @@ export const SendBox = ({
   };
 
   return (
-    <div className="py-6 pb-8 bg-gradient-to-t from-bg-app to-transparent">
+    <section className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-surface via-surface to-transparent pb-6 px-2 lg:pb-8 lg:ml-[280px]">
       <div
-        className="mx-10 relative bg-input border border-color rounded-xl shadow-md transition-all focus-within:border-primary focus-within:shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1),0_4px_6px_-4px_rgba(0,0,0,0.1),0_0_0_2px_var(--primary-light)]"
+        className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-2xl border border-ink-900/10 bg-surface px-4 py-3 shadow-card transition-colors focus-within:border-ink-900/20"
         onDrop={handleDrop}
         onDragOver={handleDragOver}
       >
-        {/* 前缀内容（如文件预览列表） */}
         {prefix}
+        {tools && <div className="flex items-center gap-2 border-b border-ink-900/10 pb-2">{tools}</div>}
 
-        {/* 工具按钮 */}
-        {tools && <div className="flex items-center gap-2 p-2 border-b border-color">{tools}</div>}
-
-        {/* 文本输入区域 */}
-        <textarea
-          ref={textareaRef}
-          className="w-full p-4 pl-5 pr-14 border-none bg-transparent resize-none font-inherit text-base text-text-primary outline-none min-h-15"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onPaste={handlePaste}
-          onCompositionStart={handleCompositionStart}
-          onCompositionEnd={handleCompositionEnd}
-          placeholder={placeholder}
-          rows={1}
-          disabled={loading}
-        />
-
-        {/* 操作按钮 */}
-        <div className="absolute right-3 bottom-3 flex items-center gap-2">
-          {/* 停止按钮 */}
-          {loading && onStop && (
-            <button
-              type="button"
-              onClick={onStop}
-              className="w-9 h-9 bg-red-500 text-white rounded-md flex items-center justify-center cursor-pointer transition-colors hover:bg-red-600"
-              title="Stop (ESC)"
-            >
-              <X size={16} />
-            </button>
-          )}
-
-          {/* 发送/加载按钮 */}
-          {loading ? (
-            <div className="w-9 h-9 bg-primary text-white rounded-md flex items-center justify-center cursor-wait">
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={onSend}
-              className="w-9 h-9 bg-primary text-white border-none rounded-md flex items-center justify-center cursor-pointer transition-colors hover:bg-primary-hover hover:scale-105 disabled:bg-slate-300 disabled:cursor-not-allowed dark:disabled:bg-slate-700"
-              disabled={!value.trim()}
-              title="Send (Enter)"
-            >
-              <Send size={16} />
-            </button>
-          )}
+        <div className="flex items-end gap-3">
+          <textarea
+            ref={textareaRef}
+            className="flex-1 resize-none bg-transparent py-1.5 text-sm text-ink-800 placeholder:text-muted focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
+            placeholder={placeholder}
+            rows={1}
+            disabled={loading}
+          />
+          <div className="flex items-center gap-2">
+            {loading ? (
+              onStop ? (
+                <button
+                  type="button"
+                  onClick={onStop}
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-error text-white transition-colors hover:bg-error/90"
+                  title="Stop (ESC)"
+                >
+                  <X size={14} />
+                </button>
+              ) : (
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-white">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                </div>
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={onSend}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!value.trim()}
+                title="Send (Enter)"
+              >
+                <Send size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* 隐藏的文件输入 */}
         {onFilesAdded && (
           <input
             type="file"
@@ -188,6 +181,6 @@ export const SendBox = ({
           />
         )}
       </div>
-    </div>
+    </section>
   );
 };

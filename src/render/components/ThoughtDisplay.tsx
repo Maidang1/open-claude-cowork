@@ -1,6 +1,7 @@
 import { Think } from "@ant-design/x";
 import { Button } from "antd";
 import { useEffect, useState } from "react";
+import Markdown from "react-markdown";
 
 interface ThoughtDisplayProps {
   thought: string;
@@ -13,7 +14,6 @@ export const ThoughtDisplay = ({
   thought,
   running,
   onStop,
-  style = "default",
 }: ThoughtDisplayProps) => {
   const [elapsed, setElapsed] = useState(0);
 
@@ -51,16 +51,17 @@ export const ThoughtDisplay = ({
     <div onKeyDown={handleKeyDown} tabIndex={0}>
       <Think
         title="AI is thinking"
-        icon={<span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
-        className={style === "compact" ? "p-3" : "p-4"}
+        icon={
+          <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse " />
+        }
       >
         <div className="space-y-2">
           {running && (
-            <div className="text-xs text-slate-500 dark:text-slate-400">{formatTime(elapsed)}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              {formatTime(elapsed)}
+            </div>
           )}
-          <div className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
-            {thought}
-          </div>
+          <Markdown>{thought}</Markdown>
           {running && (
             <Button size="small" danger onClick={onStop}>
               Stop
