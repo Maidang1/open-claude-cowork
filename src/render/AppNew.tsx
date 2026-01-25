@@ -178,7 +178,9 @@ const App = () => {
     // Load wallpaper from settings
     const loadWallpaper = async () => {
       const savedWallpaper = await window.electron.invoke("env:get-wallpaper");
-      setWallpaper(savedWallpaper || null);
+      const normalized =
+        typeof savedWallpaper === "string" ? savedWallpaper.trim() : "";
+      setWallpaper(normalized ? normalized : null);
     };
     loadWallpaper();
   }, []);
@@ -205,9 +207,10 @@ const App = () => {
   }, [wallpaper]);
 
   const handleWallpaperChange = async (path: string | null) => {
-    setWallpaper(path);
-    if (path) {
-      await window.electron.invoke("env:set-wallpaper", path);
+    const normalized = typeof path === "string" ? path.trim() : "";
+    setWallpaper(normalized ? normalized : null);
+    if (normalized) {
+      await window.electron.invoke("env:set-wallpaper", normalized);
     } else {
       await window.electron.invoke("env:clear-wallpaper");
     }

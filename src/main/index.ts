@@ -60,6 +60,7 @@ const registerWallpaperProtocol = () => {
         path.resolve(app.getAppPath(), ".."),
         path.resolve(app.getAppPath(), "..", "render"),
         path.resolve(app.getAppPath(), "render"),
+        process.resourcesPath,
         process.cwd(),
       ];
       const relativeCandidates = [normalizedPath, path.join("public", normalizedPath)];

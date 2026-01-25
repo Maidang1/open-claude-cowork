@@ -269,8 +269,18 @@ input.mono {
 }
 
 /* 有壁纸时透明化背景 */
-.bg-wallpaper .bg-app {
-  background-color: transparent;
+.bg-wallpaper .bg-app,
+.bg-wallpaper .bg-surface,
+.bg-wallpaper .bg-surface-cream {
+  background-color: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+}
+
+[data-theme="dark"].bg-wallpaper .bg-app,
+[data-theme="dark"].bg-wallpaper .bg-surface,
+[data-theme="dark"].bg-wallpaper .bg-surface-cream {
+  background-color: rgba(0, 0, 0, 0.3);
 }
 
 .bg-surface {

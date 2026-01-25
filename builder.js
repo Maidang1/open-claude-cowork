@@ -50,6 +50,10 @@ const config = {
       from: "./public/assets/icons",
       to: "assets/icons",
     },
+    {
+      from: "./assets/wallpaper",
+      to: "assets/wallpaper",
+    },
   ],
   icon: resolve(__dirname, `./public/assets/icons/icon.icns`),
   asarUnpack: "**\\*.{node,dll}**node_modules/cytoscape-fcose/node_modules**",
