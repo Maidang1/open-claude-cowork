@@ -17,6 +17,7 @@ import type {
   Task,
   ToolCall,
 } from "./types";
+import { isWallpaperGradient, wallpaperUrl } from "./utils/wallpaper";
 import WorkspaceWelcome from "./WorkspaceWelcome";
 
 // --- Types ---
@@ -76,6 +77,7 @@ const App = () => {
     }
     return "light";
   });
+  const [wallpaper, setWallpaper] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -139,6 +141,40 @@ const App = () => {
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    const loadWallpaper = async () => {
+      const savedWallpaper = await window.electron.invoke("env:get-wallpaper");
+      const normalized = typeof savedWallpaper === "string" ? savedWallpaper.trim() : "";
+      setWallpaper(normalized ? normalized : null);
+    };
+    loadWallpaper();
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (wallpaper) {
+      if (isWallpaperGradient(wallpaper)) {
+        root.style.setProperty("--wallpaper", wallpaper);
+      } else {
+        root.style.setProperty("--wallpaper", `url('${wallpaperUrl(wallpaper)}')`);
+      }
+      root.classList.add("bg-wallpaper");
+    } else {
+      root.style.removeProperty("--wallpaper");
+      root.classList.remove("bg-wallpaper");
+    }
+  }, [wallpaper]);
+
+  const handleWallpaperChange = async (path: string | null) => {
+    const normalized = typeof path === "string" ? path.trim() : "";
+    setWallpaper(normalized ? normalized : null);
+    if (normalized) {
+      await window.electron.invoke("env:set-wallpaper", normalized);
+    } else {
+      await window.electron.invoke("env:clear-wallpaper");
+    }
+  };
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "light" ? "dark" : "light"));
@@ -1245,7 +1281,8 @@ const App = () => {
           onAgentEnvChange={handleAgentEnvChange}
           isConnected={isConnected}
           onConnectToggle={handleConnect}
-          currentWorkspace={currentWorkspace}
+          wallpaper={wallpaper}
+          onWallpaperChange={handleWallpaperChange}
         />
         <NewTaskModal
           isOpen={isNewTaskOpen}

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { ChevronDown } from "lucide-react";
 import type { AgentModelInfo, ConnectionStatus } from "../types";
 
@@ -31,6 +32,8 @@ export const ChatHeader = ({
   agentMessageLog,
 }: ChatHeaderProps) => {
   const currentModel = models.find((model) => model.modelId === currentModelId);
+  const dragStyle = { WebkitAppRegion: "drag" } as CSSProperties;
+  const noDragStyle = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
   return (
     <>
@@ -68,7 +71,7 @@ export const ChatHeader = ({
 
         <div
           className="absolute left-1/2 -translate-x-1/2 text-sm font-medium text-ink-700 select-none"
-          style={{ WebkitAppRegion: "drag" }}
+          style={dragStyle}
         >
           {title || "Agent Cowork"}
         </div>
@@ -80,7 +83,7 @@ export const ChatHeader = ({
 
         <div
           className="flex items-center gap-3 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
-          style={{ WebkitAppRegion: "no-drag" }}
+          style={noDragStyle}
         >
           {models.length > 0 && (
             <div className="relative inline-flex flex-col gap-1.5">

@@ -1,6 +1,5 @@
 import { Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import type { ImageAttachment } from "../types";
 
 interface SendBoxProps {
   value: string;

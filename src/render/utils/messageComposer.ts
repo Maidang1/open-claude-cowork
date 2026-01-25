@@ -1,4 +1,11 @@
-import type { MessageIndex, TMessage } from "../types/messageTypes";
+import type {
+  MessageIndex,
+  TAcpToolCallMessage,
+  TMessage,
+  TTextMessage,
+  TThoughtMessage,
+  TToolCallMessage,
+} from "../types/messageTypes";
 
 // 构建消息索引
 export function buildMessageIndex(list: TMessage[]): MessageIndex {
@@ -41,8 +48,14 @@ export function composeMessage(list: TMessage[], newMsg: TMessage): TMessage[] {
     const existingIdx = index.toolCallIdIndex.get(newMsg.content.update.toolCallId);
     if (existingIdx !== undefined) {
       const existingMsg = list[existingIdx];
-      const merged = { ...existingMsg.content, ...newMsg.content };
-      const updated = { ...existingMsg, content: merged };
+      if (existingMsg.type !== "acp_tool_call") {
+        return replaceMessage(list, existingIdx, newMsg);
+      }
+      const merged: TAcpToolCallMessage["content"] = {
+        ...existingMsg.content,
+        ...newMsg.content,
+      };
+      const updated: TAcpToolCallMessage = { ...existingMsg, content: merged };
       return replaceMessage(list, existingIdx, updated);
     }
   }
@@ -52,8 +65,14 @@ export function composeMessage(list: TMessage[], newMsg: TMessage): TMessage[] {
     const existingIdx = index.callIdIndex.get(newMsg.content.callId);
     if (existingIdx !== undefined) {
       const existingMsg = list[existingIdx];
-      const merged = { ...existingMsg.content, ...newMsg.content };
-      const updated = { ...existingMsg, content: merged };
+      if (existingMsg.type !== "tool_call") {
+        return replaceMessage(list, existingIdx, newMsg);
+      }
+      const merged: TToolCallMessage["content"] = {
+        ...existingMsg.content,
+        ...newMsg.content,
+      };
+      const updated: TToolCallMessage = { ...existingMsg, content: merged };
       return replaceMessage(list, existingIdx, updated);
     }
   }
@@ -63,29 +82,30 @@ export function composeMessage(list: TMessage[], newMsg: TMessage): TMessage[] {
     const existingIdx = index.msgIdIndex.get(newMsg.msg_id);
     if (existingIdx !== undefined) {
       const existingMsg = list[existingIdx];
+      if (existingMsg.type !== newMsg.type) {
+        return replaceMessage(list, existingIdx, newMsg);
+      }
       if (existingMsg.type === "text" && newMsg.type === "text") {
-        const merged = {
+        const merged: TTextMessage["content"] = {
           ...existingMsg.content,
           ...newMsg.content,
           text: `${existingMsg.content.text || ""}${newMsg.content.text || ""}`,
         };
-        const updated = { ...existingMsg, content: merged };
+        const updated: TTextMessage = { ...existingMsg, content: merged };
         return replaceMessage(list, existingIdx, updated);
       }
 
       if (existingMsg.type === "thought" && newMsg.type === "thought") {
-        const merged = {
+        const merged: TThoughtMessage["content"] = {
           ...existingMsg.content,
           ...newMsg.content,
           thought: `${existingMsg.content.thought || ""}${newMsg.content.thought || ""}`,
         };
-        const updated = { ...existingMsg, content: merged };
+        const updated: TThoughtMessage = { ...existingMsg, content: merged };
         return replaceMessage(list, existingIdx, updated);
       }
 
-      const merged = { ...existingMsg.content, ...newMsg.content };
-      const updated = { ...existingMsg, content: merged };
-      return replaceMessage(list, existingIdx, updated);
+      return replaceMessage(list, existingIdx, newMsg);
     }
   }
 

@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import type { Task } from "../types";
@@ -26,6 +27,7 @@ export const Sidebar = ({
   onToggleTheme,
 }: SidebarProps) => {
   const { Moon, Sun, Settings, Trash2, Edit2 } = require("lucide-react");
+  const dragStyle = { WebkitAppRegion: "drag" } as CSSProperties;
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
 
@@ -56,7 +58,7 @@ export const Sidebar = ({
 
   return (
     <aside className="fixed inset-y-0 left-0 flex h-full w-[280px] flex-col gap-4 border-r border-ink-900/5 bg-surface-cream px-4 pb-4 pt-12">
-      <div className="absolute top-0 left-0 right-0 h-12" style={{ WebkitAppRegion: "drag" }} />
+      <div className="absolute top-0 left-0 right-0 h-12" style={dragStyle} />
       <div className="flex gap-2">
         <button
           type="button"

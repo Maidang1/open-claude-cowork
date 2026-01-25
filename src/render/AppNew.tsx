@@ -1,6 +1,5 @@
 import { theme as antdTheme, ConfigProvider } from "antd";
 import { Loader2 } from "lucide-react";
-import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./tailwind.css";
 import "./theme.css";
@@ -9,16 +8,7 @@ import { ChatHeader, MessageRenderer, SendBox, Sidebar } from "./components";
 import EnvironmentSetup from "./EnvironmentSetup";
 import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
-import type {
-  AgentCommandInfo,
-  AgentInfoState,
-  ConnectionStatus,
-  ImageAttachment,
-  IncomingMessage,
-  Task,
-  ToolCall,
-} from "./types";
-import type { TMessage } from "./types/messageTypes";
+import type { AgentInfoState, ConnectionStatus, ImageAttachment, IncomingMessage, Task } from "./types";
 import { MessageComposer } from "./utils/messageComposer";
 import {
   transformIncomingMessage,
@@ -30,22 +20,6 @@ import WorkspaceWelcome from "./WorkspaceWelcome";
 
 // --- Types ---
 declare const DEBUG: string | undefined;
-
-const LOCAL_COMMANDS: AgentCommandInfo[] = [];
-
-const mergeCommands = (
-  agentCommands: AgentCommandInfo[],
-  localCommands: AgentCommandInfo[],
-) => {
-  const merged = new Map<string, AgentCommandInfo>();
-  for (const cmd of localCommands) {
-    merged.set(cmd.name, cmd);
-  }
-  for (const cmd of agentCommands) {
-    merged.set(cmd.name, cmd);
-  }
-  return [...merged.values()];
-};
 
 // --- Main App ---
 
@@ -65,8 +39,6 @@ const App = () => {
     commands: [],
     tokenUsage: null,
   });
-  const [isCommandMenuOpen, setIsCommandMenuOpen] = useState(false);
-  const [commandSelectedIndex, setCommandSelectedIndex] = useState(0);
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -470,6 +442,7 @@ const App = () => {
       // Agent Messages
       setTasks((prev) => {
         const resolvedTaskId = resolveTaskId(prev);
+        if (!resolvedTaskId) return prev;
         const targetTask = resolvedTaskId
           ? prev.find((task) => task.id === resolvedTaskId)
           : null;
@@ -962,47 +935,6 @@ const App = () => {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (isCommandMenuOpen) {
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        e.preventDefault();
-        setCommandSelectedIndex((prev) => {
-          const max = filteredCommands.length;
-          if (max === 0) return 0;
-          if (e.key === "ArrowDown") {
-            return (prev + 1) % max;
-          }
-          return (prev - 1 + max) % max;
-        });
-        return;
-      }
-
-      if (e.key === "Enter") {
-        if (filteredCommands.length > 0) {
-          e.preventDefault();
-          handleCommandPick(filteredCommands[commandSelectedIndex]);
-          return;
-        }
-      }
-
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setIsCommandMenuOpen(false);
-        return;
-      }
-    }
-
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  const handleCommandPick = (cmd: AgentCommandInfo) => {
-    setInputText(`/${cmd.name} `);
-    setIsCommandMenuOpen(false);
-  };
-
   const handleModelPick = async (modelId: string) => {
     try {
       const res = await window.electron.invoke("agent:set-model", modelId);
@@ -1029,23 +961,6 @@ const App = () => {
       });
     }
   };
-
-  const mergedCommands = useMemo(
-    () => mergeCommands(agentInfo.commands, LOCAL_COMMANDS),
-    [agentInfo.commands],
-  );
-  const commandQuery = inputText.startsWith("/")
-    ? inputText.slice(1).trim().toLowerCase()
-    : "";
-  const filteredCommands = mergedCommands.filter((cmd) =>
-    commandQuery ? cmd.name.toLowerCase().includes(commandQuery) : true,
-  );
-
-  useEffect(() => {
-    if (commandSelectedIndex >= filteredCommands.length) {
-      setCommandSelectedIndex(0);
-    }
-  }, [commandSelectedIndex, filteredCommands.length]);
 
   const handleAgentCommandChange = (value: string) => {
     setAgentCommand(value);
@@ -1141,7 +1056,6 @@ const App = () => {
           onAgentEnvChange={handleAgentEnvChange}
           isConnected={isConnected}
           onConnectToggle={handleConnect}
-          currentWorkspace={currentWorkspace}
           wallpaper={wallpaper}
           onWallpaperChange={handleWallpaperChange}
         />

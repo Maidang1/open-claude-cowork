@@ -278,104 +278,94 @@ export function transformToLegacyMessages(
 
   return messages.map((msg) => {
     const prev = prevById.get(msg.id);
-
-    if (msg.type === "system") {
-      return {
-        id: msg.id,
-        msgId: msg.msg_id ?? prev?.msgId,
-        sender: "system",
-        content: msg.content.text || "",
-      };
+    switch (msg.type) {
+      case "system":
+        return {
+          id: msg.id,
+          msgId: msg.msg_id ?? prev?.msgId,
+          sender: "system",
+          content: msg.content.text || "",
+        };
+      case "acp_permission":
+        return {
+          id: msg.id,
+          msgId: msg.msg_id ?? prev?.msgId,
+          sender: "system",
+          content: msg.content.content || msg.content.tool || "Permission request",
+          permissionId: msg.content.id || prev?.permissionId,
+          options: msg.content.options || prev?.options,
+        };
+      case "thought":
+        return {
+          id: msg.id,
+          msgId: msg.msg_id ?? prev?.msgId,
+          sender: "agent",
+          content: "",
+          thought: msg.content.thought || "",
+          tokenUsage: prev?.tokenUsage,
+        };
+      case "acp_tool_call": {
+        const fallbackTool = prev?.toolCalls?.[0];
+        const toolCallId = msg.content.toolCallId || msg.content.update?.toolCallId;
+        const tool: ToolCall = {
+          id: toolCallId || fallbackTool?.id || msg.id,
+          name: msg.content.name || msg.content.title || fallbackTool?.name || "Unknown Tool",
+          kind: msg.content.kind || fallbackTool?.kind,
+          status: toToolCallStatus(msg.content.status || msg.content.update?.status),
+          result: {
+            rawInput:
+              msg.content.rawInput ?? msg.content.update?.rawInput ?? fallbackTool?.result?.rawInput,
+            rawOutput:
+              msg.content.rawOutput ??
+              msg.content.update?.rawOutput ??
+              fallbackTool?.result?.rawOutput,
+          },
+        };
+        return {
+          id: msg.id,
+          msgId: msg.msg_id ?? prev?.msgId,
+          sender: "agent",
+          content: "",
+          toolCalls: [tool],
+          tokenUsage: prev?.tokenUsage,
+        };
+      }
+      case "tool_call": {
+        const fallbackTool = prev?.toolCalls?.[0];
+        const tool: ToolCall = {
+          id: msg.content.callId || fallbackTool?.id || msg.id,
+          name: msg.content.name || fallbackTool?.name || "Unknown Tool",
+          status: toToolCallStatus(msg.content.status || fallbackTool?.status),
+          result: {
+            rawInput: msg.content.result?.rawInput ?? fallbackTool?.result?.rawInput,
+            rawOutput: msg.content.result?.rawOutput ?? fallbackTool?.result?.rawOutput,
+          },
+        };
+        return {
+          id: msg.id,
+          msgId: msg.msg_id ?? prev?.msgId,
+          sender: "agent",
+          content: "",
+          toolCalls: [tool],
+          tokenUsage: prev?.tokenUsage,
+        };
+      }
+      case "text": {
+        const sender = resolveSender(msg, prev);
+        return {
+          id: msg.id,
+          msgId: msg.msg_id ?? prev?.msgId,
+          sender,
+          content: msg.content.text || "",
+          images: msg.content.images,
+          tokenUsage: prev?.tokenUsage,
+        };
+      }
     }
-
-    if (msg.type === "acp_permission") {
-      return {
-        id: msg.id,
-        msgId: msg.msg_id ?? prev?.msgId,
-        sender: "system",
-        content: msg.content.content || msg.content.tool || "Permission request",
-        permissionId: msg.content.id || prev?.permissionId,
-        options: msg.content.options || prev?.options,
-      };
-    }
-
-    if (msg.type === "thought") {
-      return {
-        id: msg.id,
-        msgId: msg.msg_id ?? prev?.msgId,
-        sender: "agent",
-        content: "",
-        thought: msg.content.thought || "",
-        tokenUsage: prev?.tokenUsage,
-      };
-    }
-
-    if (msg.type === "acp_tool_call") {
-      const fallbackTool = prev?.toolCalls?.[0];
-      const toolCallId = msg.content.toolCallId || msg.content.update?.toolCallId;
-      const tool: ToolCall = {
-        id: toolCallId || fallbackTool?.id || msg.id,
-        name: msg.content.name || msg.content.title || fallbackTool?.name || "Unknown Tool",
-        kind: msg.content.kind || fallbackTool?.kind,
-        status: toToolCallStatus(msg.content.status || msg.content.update?.status),
-        result: {
-          rawInput:
-            msg.content.rawInput ?? msg.content.update?.rawInput ?? fallbackTool?.result?.rawInput,
-          rawOutput:
-            msg.content.rawOutput ??
-            msg.content.update?.rawOutput ??
-            fallbackTool?.result?.rawOutput,
-        },
-      };
-      return {
-        id: msg.id,
-        msgId: msg.msg_id ?? prev?.msgId,
-        sender: "agent",
-        content: "",
-        toolCalls: [tool],
-        tokenUsage: prev?.tokenUsage,
-      };
-    }
-
-    if (msg.type === "tool_call") {
-      const fallbackTool = prev?.toolCalls?.[0];
-      const tool: ToolCall = {
-        id: msg.content.callId || fallbackTool?.id || msg.id,
-        name: msg.content.name || fallbackTool?.name || "Unknown Tool",
-        status: toToolCallStatus(msg.content.status || fallbackTool?.status),
-        result: {
-          rawInput: msg.content.result?.rawInput ?? fallbackTool?.result?.rawInput,
-          rawOutput: msg.content.result?.rawOutput ?? fallbackTool?.result?.rawOutput,
-        },
-      };
-      return {
-        id: msg.id,
-        msgId: msg.msg_id ?? prev?.msgId,
-        sender: "agent",
-        content: "",
-        toolCalls: [tool],
-        tokenUsage: prev?.tokenUsage,
-      };
-    }
-
-    if (msg.type === "text") {
-      const sender = resolveSender(msg, prev);
-      return {
-        id: msg.id,
-        msgId: msg.msg_id ?? prev?.msgId,
-        sender,
-        content: msg.content.text || "",
-        images: msg.content.images,
-        tokenUsage: prev?.tokenUsage,
-      };
-    }
-
-    return {
-      id: msg.id,
-      msgId: msg.msg_id ?? prev?.msgId,
-      sender: prev?.sender || "system",
-      content: (msg.content as any)?.text || "",
-      tokenUsage: prev?.tokenUsage,
+    return prev ?? {
+      id: "unknown",
+      sender: "system",
+      content: "",
     };
   });
 }

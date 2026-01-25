@@ -76,7 +76,6 @@ interface SettingsModalProps {
   onAgentEnvChange: (env: Record<string, string>) => void;
   isConnected: boolean;
   onConnectToggle: () => void;
-  currentWorkspace: string | null;
   wallpaper: string | null;
   onWallpaperChange: (path: string | null) => void;
 }
@@ -90,7 +89,6 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onAgentEnvChange,
   isConnected,
   onConnectToggle,
-  currentWorkspace,
   wallpaper,
   onWallpaperChange,
 }) => {

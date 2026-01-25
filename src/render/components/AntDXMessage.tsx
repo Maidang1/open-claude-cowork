@@ -207,11 +207,13 @@ export const AntDXMessage = ({
   const isUser = msg.sender === "user";
   const isSystem = msg.sender === "system";
 
+  const permissionId = msg.permissionId;
+
   // Permission Request UI - render as special system message
-  if (msg.permissionId) {
+  if (permissionId) {
     const handlePermission = (optionId: string | null) => {
       if (onPermissionResponse) {
-        onPermissionResponse(msg.permissionId, optionId);
+        onPermissionResponse(permissionId, optionId);
       }
     };
 
@@ -285,7 +287,8 @@ export const AntDXMessage = ({
 
   // AI message - render thought, tools, and content in order
   const hasThought = msg.thought && msg.thought.length > 0;
-  const hasToolCalls = msg.toolCalls && msg.toolCalls.length > 0;
+  const toolCalls = msg.toolCalls ?? [];
+  const hasToolCalls = toolCalls.length > 0;
   const hasContent = msg.content && msg.content.length > 0;
 
   if (isLoading) {
@@ -341,7 +344,7 @@ export const AntDXMessage = ({
       {/* Tool Calls */}
       {hasToolCalls && (
         <div className="flex flex-col gap-1.5 mb-2">
-          {msg.toolCalls.map((tool) => (
+          {toolCalls.map((tool) => (
             <ToolCallItem key={tool.id} tool={tool} />
           ))}
         </div>

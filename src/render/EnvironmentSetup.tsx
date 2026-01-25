@@ -148,7 +148,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
       if (res?.success === false) {
         throw new Error(res.error || "Failed to save runtime");
       }
-      check;
+      checkEnvironment();
     } catch (e: any) {
       alert(e.message || "Failed to update runtime");
     } finally {

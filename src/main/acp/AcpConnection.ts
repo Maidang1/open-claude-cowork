@@ -2,6 +2,7 @@ import { type ChildProcess, exec, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import { Readable, Writable } from "node:stream";
 import { promisify } from "node:util";
+import type { ContentBlock } from "@agentclientprotocol/sdk";
 import { ClientSideConnection, ndJsonStream } from "@agentclientprotocol/sdk";
 import type { IncomingMessage } from "@src/types/acpTypes";
 import { resolveWorkspacePath } from "./paths";
@@ -251,12 +252,7 @@ export class AcpConnection {
 
   async prompt(
     sessionId: string,
-    prompt: Array<{
-      type: string;
-      text?: string;
-      mimeType?: string;
-      data?: string;
-    }>,
+    prompt: ContentBlock[],
   ) {
     if (!this.connection) {
       throw new Error("Connection closed before prompt");

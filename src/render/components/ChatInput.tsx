@@ -42,7 +42,6 @@ export const ChatInput = ({
   // 处理粘贴事件
   const handlePaste = (e: React.ClipboardEvent) => {
     const items = e.clipboardData.items;
-    const newImages: ImageAttachment[] = [];
 
     for (let i = 0; i < items.length; i++) {
       const item = items[i];

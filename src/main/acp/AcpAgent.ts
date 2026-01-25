@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import type { ContentBlock } from "@agentclientprotocol/sdk";
 import type { AgentInfoState, IncomingMessage } from "@src/types/acpTypes";
 import { AcpAdapter, extractTokenUsage } from "./AcpAdapter";
 import { AcpConnection } from "./AcpConnection";
@@ -8,12 +9,7 @@ const buildPromptContent = (
   text: string,
   images?: Array<{ mimeType: string; dataUrl: string }>,
 ) => {
-  const prompt: Array<{
-    type: string;
-    text?: string;
-    mimeType?: string;
-    data?: string;
-  }> = [{ type: "text", text }];
+  const prompt: ContentBlock[] = [{ type: "text", text }];
 
   if (images && images.length > 0) {
     for (const image of images) {
