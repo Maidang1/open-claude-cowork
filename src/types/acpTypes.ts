@@ -13,7 +13,7 @@ export interface AgentPlugin {
   defaultCommand: string;
   checkCommand?: string;
   defaultEnv?: Record<string, string>;
-  icon?: string; // 新增图标属性
+  icon?: string; // Icon key used by @lobehub/icons.
 }
 
 export const ACP_BACKENDS_ALL: AgentPlugin[] = [
@@ -22,40 +22,44 @@ export const ACP_BACKENDS_ALL: AgentPlugin[] = [
     name: "Qwen Agent",
     description: "Official Qwen agent with ACP protocol support.",
     packageSpec: "@qwen-code/qwen-code",
-    defaultCommand: "qwen --acp --allowed-tools all,run_shell_command --experimental-skills",
+    defaultCommand:
+      "qwen --acp --allowed-tools all,run_shell_command --experimental-skills",
     checkCommand: "qwen",
     defaultEnv: {},
-    icon: "🧠",
+    icon: "qwen",
   },
   {
     id: "claude",
     name: "Claude Agent",
-    description: "Claude agent with ACP protocol support using @zed-industries/codex-acp.",
-    packageSpec: "@zed-industries/codex-acp",
-    defaultCommand: "npx @zed-industries/codex-acp",
+    description:
+      "Claude agent with ACP protocol support using @zed-industries/claude-code-acp.",
+    packageSpec: "@zed-industries/claude-code-acp",
+    defaultCommand: "npx @zed-industries/claude-code-acp",
     checkCommand: "npx",
     defaultEnv: {},
-    icon: "🤖",
+    icon: "claude",
   },
   {
     id: "codex",
     name: "Codex Agent",
-    description: "Codex agent with ACP protocol support using @zed-industries/codex-acp.",
+    description:
+      "Codex agent with ACP protocol support using @zed-industries/codex-acp.",
     packageSpec: "@zed-industries/codex-acp",
     defaultCommand: "npx @zed-industries/codex-acp",
     checkCommand: "npx",
     defaultEnv: {},
-    icon: "💻",
+    icon: "openai",
   },
   {
     id: "gemini",
     name: "Gemini Agent",
     description: "Official Gemini agent with ACP protocol support.",
     packageSpec: "@google/gemini-code",
-    defaultCommand: "gemini --acp --allowed-tools all,run_shell_command --experimental-skills",
+    defaultCommand:
+      "gemini --acp --allowed-tools all,run_shell_command --experimental-skills",
     checkCommand: "gemini",
     defaultEnv: {},
-    icon: "🌟",
+    icon: "gemini",
   },
 ];
 

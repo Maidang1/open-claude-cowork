@@ -1,6 +1,7 @@
 import { Check, ChevronDown, Plus, Trash2, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AgentIcon } from "./agents/AgentIcon";
 import { AGENT_PLUGINS, getAgentPlugin } from "./agents/registry";
 import { useClickOutside, useEscapeKey, useNodeRuntime } from "./hooks";
 import { wallpaperUrl } from "./utils/wallpaper";
@@ -501,7 +502,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       }}
                     >
                       {selectedPlugin?.icon && (
-                        <span style={{ fontSize: "16px" }}>{selectedPlugin.icon}</span>
+                        <span style={{ display: "inline-flex", alignItems: "center" }}>
+                          <AgentIcon icon={selectedPlugin.icon} size={16} />
+                        </span>
                       )}
                       {selectedPlugin ? selectedPlugin.name : "Custom Agent"}
                     </span>
@@ -541,7 +544,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                               gap: "8px",
                             }}
                           >
-                            {plugin.icon && <span style={{ fontSize: "16px" }}>{plugin.icon}</span>}
+                            {plugin.icon && (
+                              <span style={{ display: "inline-flex", alignItems: "center" }}>
+                                <AgentIcon icon={plugin.icon} size={16} />
+                              </span>
+                            )}
                             {plugin.name}
                             {pluginInstallStatuses[plugin.id] === "installed" && (
                               <span

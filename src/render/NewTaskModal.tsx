@@ -1,5 +1,6 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { AgentIcon } from "./agents/AgentIcon";
 import { AGENT_PLUGINS, getAgentPlugin } from "./agents/registry";
 
 interface NewTaskModalProps {
@@ -173,7 +174,11 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
                 className={`preset-button ${selectedPluginId === plugin.id ? "active" : ""}`}
               >
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                  {plugin.icon && <span style={{ fontSize: "18px" }}>{plugin.icon}</span>}
+                  {plugin.icon && (
+                    <span style={{ display: "inline-flex", alignItems: "center" }}>
+                      <AgentIcon icon={plugin.icon} size={18} />
+                    </span>
+                  )}
                   <span>{plugin.name}</span>
                   {pluginInstallStatuses[plugin.id] === "installed" && (
                     <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)" }}>
