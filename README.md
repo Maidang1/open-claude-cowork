@@ -4,10 +4,24 @@ Open Claude Cowork is a powerful desktop application built with Electron and Rea
 
 ## Features
 
-<p align="center">
-  <img width="400" alt="image" src="https://github.com/user-attachments/assets/cb24746b-93c5-4523-9014-281eaf879a9b" />
-  <img width="400" alt="image" src="https://github.com/user-attachments/assets/4c965d7c-78c5-4d7b-a042-c88f12e763e7" />
+
+
+
+
+
+<p align="left">
+  <img width="400" alt="screenshot-20260126-001" src="https://github.com/user-attachments/assets/38a09ed6-e654-434d-8aa0-2d2e68bb0250" />
+  <img width="400" alt="screenshot-20260126-002" src="https://github.com/user-attachments/assets/ee6096ec-bd14-4c9c-9a78-6eed9d096093" />
 </p>
+<p align="left">
+  <img width="400" alt="screenshot-20260126-005" src="https://github.com/user-attachments/assets/3399660f-1bf1-4d74-8e67-b72eccc3be55" />
+  <img width="400" alt="screenshot-20260126-006" src="https://github.com/user-attachments/assets/1598669e-0340-41b4-8184-e4f360d640c2" />
+</p>
+<p align="left">
+  <img width="400" alt="screenshot-20260126-003" src="https://github.com/user-attachments/assets/294788f2-0575-4879-8886-ff85f0919fc6" />
+  <img width="400" alt="screenshot-20260126-004" src="https://github.com/user-attachments/assets/62ec5dd3-385b-4026-be15-1d6227accf40" />
+</p>
+
 
 - **🤖 AI Agent Integration**: Connect and interact with AI agents (e.g., Qwen) using the standardized Agent Client Protocol (ACP).
 - **📋 Task Management**: Organize your work into distinct tasks, each with its own workspace context and agent configuration.
