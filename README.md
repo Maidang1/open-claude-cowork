@@ -18,8 +18,8 @@ Open Claude Cowork is a powerful desktop application built with Electron and Rea
   <img width="400" alt="screenshot-20260126-006" src="https://github.com/user-attachments/assets/1598669e-0340-41b4-8184-e4f360d640c2" />
 </p>
 <p align="left">
-  <img width="400" alt="screenshot-20260126-003" src="https://github.com/user-attachments/assets/294788f2-0575-4879-8886-ff85f0919fc6" />
   <img width="400" alt="screenshot-20260126-004" src="https://github.com/user-attachments/assets/62ec5dd3-385b-4026-be15-1d6227accf40" />
+  <img width="400" alt="screenshot-20260126-003" src="https://github.com/user-attachments/assets/294788f2-0575-4879-8886-ff85f0919fc6" />
 </p>
 
 
