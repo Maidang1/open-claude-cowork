@@ -13,8 +13,8 @@ const buildTarget =
 const getMacArch = () => {
   if (buildTarget === "darwin-x64") return ["x64"];
   if (buildTarget === "darwin-arm64") return ["arm64"];
-  // darwin (universal) or fallback: build both
-  return ["x64", "arm64"];
+  // 只构建 ARM64（现代 macOS 设备主要是 ARM）
+  return ["arm64"];
 };
 
 const dir = buildTarget + "/" + dayjs().format("YYYY_MM_DD_HH_mm_ss");
@@ -51,7 +51,7 @@ const config = {
       to: "assets/icons",
     },
     {
-      from: "./assets/wallpaper",
+      from: "./public/assets/wallpaper",
       to: "assets/wallpaper",
     },
   ],
@@ -72,10 +72,6 @@ const config = {
     target: [
       {
         target: "dmg",
-        arch: getMacArch(),
-      },
-      {
-        target: "zip",
         arch: getMacArch(),
       },
     ],
@@ -117,8 +113,7 @@ const config = {
   win: {
     icon: resolve(__dirname, `./public/assets/icons/icon.ico`),
     target: [
-      { target: "nsis", arch: ["x64", "ia32"] },
-      { target: "portable", arch: ["x64"] },
+      { target: "nsis", arch: ["x64"] }, // 只构建 x64 版本
     ],
     verifyUpdateCodeSignature: false,
     requestedExecutionLevel: "asInvoker",
@@ -137,9 +132,8 @@ const config = {
     artifactName: "${productName}-${version}-${env.BUILD_ENV}-portable.${ext}",
   },
   linux: {
-    artifactName: "${productName}-${version}-${env.BUILD_ENV}.${ext}",
+    artifactName: "${productName}-${version}-${env.BUILD_ENV}-${arch}.${ext}",
     target: [
-      { target: "AppImage", arch: ["x64", "arm64"] },
       { target: "deb", arch: ["x64", "arm64"] },
       { target: "rpm", arch: ["x64", "arm64"] },
     ],

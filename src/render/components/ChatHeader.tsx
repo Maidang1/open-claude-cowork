@@ -32,6 +32,18 @@ export const ChatHeader = ({
   agentMessageLog,
 }: ChatHeaderProps) => {
   const currentModel = models.find((model) => model.modelId === currentModelId);
+  const modelMenuItems = currentModelId
+    ? currentModel
+      ? models
+      : [
+          ...models,
+          {
+            modelId: currentModelId,
+            name: currentModelId,
+            description: "Current model (not in list)",
+          },
+        ]
+    : models;
   const dragStyle = { WebkitAppRegion: "drag" } as CSSProperties;
   const noDragStyle = { WebkitAppRegion: "no-drag" } as CSSProperties;
 
@@ -92,7 +104,7 @@ export const ChatHeader = ({
           className="flex items-center gap-3 opacity-0 pointer-events-none transition-opacity group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto"
           style={noDragStyle}
         >
-          {models.length > 0 && (
+          {(modelMenuItems.length > 0 || currentModelId) && (
             <div className="relative inline-flex flex-col gap-1.5">
               <button
                 type="button"
@@ -106,7 +118,7 @@ export const ChatHeader = ({
               </button>
               {isModelMenuOpen && (
                 <div className="absolute top-[calc(100%+6px)] right-0 w-60 rounded-xl border border-ink-900/10 bg-surface p-1 shadow-card z-50 max-h-72 overflow-y-auto">
-                  {models.map((model) => (
+                  {modelMenuItems.map((model) => (
                     <button
                       key={model.modelId}
                       type="button"

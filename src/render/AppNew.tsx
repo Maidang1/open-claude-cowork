@@ -33,32 +33,34 @@ const App = () => {
   const [envReady, setEnvReady] = useState<boolean | null>(null); // null = checking
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const [inputText, setInputText] = useState("");
-  const [inputImages, setInputImages] = useState<ImageAttachment[]>([]);
+  const [inputTextByTask, setInputTextByTask] = useState<Record<string, string>>({});
+  const [inputImagesByTask, setInputImagesByTask] = useState<
+    Record<string, ImageAttachment[]>
+  >({});
   const [agentCommand, setAgentCommand] = useState(getDefaultAgentPlugin().defaultCommand);
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
-  const [agentInfo, setAgentInfo] = useState<AgentInfoState>({
-    models: [],
-    currentModelId: null,
-    commands: [],
-    tokenUsage: null,
-  });
+  const [agentInfoByTask, setAgentInfoByTask] = useState<Record<string, AgentInfoState>>(
+    {},
+  );
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
+  const [isConnectedByTask, setIsConnectedByTask] = useState<Record<string, boolean>>({});
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
-  const [agentCapabilities, setAgentCapabilities] = useState<any | null>(null);
-  const [agentMessageLog, setAgentMessageLog] = useState<string[]>([]);
+  const [agentCapabilitiesByTask, setAgentCapabilitiesByTask] = useState<
+    Record<string, any | null>
+  >({});
+  const [agentMessageLogByTask, setAgentMessageLogByTask] = useState<
+    Record<string, string[]>
+  >({});
   const showDebug = String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
 
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
-    state: "disconnected",
-    message: "Disconnected",
-  });
+  const [connectionStatusByTask, setConnectionStatusByTask] = useState<
+    Record<string, ConnectionStatus>
+  >({});
 
-  // Track if we are waiting for an agent response
-  const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
+  // Track waiting state per task
+  const [waitingByTask, setWaitingByTask] = useState<Record<string, boolean>>({});
 
   const [theme, setTheme] = useState<"light" | "dark" | "auto">(() => {
     if (typeof window !== "undefined" && window.matchMedia) {
@@ -78,12 +80,14 @@ const App = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const autoConnectAttempted = useRef(false);
   const connectInFlight = useRef(false);
-  const sessionLoadInFlight = useRef(false);
+  const sessionLoadInFlightByTask = useRef<Record<string, boolean>>({});
+  const pendingConnectTaskIdRef = useRef<string | null>(null);
   const tasksRef = useRef<Task[]>([]);
   const activeTaskIdRef = useRef<string | null>(null);
+  const isConnectedByTaskRef = useRef<Record<string, boolean>>({});
   const composerRef = useRef<MessageComposer | null>(null);
-  const agentTextMsgIdRef = useRef<string | null>(null);
-  const agentThoughtMsgIdRef = useRef<string | null>(null);
+  const agentTextMsgIdByTaskRef = useRef<Record<string, string | null>>({});
+  const agentThoughtMsgIdByTaskRef = useRef<Record<string, string | null>>({});
 
   useEffect(() => {
     tasksRef.current = tasks;
@@ -93,7 +97,59 @@ const App = () => {
     activeTaskIdRef.current = activeTaskId;
   }, [activeTaskId]);
 
+  useEffect(() => {
+    isConnectedByTaskRef.current = isConnectedByTask;
+  }, [isConnectedByTask]);
+
   const activeTask = tasks.find((task) => task.id === activeTaskId) || null;
+  const defaultAgentInfo = useMemo<AgentInfoState>(
+    () => ({
+      models: [],
+      currentModelId: null,
+      commands: [],
+      tokenUsage: null,
+    }),
+    [],
+  );
+  const activeAgentInfo = useMemo(() => {
+    if (!activeTaskId) return defaultAgentInfo;
+    const stored = agentInfoByTask[activeTaskId] || defaultAgentInfo;
+    return {
+      models: stored.models || [],
+      commands: stored.commands || [],
+      currentModelId: activeTask?.modelId ?? stored.currentModelId ?? null,
+      tokenUsage: activeTask?.tokenUsage ?? stored.tokenUsage ?? null,
+    };
+  }, [
+    activeTask?.modelId,
+    activeTask?.tokenUsage,
+    activeTaskId,
+    agentInfoByTask,
+    defaultAgentInfo,
+  ]);
+  const activeAgentCapabilities = activeTaskId
+    ? agentCapabilitiesByTask[activeTaskId] ?? null
+    : null;
+  const activeAgentMessageLog = activeTaskId
+    ? agentMessageLogByTask[activeTaskId] ?? []
+    : [];
+  const inputText = activeTaskId ? inputTextByTask[activeTaskId] ?? "" : "";
+  const inputImages = activeTaskId ? inputImagesByTask[activeTaskId] ?? [] : [];
+  const activeIsConnected = activeTaskId ? Boolean(isConnectedByTask[activeTaskId]) : false;
+  const defaultConnectionStatus = useMemo<ConnectionStatus>(
+    () => ({
+      state: "disconnected",
+      message: "Disconnected",
+    }),
+    [],
+  );
+  const activeConnectionStatus = activeTaskId
+    ? connectionStatusByTask[activeTaskId] ?? defaultConnectionStatus
+    : defaultConnectionStatus;
+  const anyConnected = useMemo(
+    () => Object.values(isConnectedByTask).some(Boolean),
+    [isConnectedByTask],
+  );
 
   // 初始化消息合并器
   useEffect(() => {
@@ -137,11 +193,17 @@ const App = () => {
     setCurrentWorkspace(task.workspace);
     setAgentCommand(task.agentCommand);
     setAgentEnv(task.agentEnv || {});
-    setAgentInfo((prev) => ({
-      ...prev,
-      currentModelId: task.modelId ?? prev.currentModelId,
-      tokenUsage: task.tokenUsage ?? null,
-    }));
+    setAgentInfoByTask((prev) => {
+      const existing = prev[task.id] || defaultAgentInfo;
+      return {
+        ...prev,
+        [task.id]: {
+          ...existing,
+          currentModelId: task.modelId ?? existing.currentModelId ?? null,
+          tokenUsage: task.tokenUsage ?? existing.tokenUsage ?? null,
+        },
+      };
+    });
   };
 
   useEffect(() => {
@@ -234,52 +296,185 @@ const App = () => {
       return;
     }
     const task = tasks.find((entry) => entry.id === activeTaskId);
-    if (!task?.modelId && agentInfo.currentModelId) {
+    if (!task?.modelId && activeAgentInfo.currentModelId) {
       applyTaskUpdates(activeTaskId, {
-        modelId: agentInfo.currentModelId,
+        modelId: activeAgentInfo.currentModelId,
         updatedAt: Date.now(),
       });
     }
-  }, [activeTaskId, agentInfo.currentModelId, tasks]);
+  }, [activeAgentInfo.currentModelId, activeTaskId, applyTaskUpdates, tasks]);
 
   useEffect(() => {
-    if (!isConnected) {
-      setAgentCapabilities(null);
+    if (!activeTaskId) {
+      return;
+    }
+    if (!activeIsConnected) {
+      setAgentCapabilitiesByTask((prev) => ({ ...prev, [activeTaskId]: null }));
       return;
     }
     if (window.electron) {
       window.electron
         .invoke("agent:get-capabilities")
-        .then((caps) => setAgentCapabilities(caps))
-        .catch(() => setAgentCapabilities(null));
+        .then((caps) =>
+          setAgentCapabilitiesByTask((prev) => ({ ...prev, [activeTaskId]: caps })),
+        )
+        .catch(() => setAgentCapabilitiesByTask((prev) => ({ ...prev, [activeTaskId]: null })));
     }
-  }, [isConnected]);
+  }, [activeIsConnected, activeTaskId]);
 
   useEffect(() => {
-    if (!activeTaskId && agentMessageLog.length > 0) {
-      setAgentMessageLog([]);
+    if (!activeTaskId && Object.keys(agentMessageLogByTask).length > 0) {
+      setAgentMessageLogByTask({});
     }
-  }, [activeTaskId, agentMessageLog.length]);
+  }, [activeTaskId, agentMessageLogByTask]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, []);
 
+  const setCurrentInputText = useCallback(
+    (value: string) => {
+      if (!activeTaskId) return;
+      setInputTextByTask((prev) => ({ ...prev, [activeTaskId]: value }));
+    },
+    [activeTaskId],
+  );
+
+  const setCurrentInputImages = useCallback(
+    (images: ImageAttachment[]) => {
+      if (!activeTaskId) return;
+      setInputImagesByTask((prev) => ({ ...prev, [activeTaskId]: images }));
+    },
+    [activeTaskId],
+  );
+
+  const appendCurrentInputImages = useCallback(
+    (images: ImageAttachment[]) => {
+      if (!activeTaskId) return;
+      setInputImagesByTask((prev) => {
+        const existing = prev[activeTaskId] ?? [];
+        return { ...prev, [activeTaskId]: [...existing, ...images] };
+      });
+    },
+    [activeTaskId],
+  );
+
+  const setTaskConnected = useCallback((taskId: string, connected: boolean) => {
+    setIsConnectedByTask((prev) => {
+      const isConnected = Boolean(prev[taskId]);
+      if (isConnected === connected) return prev;
+      const next = { ...prev };
+      if (connected) {
+        next[taskId] = true;
+      } else {
+        delete next[taskId];
+      }
+      return next;
+    });
+  }, []);
+
+  const setTaskConnectionStatus = useCallback(
+    (taskId: string, status: ConnectionStatus) => {
+      setConnectionStatusByTask((prev) => {
+        const existing = prev[taskId];
+        if (existing?.state === status.state && existing?.message === status.message) {
+          return prev;
+        }
+        return { ...prev, [taskId]: status };
+      });
+    },
+    [],
+  );
+
+  const clearTaskState = useCallback((taskId: string) => {
+    setInputTextByTask((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+    setInputImagesByTask((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+    setWaitingByTask((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+    setAgentInfoByTask((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+    setAgentCapabilitiesByTask((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+    setAgentMessageLogByTask((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+    setIsConnectedByTask((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+    setConnectionStatusByTask((prev) => {
+      const next = { ...prev };
+      delete next[taskId];
+      return next;
+    });
+    delete sessionLoadInFlightByTask.current[taskId];
+    delete agentTextMsgIdByTaskRef.current[taskId];
+    delete agentThoughtMsgIdByTaskRef.current[taskId];
+    if (pendingConnectTaskIdRef.current === taskId) {
+      pendingConnectTaskIdRef.current = null;
+    }
+  }, []);
+
+  const setTaskWaiting = useCallback((taskId: string, waiting: boolean) => {
+    setWaitingByTask((prev) => {
+      const isWaiting = Boolean(prev[taskId]);
+      if (isWaiting === waiting) return prev;
+      const next = { ...prev };
+      if (waiting) {
+        next[taskId] = true;
+      } else {
+        delete next[taskId];
+      }
+      return next;
+    });
+  }, []);
+
   const handleIncomingMessage = useCallback(
     (data: IncomingMessage) => {
-      // Clear waiting state when receiving agent messages
-      if (
-        data.type === "agent_text" ||
-        data.type === "agent_thought" ||
-        data.type === "tool_call"
-      ) {
-        setIsWaitingForResponse(false);
-      }
-
       const tasksSnapshot = tasksRef.current;
       const activeTaskIdSnapshot = activeTaskIdRef.current;
       const activeTaskSnapshot =
         tasksSnapshot.find((task) => task.id === activeTaskIdSnapshot) ?? null;
+      const resolveTaskId = (list: Task[]) => {
+        if (data.sessionId) {
+          const match = list.find((task) => task.sessionId === data.sessionId);
+          return match?.id ?? activeTaskIdSnapshot;
+        }
+        return activeTaskIdSnapshot;
+      };
+      const resolvedTaskIdSnapshot = resolveTaskId(tasksSnapshot);
+
+      // Clear waiting state only for the task that owns this message
+      if (
+        data.type === "agent_text" ||
+        data.type === "agent_thought" ||
+        data.type === "tool_call" ||
+        data.type === "tool_call_update"
+      ) {
+        if (resolvedTaskIdSnapshot) {
+          setTaskWaiting(resolvedTaskIdSnapshot, false);
+        }
+      }
 
       if (
         !activeTaskIdSnapshot &&
@@ -290,13 +485,6 @@ const App = () => {
       ) {
         return;
       }
-      const resolveTaskId = (list: Task[]) => {
-        if (data.sessionId) {
-          const match = list.find((task) => task.sessionId === data.sessionId);
-          return match?.id ?? activeTaskIdSnapshot;
-        }
-        return activeTaskIdSnapshot;
-      };
       if (data.type === "agent_info") {
         const resolvedTaskId = data.sessionId
           ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)?.id ??
@@ -341,12 +529,20 @@ const App = () => {
             }),
           );
         }
-        setAgentInfo((prev) => ({
-          models: data.info?.models ?? prev.models,
-          currentModelId: data.info?.currentModelId ?? prev.currentModelId,
-          commands: data.info?.commands ?? prev.commands,
-          tokenUsage: mergedUsage,
-        }));
+        if (resolvedTaskId) {
+          setAgentInfoByTask((prev) => {
+            const existing = prev[resolvedTaskId] || defaultAgentInfo;
+            return {
+              ...prev,
+              [resolvedTaskId]: {
+                models: data.info?.models ?? existing.models,
+                currentModelId: data.info?.currentModelId ?? existing.currentModelId,
+                commands: data.info?.commands ?? existing.commands,
+                tokenUsage: mergedUsage,
+              },
+            };
+          });
+        }
         if (data.info?.currentModelId && resolvedTaskId) {
           applyTaskUpdates(resolvedTaskId, {
             modelId: data.info.currentModelId,
@@ -368,12 +564,20 @@ const App = () => {
       if (data.type === "system") {
         const content = data.text || "";
         if (content.includes("Agent disconnected") || content.includes("Agent process error")) {
-          setIsConnected(false);
+          const message = content.replace(/^System:\s*/, "");
+          setIsConnectedByTask({});
+          setWaitingByTask({});
+          setAgentInfoByTask({});
+          setAgentCapabilitiesByTask({});
           clearAllSessionIds();
-          sessionLoadInFlight.current = false;
-          setConnectionStatus({
-            state: "error",
-            message: content.replace(/^System:\s*/, ""),
+          sessionLoadInFlightByTask.current = {};
+          pendingConnectTaskIdRef.current = null;
+          setConnectionStatusByTask(() => {
+            const next: Record<string, ConnectionStatus> = {};
+            tasksSnapshot.forEach((task) => {
+              next[task.id] = { state: "error", message };
+            });
+            return next;
           });
           return;
         }
@@ -433,7 +637,8 @@ const App = () => {
       }
 
       if (
-        sessionLoadInFlight.current &&
+        resolvedTaskIdSnapshot &&
+        sessionLoadInFlightByTask.current[resolvedTaskIdSnapshot] &&
         (data.type === "agent_text" ||
           data.type === "agent_thought" ||
           data.type === "tool_call" ||
@@ -451,15 +656,15 @@ const App = () => {
 
         let msgId: string | undefined;
         if (data.type === "agent_text") {
-          if (!agentTextMsgIdRef.current) {
-            agentTextMsgIdRef.current = Date.now().toString();
+          if (!agentTextMsgIdByTaskRef.current[resolvedTaskId]) {
+            agentTextMsgIdByTaskRef.current[resolvedTaskId] = Date.now().toString();
           }
-          msgId = agentTextMsgIdRef.current;
+          msgId = agentTextMsgIdByTaskRef.current[resolvedTaskId] ?? undefined;
         } else if (data.type === "agent_thought") {
-          if (!agentThoughtMsgIdRef.current) {
-            agentThoughtMsgIdRef.current = Date.now().toString();
+          if (!agentThoughtMsgIdByTaskRef.current[resolvedTaskId]) {
+            agentThoughtMsgIdByTaskRef.current[resolvedTaskId] = Date.now().toString();
           }
-          msgId = agentThoughtMsgIdRef.current;
+          msgId = agentThoughtMsgIdByTaskRef.current[resolvedTaskId] ?? undefined;
         }
 
         const newMessage = transformIncomingMessage(data, resolvedTaskId, {
@@ -496,7 +701,16 @@ const App = () => {
 
       setTimeout(scrollToBottom, 100);
     },
-    [applyTaskUpdates, clearAllSessionIds, scrollToBottom, setAgentInfo],
+    [
+      applyTaskUpdates,
+      clearAllSessionIds,
+      defaultAgentInfo,
+      scrollToBottom,
+      setAgentInfoByTask,
+      setTaskConnected,
+      setTaskConnectionStatus,
+      setTaskWaiting,
+    ],
   );
 
   useEffect(() => {
@@ -508,10 +722,20 @@ const App = () => {
       const data: IncomingMessage =
         typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
       console.log("[agent:message]", data);
-      setAgentMessageLog((prev) => {
-        const next = [`[${new Date().toISOString()}] ${JSON.stringify(data)}`, ...prev];
-        return next.slice(0, 50);
-      });
+      const resolvedTaskId = data.sessionId
+        ? tasksRef.current.find((task) => task.sessionId === data.sessionId)?.id ??
+          activeTaskIdRef.current
+        : activeTaskIdRef.current;
+      if (resolvedTaskId) {
+        setAgentMessageLogByTask((prev) => {
+          const existing = prev[resolvedTaskId] ?? [];
+          const next = [
+            `[${new Date().toISOString()}] ${JSON.stringify(data)}`,
+            ...existing,
+          ];
+          return { ...prev, [resolvedTaskId]: next.slice(0, 50) };
+        });
+      }
       handleIncomingMessage(data);
     });
 
@@ -562,11 +786,8 @@ const App = () => {
       return null;
     }
     autoConnectAttempted.current = true;
-    sessionLoadInFlight.current = false;
-    if (!isConnected) {
-      setIsConnected(false);
-    }
-    setConnectionStatus({
+    sessionLoadInFlightByTask.current[task.id] = false;
+    setTaskConnectionStatus(task.id, {
       state: "connecting",
       message: `Connecting to: ${task.agentCommand}...`,
     });
@@ -575,7 +796,7 @@ const App = () => {
     try {
       const commandName = task.agentCommand.trim().split(" ")[0];
       if (!commandName) {
-        setConnectionStatus({
+        setTaskConnectionStatus(task.id, {
           state: "error",
           message: "Agent command is empty.",
         });
@@ -584,7 +805,7 @@ const App = () => {
       if (!commandName.includes("/") && !commandName.startsWith(".")) {
         const check = await window.electron.invoke("agent:check-command", commandName);
         if (!check.installed) {
-          setConnectionStatus({
+          setTaskConnectionStatus(task.id, {
             state: "error",
             message: `${commandName} not installed. Please check settings.`,
           });
@@ -600,7 +821,7 @@ const App = () => {
         { reuseIfSame: true, createSession: false },
       );
       if (!connectResult.success) {
-        setConnectionStatus({
+        setTaskConnectionStatus(task.id, {
           state: "error",
           message: `Connection failed: ${connectResult.error}`,
         });
@@ -632,18 +853,18 @@ const App = () => {
               lastActiveAt: Date.now(),
             });
           } else if (canLoad) {
-            sessionLoadInFlight.current = true;
+            sessionLoadInFlightByTask.current[task.id] = true;
             await window.electron.invoke("agent:load-session", task.sessionId, task.workspace);
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
               lastActiveAt: Date.now(),
             });
-            sessionLoadInFlight.current = false;
+            sessionLoadInFlightByTask.current[task.id] = false;
           }
         } catch {
           sessionId = null;
-          sessionLoadInFlight.current = false;
+          sessionLoadInFlightByTask.current[task.id] = false;
         }
       }
 
@@ -657,8 +878,8 @@ const App = () => {
         });
       }
 
-      setIsConnected(true);
-      setConnectionStatus({
+      setTaskConnected(task.id, true);
+      setTaskConnectionStatus(task.id, {
         state: "connected",
         message: "Connected.",
       });
@@ -669,59 +890,69 @@ const App = () => {
 
       return sessionId;
     } catch (e: any) {
-      if (!isConnected) {
-        setIsConnected(false);
-      }
-      setConnectionStatus({
+      setTaskConnected(task.id, false);
+      setTaskConnectionStatus(task.id, {
         state: "error",
         message: `Connection failed: ${e.message}`,
       });
       return null;
     } finally {
       connectInFlight.current = false;
+      const pendingTaskId = pendingConnectTaskIdRef.current;
+      if (pendingTaskId && pendingTaskId === activeTaskIdRef.current) {
+        pendingConnectTaskIdRef.current = null;
+        const pendingTask = tasksRef.current.find((entry) => entry.id === pendingTaskId);
+        if (pendingTask && !isConnectedByTaskRef.current[pendingTaskId]) {
+          ensureTaskSession(pendingTask);
+        }
+      }
     }
   };
 
   useEffect(() => {
-    if (!activeTask || isConnected || connectInFlight.current) {
+    if (!activeTask || activeIsConnected) {
+      return;
+    }
+    if (connectInFlight.current) {
+      pendingConnectTaskIdRef.current = activeTask.id;
+      setTaskConnectionStatus(activeTask.id, {
+        state: "connecting",
+        message: "Queued to connect...",
+      });
       return;
     }
     // removed hardcoded qwen check
     ensureTaskSession(activeTask);
-  }, [activeTask, isConnected]);
+  }, [activeIsConnected, activeTask]);
 
   const handleConnect = async () => {
     if (connectInFlight.current) {
       return;
     }
-    if (isConnected) {
+    if (activeIsConnected) {
       await window.electron.invoke("agent:disconnect");
-      setIsConnected(false);
+      setIsConnectedByTask({});
+      setConnectionStatusByTask({});
+      setWaitingByTask({});
+      setAgentInfoByTask({});
+      setAgentCapabilitiesByTask({});
+      setAgentMessageLogByTask({});
       clearAllSessionIds();
-      sessionLoadInFlight.current = false;
-      agentTextMsgIdRef.current = null;
-      agentThoughtMsgIdRef.current = null;
-      setAgentInfo({
-        models: [],
-        currentModelId: null,
-        commands: [],
-        tokenUsage: null,
-      });
-      setConnectionStatus({
-        state: "disconnected",
-        message: "Disconnected.",
-      });
-    } else {
-      if (!activeTask) {
-        setConnectionStatus({
-          state: "error",
-          message: "No active task selected.",
-        });
-        return;
-      }
-      await ensureTaskSession(activeTask);
-      setIsSettingsOpen(false);
+      sessionLoadInFlightByTask.current = {};
+      agentTextMsgIdByTaskRef.current = {};
+      agentThoughtMsgIdByTaskRef.current = {};
+      pendingConnectTaskIdRef.current = null;
+      return;
     }
+    if (!activeTask) {
+      return;
+    }
+    setTaskConnectionStatus(activeTask.id, {
+      state: "connecting",
+      message: `Connecting to: ${activeTask.agentCommand}...`,
+    });
+    await ensureTaskSession(activeTask);
+    setIsSettingsOpen(false);
   };
 
   const createTaskId = () => {
@@ -780,14 +1011,28 @@ const App = () => {
     setActiveTaskId(taskId);
     syncActiveTaskState(task);
 
+    if (connectInFlight.current) {
+      pendingConnectTaskIdRef.current = task.id;
+      setTaskConnectionStatus(task.id, {
+        state: "connecting",
+        message: "Queued to connect...",
+      });
+      return;
+    }
+
     // 检查任务是否有会话ID，如果有且已经连接，则不重新连接
-    if (isConnected && task.sessionId) {
+    if (anyConnected && task.sessionId) {
       try {
         await window.electron.invoke("agent:set-active-session", task.sessionId, task.workspace);
         // 当切换任务时，同时更新模型到该任务的模型
         if (task.modelId) {
           await window.electron.invoke("agent:set-model", task.modelId);
         }
+        setTaskConnected(task.id, true);
+        setTaskConnectionStatus(task.id, {
+          state: "connected",
+          message: "Connected.",
+        });
         return;
       } catch (e: any) {
         console.error("Failed to set active session:", e);
@@ -811,6 +1056,7 @@ const App = () => {
     const nextTasks = tasks.filter((task) => task.id !== taskId);
     setTasks(nextTasks);
     await window.electron.invoke("db:delete-task", taskId);
+    clearTaskState(taskId);
 
     if (activeTaskId !== taskId) {
       return;
@@ -823,21 +1069,23 @@ const App = () => {
       await ensureTaskSession(nextActive);
     } else {
       setActiveTaskId(null);
-      setIsConnected(false);
+      setIsConnectedByTask({});
+      setConnectionStatusByTask({});
       clearAllSessionIds();
-      sessionLoadInFlight.current = false;
+      sessionLoadInFlightByTask.current = {};
+      pendingConnectTaskIdRef.current = null;
       await window.electron.invoke("agent:disconnect");
-      setConnectionStatus({
-        state: "disconnected",
-        message: "Disconnected.",
-      });
     }
   };
 
   const handleStop = async () => {
     try {
       await window.electron.invoke("agent:stop");
-      setIsWaitingForResponse(false);
+      if (activeTaskId) {
+        setTaskWaiting(activeTaskId, false);
+      } else {
+        setWaitingByTask({});
+      }
     } catch (e: any) {
       console.error("Stop error:", e);
     }
@@ -845,7 +1093,7 @@ const App = () => {
 
   const handleSend = async () => {
     if (!inputText.trim() && inputImages.length === 0) return;
-    if (!isConnected) {
+    if (!activeIsConnected) {
       handleIncomingMessage({
         type: "system",
         text: "Error: Not connected to agent.",
@@ -860,12 +1108,12 @@ const App = () => {
       return;
     }
 
-    sessionLoadInFlight.current = false;
+    sessionLoadInFlightByTask.current[activeTaskId] = false;
 
     const text = inputText;
     const images = [...inputImages];
-    setInputText("");
-    setInputImages([]);
+    setInputTextByTask((prev) => ({ ...prev, [activeTaskId]: "" }));
+    setInputImagesByTask((prev) => ({ ...prev, [activeTaskId]: [] }));
 
     if (activeTaskId) {
       const nextMessages = [
@@ -887,13 +1135,18 @@ const App = () => {
     setTimeout(scrollToBottom, 100);
 
     // Set loading state after scroll to ensure the loading bubble is visible
-    setIsWaitingForResponse(true);
-    agentTextMsgIdRef.current = null;
-    agentThoughtMsgIdRef.current = null;
+    if (activeTaskId) {
+      setTaskWaiting(activeTaskId, true);
+    }
+    agentTextMsgIdByTaskRef.current[activeTaskId] = null;
+    agentThoughtMsgIdByTaskRef.current[activeTaskId] = null;
 
     try {
       await window.electron.invoke("agent:send", text, images);
     } catch (e: any) {
+      if (activeTaskId) {
+        setTaskWaiting(activeTaskId, false);
+      }
       handleIncomingMessage({
         type: "system",
         text: `Send error: ${e.message}`,
@@ -911,7 +1164,18 @@ const App = () => {
         });
         return;
       }
-      setAgentInfo((prev) => ({ ...prev, currentModelId: modelId }));
+      if (activeTaskId) {
+        setAgentInfoByTask((prev) => {
+          const existing = prev[activeTaskId] || defaultAgentInfo;
+          return {
+            ...prev,
+            [activeTaskId]: {
+              ...existing,
+              currentModelId: modelId,
+            },
+          };
+        });
+      }
       if (activeTaskId) {
         applyTaskUpdates(activeTaskId, {
           modelId,
@@ -974,6 +1238,7 @@ const App = () => {
     if (!activeTask) return [];
     return transformMessages(activeTask.messages, activeTaskId || "default");
   }, [activeTask, activeTaskId]);
+  const isWaitingForResponse = activeTaskId ? Boolean(waitingByTask[activeTaskId]) : false;
 
   // Show environment setup if not ready
   if (envReady === null) {
@@ -1018,7 +1283,7 @@ const App = () => {
           onAgentCommandChange={handleAgentCommandChange}
           agentEnv={agentEnv}
           onAgentEnvChange={handleAgentEnvChange}
-          isConnected={isConnected}
+          isConnected={activeIsConnected}
           onConnectToggle={handleConnect}
           wallpaper={wallpaper}
           onWallpaperChange={handleWallpaperChange}
@@ -1048,18 +1313,18 @@ const App = () => {
         {/* Main Chat Area */}
         <main className="ml-[280px] flex h-full flex-col bg-surface-cream">
           <ChatHeader
-            connectionStatus={connectionStatus}
+            connectionStatus={activeConnectionStatus}
             currentWorkspace={currentWorkspace}
-            models={agentInfo.models}
-            currentModelId={agentInfo.currentModelId}
+            models={activeAgentInfo.models}
+            currentModelId={activeAgentInfo.currentModelId}
             isModelMenuOpen={isModelMenuOpen}
             onToggleModelMenu={() => setIsModelMenuOpen((prev) => !prev)}
             onModelPick={handleModelPick}
             title={activeTask?.title || "Agent Cowork"}
             showDebug={showDebug}
-            agentInfo={agentInfo}
-            agentCapabilities={agentCapabilities}
-            agentMessageLog={agentMessageLog}
+            agentInfo={activeAgentInfo}
+            agentCapabilities={activeAgentCapabilities}
+            agentMessageLog={activeAgentMessageLog}
           />
 
           <div className="flex-1 overflow-y-auto bg-surface-cream">
@@ -1103,7 +1368,7 @@ const App = () => {
 
           <SendBox
             value={inputText}
-            onChange={setInputText}
+            onChange={setCurrentInputText}
             loading={isWaitingForResponse}
             placeholder="Describe what you want agent to handle... (paste images to include)"
             onStop={handleStop}
@@ -1120,7 +1385,7 @@ const App = () => {
                     size: file.size,
                   });
                   if (newImages.length === files.length) {
-                    setInputImages((prev) => [...prev, ...newImages]);
+                    appendCurrentInputImages(newImages);
                   }
                 };
                 reader.readAsDataURL(file);
@@ -1129,7 +1394,7 @@ const App = () => {
             supportedExts={["image/png", "image/jpeg", "image/webp"]}
             onSend={handleSend}
             images={inputImages}
-            onImagesChange={setInputImages}
+            onImagesChange={setCurrentInputImages}
           />
         </main>
       </div>
