@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
 import { ChevronDown } from "lucide-react";
+import type { CSSProperties } from "react";
 import type { AgentModelInfo, ConnectionStatus } from "../types";
 
 interface ChatHeaderProps {
@@ -45,7 +45,7 @@ export const ChatHeader = ({
                 connectionStatus.state === "connected"
                   ? "bg-success"
                   : connectionStatus.state === "connecting"
-                    ? "bg-accent"
+                    ? "bg-accent animate-pulse"
                     : connectionStatus.state === "error"
                       ? "bg-error"
                       : "bg-ink-400"
@@ -55,7 +55,7 @@ export const ChatHeader = ({
               {connectionStatus.state === "connected"
                 ? "Connected"
                 : connectionStatus.state === "connecting"
-                  ? "Connecting"
+                  ? connectionStatus.message || "Connecting..."
                   : "Disconnected"}
             </span>
           </div>
@@ -73,7 +73,14 @@ export const ChatHeader = ({
           className="absolute left-1/2 -translate-x-1/2 text-sm font-medium text-ink-700 select-none"
           style={dragStyle}
         >
-          {title || "Agent Cowork"}
+          {connectionStatus.state === "connecting" ? (
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded-full bg-accent animate-pulse" />
+              <span>{connectionStatus.message || "Connecting to agent..."}</span>
+            </div>
+          ) : (
+            title || "Agent Cowork"
+          )}
         </div>
         <div className="pointer-events-none absolute right-6 flex items-center gap-1 text-ink-400/60 opacity-100 transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
           <span className="h-1 w-1 rounded-full bg-current" />
@@ -104,7 +111,9 @@ export const ChatHeader = ({
                       key={model.modelId}
                       type="button"
                       className={`w-full rounded-lg px-3 py-2 text-left transition hover:bg-ink-900/5 ${
-                        model.modelId === currentModelId ? "bg-accent/10 text-ink-800" : "text-ink-700"
+                        model.modelId === currentModelId
+                          ? "bg-accent/10 text-ink-800"
+                          : "text-ink-700"
                       }`}
                       onClick={() => onModelPick(model.modelId)}
                     >

@@ -250,10 +250,7 @@ export class AcpConnection {
     );
   }
 
-  async prompt(
-    sessionId: string,
-    prompt: ContentBlock[],
-  ) {
+  async prompt(sessionId: string, prompt: ContentBlock[]) {
     if (!this.connection) {
       throw new Error("Connection closed before prompt");
     }

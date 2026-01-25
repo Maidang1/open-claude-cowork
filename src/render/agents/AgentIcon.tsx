@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
 import { Claude, Gemini, OpenAI, Qwen } from "@lobehub/icons";
+import type { CSSProperties } from "react";
 
 const ICONS = {
   qwen: Qwen,

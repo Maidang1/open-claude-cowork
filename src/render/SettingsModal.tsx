@@ -8,7 +8,8 @@ import { wallpaperUrl } from "./utils/wallpaper";
 
 // 预置壁纸数据
 const LOCAL_WALLPAPER_DIR = "assets/wallpaper";
-const localWallpaperPath = (fileName: string) => `${LOCAL_WALLPAPER_DIR}/${fileName}`;
+const localWallpaperPath = (fileName: string) =>
+  `${LOCAL_WALLPAPER_DIR}/${fileName}`;
 
 const PRESET_WALLPAPERS = [
   {
@@ -78,6 +79,8 @@ interface SettingsModalProps {
   onConnectToggle: () => void;
   wallpaper: string | null;
   onWallpaperChange: (path: string | null) => void;
+  theme: "light" | "dark" | "auto";
+  onThemeChange: (theme: "light" | "dark" | "auto") => void;
 }
 
 const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -91,21 +94,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onConnectToggle,
   wallpaper,
   onWallpaperChange,
+  theme,
+  onThemeChange,
 }) => {
+  const [isThemeDropdownOpen, setIsThemeDropdownOpen] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const themeDropdownRef = useRef<HTMLDivElement>(null);
 
   const [selectedPluginId, setSelectedPluginId] = useState<string>("custom");
   const [newEnvKey, setNewEnvKey] = useState("");
   const [newEnvVal, setNewEnvVal] = useState("");
-  const [activeTab, setActiveTab] = useState<"agents" | "general" | "display">("agents");
+  const [activeTab, setActiveTab] = useState<"agents" | "general" | "display">(
+    "agents",
+  );
   const [isAgentDropdownOpen, setIsAgentDropdownOpen] = useState(false);
-  const [pluginInstallStatuses, setPluginInstallStatuses] = useState<Record<string, string>>({});
+  const [pluginInstallStatuses, setPluginInstallStatuses] = useState<
+    Record<string, string>
+  >({});
 
   const handleBrowseWallpaper = async () => {
     const result = await window.electron.invoke("dialog:openFile", {
       title: "Select Wallpaper",
-      filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "webp"] }],
+      filters: [
+        { name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "webp"] },
+      ],
     });
     if (result) {
       onWallpaperChange(result);
@@ -140,7 +153,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
       for (const plugin of AGENT_PLUGINS) {
         try {
           if (plugin.checkCommand) {
-            const res = await window.electron.invoke("agent:check-command", plugin.checkCommand);
+            const res = await window.electron.invoke(
+              "agent:check-command",
+              plugin.checkCommand,
+            );
             statuses[plugin.id] = res.installed ? "installed" : "not-installed";
           } else {
             statuses[plugin.id] = "installed";
@@ -160,6 +176,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   // Close handlers
   useEscapeKey(onClose, isOpen);
   useClickOutside(dropdownRef, () => setIsAgentDropdownOpen(false));
+  useClickOutside(themeDropdownRef, () => setIsThemeDropdownOpen(false));
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (modalRef.current && !modalRef.current.contains(e.target as Node)) {
@@ -171,7 +188,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
     const found = AGENT_PLUGINS.find((plugin) => {
-      const heuristic = plugin.checkCommand || plugin.defaultCommand.split(" ")[0];
+      const heuristic =
+        plugin.checkCommand || plugin.defaultCommand.split(" ")[0];
       return agentCommand.includes(heuristic);
     });
     setSelectedPluginId(found?.id ?? "custom");
@@ -247,7 +265,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="settings-content">
           <div className="settings-content-header">
             <h2 className="settings-title">
-              {activeTab === "agents" ? "Agents Configuration" : "General Settings"}
+              {activeTab === "agents"
+                ? "Agents Configuration"
+                : "General Settings"}
             </h2>
             <button type="button" onClick={onClose} className="modal-close-btn">
               <X size={20} />
@@ -255,10 +275,80 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           {activeTab === "display" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "20px" }}
+            >
+              <div className="modal-section">
+                <label className="modal-label">Theme</label>
+                <span className="modal-input-hint mb-3">
+                  Choose the app theme.
+                </span>
+                <div
+                  className="custom-select-container"
+                  style={{ maxWidth: "240px" }}
+                  ref={themeDropdownRef}
+                >
+                  <button
+                    type="button"
+                    className="custom-select-trigger"
+                    onClick={() => setIsThemeDropdownOpen(!isThemeDropdownOpen)}
+                  >
+                    <span>
+                      {theme.charAt(0).toUpperCase() + theme.slice(1)}
+                    </span>
+                    <ChevronDown
+                      size={16}
+                      className={`select-arrow ${isThemeDropdownOpen ? "open" : ""}`}
+                    />
+                  </button>
+                  {isThemeDropdownOpen && (
+                    <div
+                      className="custom-select-dropdown"
+                      style={{ zIndex: 200 }}
+                    >
+                      <button
+                        type="button"
+                        className={`custom-select-option ${theme === "light" ? "selected" : ""}`}
+                        onClick={() => {
+                          onThemeChange("light");
+                          setIsThemeDropdownOpen(false);
+                        }}
+                      >
+                        Light
+                        {theme === "light" && <Check size={14} />}
+                      </button>
+                      <button
+                        type="button"
+                        className={`custom-select-option ${theme === "dark" ? "selected" : ""}`}
+                        onClick={() => {
+                          onThemeChange("dark");
+                          setIsThemeDropdownOpen(false);
+                        }}
+                      >
+                        Dark
+                        {theme === "dark" && <Check size={14} />}
+                      </button>
+                      <button
+                        type="button"
+                        className={`custom-select-option ${theme === "auto" ? "selected" : ""}`}
+                        onClick={() => {
+                          onThemeChange("auto");
+                          setIsThemeDropdownOpen(false);
+                        }}
+                      >
+                        Auto
+                        {theme === "auto" && <Check size={14} />}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="modal-section">
                 <label className="modal-label">Wallpaper</label>
-                <span className="modal-input-hint">Choose a wallpaper for the app background.</span>
+                <span className="modal-input-hint">
+                  Choose a wallpaper for the app background.
+                </span>
 
                 {/* 预置壁纸 */}
                 <div style={{ marginTop: "12px" }}>
@@ -268,7 +358,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(120px, 1fr))",
                       gap: "12px",
                       marginTop: "8px",
                     }}
@@ -281,7 +372,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                           borderRadius: "8px",
                           overflow: "hidden",
                           border: `2px solid ${
-                            wallpaper === wp.path ? "var(--primary-5)" : "transparent"
+                            wallpaper === wp.path
+                              ? "var(--primary-5)"
+                              : "transparent"
                           }`,
                           transition: "border-color var(--transition-fast)",
                         }}
@@ -332,7 +425,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       value={wallpaper || ""}
                       readOnly
                     />
-                    <button type="button" className="btn-secondary" onClick={handleBrowseWallpaper}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={handleBrowseWallpaper}
+                    >
                       Browse...
                     </button>
                     {wallpaper && (
@@ -345,31 +442,35 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       </button>
                     )}
                   </div>
-                  {wallpaper && !PRESET_WALLPAPERS.find((wp) => wp.path === wallpaper) && (
-                    <div style={{ marginTop: "12px" }}>
-                      <img
-                        src={wallpaperUrl(wallpaper)}
-                        alt="Wallpaper preview"
-                        style={{
-                          maxWidth: "200px",
-                          maxHeight: "120px",
-                          borderRadius: "8px",
-                          objectFit: "cover",
-                        }}
-                      />
-                    </div>
-                  )}
+                  {wallpaper &&
+                    !PRESET_WALLPAPERS.find((wp) => wp.path === wallpaper) && (
+                      <div style={{ marginTop: "12px" }}>
+                        <img
+                          src={wallpaperUrl(wallpaper)}
+                          alt="Wallpaper preview"
+                          style={{
+                            maxWidth: "200px",
+                            maxHeight: "120px",
+                            borderRadius: "8px",
+                            objectFit: "cover",
+                          }}
+                        />
+                      </div>
+                    )}
                 </div>
               </div>
             </div>
           )}
 
           {activeTab === "general" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "20px" }}
+            >
               <div className="modal-section">
                 <label className="modal-label">Node Runtime</label>
                 <span className="modal-input-hint">
-                  Choose the runtime used to launch JS agents. Changes apply after restart.
+                  Choose the runtime used to launch JS agents. Changes apply
+                  after restart.
                 </span>
                 <div className="preset-buttons" style={{ maxWidth: "420px" }}>
                   <button
@@ -390,7 +491,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 
                 {nodeRuntime === "custom" && (
                   <>
-                    <label className="modal-label" style={{ marginTop: "16px" }}>
+                    <label
+                      className="modal-label"
+                      style={{ marginTop: "16px" }}
+                    >
                       Custom Node.js Path
                     </label>
                     <div
@@ -408,7 +512,11 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         value={customNodePath}
                         onChange={(e) => setCustomNodePath(e.target.value)}
                       />
-                      <button type="button" className="btn-secondary" onClick={browseNodePath}>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={browseNodePath}
+                      >
                         Browse...
                       </button>
                     </div>
@@ -419,7 +527,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 )}
 
                 {runtimeError && (
-                  <div style={{ marginTop: "12px", color: "var(--error)" }}>{runtimeError}</div>
+                  <div style={{ marginTop: "12px", color: "var(--error)" }}>
+                    {runtimeError}
+                  </div>
                 )}
                 {runtimeSaved && !runtimeError && (
                   <div
@@ -452,7 +562,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     type="button"
                     className="btn-primary"
                     onClick={applyRuntime}
-                    disabled={runtimeSaving || (nodeRuntime === "custom" && !customNodePath.trim())}
+                    disabled={
+                      runtimeSaving ||
+                      (nodeRuntime === "custom" && !customNodePath.trim())
+                    }
                   >
                     {runtimeSaving ? "Saving..." : "Apply"}
                   </button>
@@ -476,8 +589,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                         opacity: 0.9,
                       }}
                     >
-                      No Node.js runtime found. Some agents may fail to start. If using a custom
-                      path, verify it; otherwise ensure the bundled runtime is available.
+                      No Node.js runtime found. Some agents may fail to start.
+                      If using a custom path, verify it; otherwise ensure the
+                      bundled runtime is available.
                     </div>
                   </div>
                 </div>
@@ -500,7 +614,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                       }}
                     >
                       {selectedPlugin?.icon && (
-                        <span style={{ display: "inline-flex", alignItems: "center" }}>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                          }}
+                        >
                           <AgentIcon icon={selectedPlugin.icon} size={16} />
                         </span>
                       )}
@@ -543,12 +662,18 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                             }}
                           >
                             {plugin.icon && (
-                              <span style={{ display: "inline-flex", alignItems: "center" }}>
+                              <span
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                }}
+                              >
                                 <AgentIcon icon={plugin.icon} size={16} />
                               </span>
                             )}
                             {plugin.name}
-                            {pluginInstallStatuses[plugin.id] === "installed" && (
+                            {pluginInstallStatuses[plugin.id] ===
+                              "installed" && (
                               <span
                                 style={{
                                   fontSize: "0.75rem",
@@ -558,7 +683,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                                 (已安装)
                               </span>
                             )}
-                            {pluginInstallStatuses[plugin.id] === "not-installed" && (
+                            {pluginInstallStatuses[plugin.id] ===
+                              "not-installed" && (
                               <span
                                 style={{
                                   fontSize: "0.75rem",
@@ -569,7 +695,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                               </span>
                             )}
                           </div>
-                          {selectedPluginId === plugin.id && <Check size={14} />}
+                          {selectedPluginId === plugin.id && (
+                            <Check size={14} />
+                          )}
                         </button>
                       ))}
                     </div>
@@ -603,7 +731,12 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   {Object.entries(agentEnv).map(([key, val]) => (
                     <div key={key} className="env-row">
                       <input readOnly value={key} className="env-input key" />
-                      <input readOnly value={val} type="password" className="env-input val" />
+                      <input
+                        readOnly
+                        value={val}
+                        type="password"
+                        className="env-input val"
+                      />
                       <button
                         type="button"
                         onClick={() => removeEnvVar(key)}
@@ -643,7 +776,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                   type="button"
                   onClick={onConnectToggle}
                   className="btn-primary"
-                  style={isConnected ? { backgroundColor: "#ef4444" } : undefined}
+                  style={
+                    isConnected ? { backgroundColor: "#ef4444" } : undefined
+                  }
                 >
                   {isConnected ? "Disconnect" : "Connect & Save"}
                 </button>

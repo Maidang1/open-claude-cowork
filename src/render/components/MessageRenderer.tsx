@@ -6,10 +6,7 @@ import { ThoughtDisplay } from "./ThoughtDisplay";
 
 interface MessageRendererProps {
   msg: TMessage;
-  onPermissionResponse?: (
-    permissionId: string,
-    optionId: string | null,
-  ) => void;
+  onPermissionResponse?: (permissionId: string, optionId: string | null) => void;
   isLoading?: boolean;
   onStop?: () => void;
 }
@@ -22,16 +19,12 @@ export const MessageRenderer = ({
 }: MessageRendererProps) => {
   const cardClassName =
     "rounded-2xl bg-surface-secondary px-2 py-2 text-sm text-ink-700 shadow-soft";
-  const roleLabelClassName =
-    "text-[14px] font-medium uppercase text-[var(--color-accent)]";
+  const roleLabelClassName = "text-[14px] font-medium uppercase text-[var(--color-accent)]";
   // 权限请求消息
   if (msg.type === "acp_permission" && onPermissionResponse) {
     return (
       <div className="my-4">
-        <MessageAcpPermission
-          msg={msg}
-          onPermissionResponse={onPermissionResponse}
-        />
+        <MessageAcpPermission msg={msg} onPermissionResponse={onPermissionResponse} />
       </div>
     );
   }
@@ -125,9 +118,7 @@ export const MessageRenderer = ({
   return (
     <div className="my-4 text-center">
       <div className="inline-block bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Unknown message type: {msg.type}
-        </p>
+        <p className="text-sm text-gray-600 dark:text-gray-400">Unknown message type: {msg.type}</p>
       </div>
     </div>
   );

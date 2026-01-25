@@ -22,8 +22,7 @@ export const ACP_BACKENDS_ALL: AgentPlugin[] = [
     name: "Qwen Agent",
     description: "Official Qwen agent with ACP protocol support.",
     packageSpec: "@qwen-code/qwen-code",
-    defaultCommand:
-      "qwen --acp --allowed-tools all,run_shell_command --experimental-skills",
+    defaultCommand: "qwen --acp --allowed-tools all,run_shell_command --experimental-skills",
     checkCommand: "qwen",
     defaultEnv: {},
     icon: "qwen",
@@ -31,8 +30,7 @@ export const ACP_BACKENDS_ALL: AgentPlugin[] = [
   {
     id: "claude",
     name: "Claude Agent",
-    description:
-      "Claude agent with ACP protocol support using @zed-industries/claude-code-acp.",
+    description: "Claude agent with ACP protocol support using @zed-industries/claude-code-acp.",
     packageSpec: "@zed-industries/claude-code-acp",
     defaultCommand: "npx @zed-industries/claude-code-acp",
     checkCommand: "npx",
@@ -42,8 +40,7 @@ export const ACP_BACKENDS_ALL: AgentPlugin[] = [
   {
     id: "codex",
     name: "Codex Agent",
-    description:
-      "Codex agent with ACP protocol support using @zed-industries/codex-acp.",
+    description: "Codex agent with ACP protocol support using @zed-industries/codex-acp.",
     packageSpec: "@zed-industries/codex-acp",
     defaultCommand: "npx @zed-industries/codex-acp",
     checkCommand: "npx",
@@ -55,8 +52,7 @@ export const ACP_BACKENDS_ALL: AgentPlugin[] = [
     name: "Gemini Agent",
     description: "Official Gemini agent with ACP protocol support.",
     packageSpec: "@google/gemini-code",
-    defaultCommand:
-      "gemini --acp --allowed-tools all,run_shell_command --experimental-skills",
+    defaultCommand: "gemini --acp --allowed-tools all,run_shell_command --experimental-skills",
     checkCommand: "gemini",
     defaultEnv: {},
     icon: "gemini",

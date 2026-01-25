@@ -8,7 +8,13 @@ import { ChatHeader, MessageRenderer, SendBox, Sidebar } from "./components";
 import EnvironmentSetup from "./EnvironmentSetup";
 import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
-import type { AgentInfoState, ConnectionStatus, ImageAttachment, IncomingMessage, Task } from "./types";
+import type {
+  AgentInfoState,
+  ConnectionStatus,
+  ImageAttachment,
+  IncomingMessage,
+  Task,
+} from "./types";
 import { MessageComposer } from "./utils/messageComposer";
 import {
   transformIncomingMessage,
@@ -29,9 +35,7 @@ const App = () => {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
   const [inputImages, setInputImages] = useState<ImageAttachment[]>([]);
-  const [agentCommand, setAgentCommand] = useState(
-    getDefaultAgentPlugin().defaultCommand,
-  );
+  const [agentCommand, setAgentCommand] = useState(getDefaultAgentPlugin().defaultCommand);
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
   const [agentInfo, setAgentInfo] = useState<AgentInfoState>({
     models: [],
@@ -46,8 +50,7 @@ const App = () => {
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const [agentCapabilities, setAgentCapabilities] = useState<any | null>(null);
   const [agentMessageLog, setAgentMessageLog] = useState<string[]>([]);
-  const showDebug =
-    String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
+  const showDebug = String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     state: "disconnected",
@@ -57,16 +60,20 @@ const App = () => {
   // Track if we are waiting for an agent response
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
 
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
+  const [theme, setTheme] = useState<"light" | "dark" | "auto">(() => {
     if (typeof window !== "undefined" && window.matchMedia) {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
+      return "auto";
     }
     return "light";
   });
 
   const [wallpaper, setWallpaper] = useState<string | null>(null);
+  const effectiveTheme = useMemo(() => {
+    if (theme !== "auto") return theme;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  }, [theme]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const autoConnectAttempted = useRef(false);
@@ -99,19 +106,14 @@ const App = () => {
     }
   }, [activeTask, activeTaskId]);
 
-  const persistTaskUpdates = useCallback(
-    (taskId: string, updates: Partial<Task>) => {
-      window.electron.invoke("db:update-task", taskId, updates);
-    },
-    [],
-  );
+  const persistTaskUpdates = useCallback((taskId: string, updates: Partial<Task>) => {
+    window.electron.invoke("db:update-task", taskId, updates);
+  }, []);
 
   const applyTaskUpdates = useCallback(
     (taskId: string, updates: Partial<Task>) => {
       setTasks((prev) => {
-        const next = prev.map((task) =>
-          task.id === taskId ? { ...task, ...updates } : task,
-        );
+        const next = prev.map((task) => (task.id === taskId ? { ...task, ...updates } : task));
         // 永远按照创建时间倒序排序
         return [...next].sort((a, b) => b.createdAt - a.createdAt);
       });
@@ -143,15 +145,30 @@ const App = () => {
   };
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+    const effectiveTheme =
+      theme === "auto"
+        ? window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light"
+        : theme;
+    document.documentElement.setAttribute("data-theme", effectiveTheme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (theme !== "auto") return;
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = (e: MediaQueryListEvent) => {
+      document.documentElement.setAttribute("data-theme", e.matches ? "dark" : "light");
+    };
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
   }, [theme]);
 
   useEffect(() => {
     // Load wallpaper from settings
     const loadWallpaper = async () => {
       const savedWallpaper = await window.electron.invoke("env:get-wallpaper");
-      const normalized =
-        typeof savedWallpaper === "string" ? savedWallpaper.trim() : "";
+      const normalized = typeof savedWallpaper === "string" ? savedWallpaper.trim() : "";
       setWallpaper(normalized ? normalized : null);
     };
     loadWallpaper();
@@ -166,10 +183,7 @@ const App = () => {
         root.style.setProperty("--wallpaper", wallpaper);
       } else {
         // 否则假设是图片文件
-        root.style.setProperty(
-          "--wallpaper",
-          `url('${wallpaperUrl(wallpaper)}')`,
-        );
+        root.style.setProperty("--wallpaper", `url('${wallpaperUrl(wallpaper)}')`);
       }
       root.classList.add("bg-wallpaper");
     } else {
@@ -188,8 +202,8 @@ const App = () => {
     }
   };
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  const setThemeMode = (newTheme: "light" | "dark" | "auto") => {
+    setTheme(newTheme);
   };
 
   const handlePermissionResponse = useCallback(
@@ -197,11 +211,7 @@ const App = () => {
       const response = optionId
         ? { outcome: { outcome: "selected", optionId } }
         : { outcome: { outcome: "cancelled" } };
-      await window.electron.invoke(
-        "agent:permission-response",
-        permissionId,
-        response,
-      );
+      await window.electron.invoke("agent:permission-response", permissionId, response);
     },
     [],
   );
@@ -289,20 +299,17 @@ const App = () => {
       };
       if (data.type === "agent_info") {
         const resolvedTaskId = data.sessionId
-          ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)
-              ?.id ?? activeTaskIdSnapshot)
+          ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)?.id ??
+            activeTaskIdSnapshot)
           : activeTaskIdSnapshot;
         const nextUsage = data.info?.tokenUsage ?? null;
         const baseUsage = activeTaskSnapshot?.tokenUsage ?? null;
         const mergedUsage = nextUsage
           ? {
-              promptTokens:
-                (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
+              promptTokens: (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
               completionTokens:
-                (baseUsage?.completionTokens ?? 0) +
-                (nextUsage.completionTokens ?? 0),
-              totalTokens:
-                (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
+                (baseUsage?.completionTokens ?? 0) + (nextUsage.completionTokens ?? 0),
+              totalTokens: (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
             }
           : baseUsage;
         if (nextUsage) {
@@ -360,10 +367,7 @@ const App = () => {
       // System Messages
       if (data.type === "system") {
         const content = data.text || "";
-        if (
-          content.includes("Agent disconnected") ||
-          content.includes("Agent process error")
-        ) {
+        if (content.includes("Agent disconnected") || content.includes("Agent process error")) {
           setIsConnected(false);
           clearAllSessionIds();
           sessionLoadInFlight.current = false;
@@ -397,8 +401,7 @@ const App = () => {
 
       if (data.type === "permission_request") {
         const updatedAt = Date.now();
-        const resolvedTaskId =
-          resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
+        const resolvedTaskId = resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
         const targetTask = resolvedTaskId
           ? tasksSnapshot.find((task) => task.id === resolvedTaskId)
           : null;
@@ -443,9 +446,7 @@ const App = () => {
       setTasks((prev) => {
         const resolvedTaskId = resolveTaskId(prev);
         if (!resolvedTaskId) return prev;
-        const targetTask = resolvedTaskId
-          ? prev.find((task) => task.id === resolvedTaskId)
-          : null;
+        const targetTask = resolvedTaskId ? prev.find((task) => task.id === resolvedTaskId) : null;
         if (!targetTask) return prev;
 
         let msgId: string | undefined;
@@ -471,10 +472,7 @@ const App = () => {
         const updatedMessages = composer.getMessages();
 
         // Convert back to legacy message shape for storage/rendering.
-        const oldFormatMessages = transformToLegacyMessages(
-          updatedMessages,
-          targetTask.messages,
-        );
+        const oldFormatMessages = transformToLegacyMessages(updatedMessages, targetTask.messages);
 
         const updatedAt = Date.now();
         if (resolvedTaskId) {
@@ -506,22 +504,16 @@ const App = () => {
     if (!window.electron) {
       return;
     }
-    const removeListener = window.electron.on(
-      "agent:message",
-      (msg: IncomingMessage | string) => {
-        const data: IncomingMessage =
-          typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
-        console.log("[agent:message]", data);
-        setAgentMessageLog((prev) => {
-          const next = [
-            `[${new Date().toISOString()}] ${JSON.stringify(data)}`,
-            ...prev,
-          ];
-          return next.slice(0, 50);
-        });
-        handleIncomingMessage(data);
-      },
-    );
+    const removeListener = window.electron.on("agent:message", (msg: IncomingMessage | string) => {
+      const data: IncomingMessage =
+        typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
+      console.log("[agent:message]", data);
+      setAgentMessageLog((prev) => {
+        const next = [`[${new Date().toISOString()}] ${JSON.stringify(data)}`, ...prev];
+        return next.slice(0, 50);
+      });
+      handleIncomingMessage(data);
+    });
 
     const loadInitialState = async () => {
       const [storedTasks, storedActiveTaskId, lastWs] = await Promise.all([
@@ -543,17 +535,13 @@ const App = () => {
       // 按创建时间倒序排序
       setTasks([...loadedTasks].sort((a, b) => b.createdAt - a.createdAt));
 
-      const resolvedActiveId = loadedTasks.find(
-        (task) => task.id === storedActiveTaskId,
-      )
+      const resolvedActiveId = loadedTasks.find((task) => task.id === storedActiveTaskId)
         ? storedActiveTaskId
         : (loadedTasks[0]?.id ?? null);
 
       if (resolvedActiveId) {
         setActiveTaskId(resolvedActiveId);
-        const nextTask = loadedTasks.find(
-          (task) => task.id === resolvedActiveId,
-        );
+        const nextTask = loadedTasks.find((task) => task.id === resolvedActiveId);
         if (nextTask) {
           syncActiveTaskState(nextTask);
         }
@@ -594,10 +582,7 @@ const App = () => {
         return null;
       }
       if (!commandName.includes("/") && !commandName.startsWith(".")) {
-        const check = await window.electron.invoke(
-          "agent:check-command",
-          commandName,
-        );
+        const check = await window.electron.invoke("agent:check-command", commandName);
         if (!check.installed) {
           setConnectionStatus({
             state: "error",
@@ -633,22 +618,14 @@ const App = () => {
 
       if (connectResult.reused && sessionId) {
         try {
-          await window.electron.invoke(
-            "agent:set-active-session",
-            sessionId,
-            task.workspace,
-          );
+          await window.electron.invoke("agent:set-active-session", sessionId, task.workspace);
         } catch {
           sessionId = null;
         }
       } else if (task.sessionId && (canResume || canLoad)) {
         try {
           if (canResume) {
-            await window.electron.invoke(
-              "agent:resume-session",
-              task.sessionId,
-              task.workspace,
-            );
+            await window.electron.invoke("agent:resume-session", task.sessionId, task.workspace);
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -656,11 +633,7 @@ const App = () => {
             });
           } else if (canLoad) {
             sessionLoadInFlight.current = true;
-            await window.electron.invoke(
-              "agent:load-session",
-              task.sessionId,
-              task.workspace,
-            );
+            await window.electron.invoke("agent:load-session", task.sessionId, task.workspace);
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -675,10 +648,7 @@ const App = () => {
       }
 
       if (!sessionId) {
-        const sessionResult = await window.electron.invoke(
-          "agent:new-session",
-          task.workspace,
-        );
+        const sessionResult = await window.electron.invoke("agent:new-session", task.workspace);
         sessionId = sessionResult.sessionId;
         applyTaskUpdates(task.id, {
           sessionId,
@@ -790,9 +760,7 @@ const App = () => {
 
     setIsNewTaskOpen(false);
     // 按创建时间倒序排序，新任务会自动在最前面
-    setTasks((prev) =>
-      [...prev, newTask].sort((a, b) => b.createdAt - a.createdAt),
-    );
+    setTasks((prev) => [...prev, newTask].sort((a, b) => b.createdAt - a.createdAt));
     window.electron.invoke("db:create-task", newTask);
     setActiveTaskId(newTask.id);
     syncActiveTaskState(newTask);
@@ -815,11 +783,11 @@ const App = () => {
     // 检查任务是否有会话ID，如果有且已经连接，则不重新连接
     if (isConnected && task.sessionId) {
       try {
-        await window.electron.invoke(
-          "agent:set-active-session",
-          task.sessionId,
-          task.workspace,
-        );
+        await window.electron.invoke("agent:set-active-session", task.sessionId, task.workspace);
+        // 当切换任务时，同时更新模型到该任务的模型
+        if (task.modelId) {
+          await window.electron.invoke("agent:set-model", task.modelId);
+        }
         return;
       } catch (e: any) {
         console.error("Failed to set active session:", e);
@@ -835,9 +803,7 @@ const App = () => {
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    const confirmed = window.confirm(
-      "Delete this task? This cannot be undone.",
-    );
+    const confirmed = window.confirm("Delete this task? This cannot be undone.");
     if (!confirmed) {
       return;
     }
@@ -1038,9 +1004,7 @@ const App = () => {
     <ConfigProvider
       theme={{
         algorithm:
-          theme === "dark"
-            ? antdTheme.darkAlgorithm
-            : antdTheme.defaultAlgorithm,
+          effectiveTheme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
         token: {
           colorPrimary: "#f97316",
         },
@@ -1058,6 +1022,8 @@ const App = () => {
           onConnectToggle={handleConnect}
           wallpaper={wallpaper}
           onWallpaperChange={handleWallpaperChange}
+          theme={theme}
+          onThemeChange={setThemeMode}
         />
         <NewTaskModal
           isOpen={isNewTaskOpen}
@@ -1076,7 +1042,7 @@ const App = () => {
           onRenameTask={handleRenameTask}
           onOpenSettings={() => setIsSettingsOpen(true)}
           theme={theme}
-          onToggleTheme={toggleTheme}
+          onThemeChange={setThemeMode}
         />
 
         {/* Main Chat Area */}
@@ -1162,6 +1128,8 @@ const App = () => {
             }}
             supportedExts={["image/png", "image/jpeg", "image/webp"]}
             onSend={handleSend}
+            images={inputImages}
+            onImagesChange={setInputImages}
           />
         </main>
       </div>

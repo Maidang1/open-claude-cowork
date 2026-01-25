@@ -71,9 +71,9 @@ const App = () => {
   // Track if we are waiting for an agent response
   const [isWaitingForResponse, setIsWaitingForResponse] = useState(false);
 
-  const [theme, setTheme] = useState<"light" | "dark">(() => {
+  const [theme, setTheme] = useState<"light" | "dark" | "auto">(() => {
     if (typeof window !== "undefined" && window.matchMedia) {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      return "auto";
     }
     return "light";
   });
@@ -138,8 +138,28 @@ const App = () => {
     }));
   };
 
+  // 应用主题到 DOM
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+    const effectiveTheme =
+      theme === "auto"
+        ? window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+          ? "dark"
+          : "light"
+        : theme;
+    document.documentElement.setAttribute("data-theme", effectiveTheme);
+  }, [theme]);
+
+  // 监听系统主题变化（仅在 auto 模式下）
+  useEffect(() => {
+    if (theme !== "auto") return;
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = (e: MediaQueryListEvent) => {
+      document.documentElement.setAttribute("data-theme", e.matches ? "dark" : "light");
+    };
+
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
   }, [theme]);
 
   useEffect(() => {
@@ -176,8 +196,8 @@ const App = () => {
     }
   };
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  const setThemeMode = (newTheme: "light" | "dark" | "auto") => {
+    setTheme(newTheme);
   };
 
   const handlePermissionResponse = useCallback(
@@ -1265,7 +1285,13 @@ const App = () => {
   return (
     <ConfigProvider
       theme={{
-        algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        algorithm: theme === "dark"
+          ? antdTheme.darkAlgorithm
+          : theme === "light"
+          ? antdTheme.defaultAlgorithm
+          : (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? antdTheme.darkAlgorithm
+            : antdTheme.defaultAlgorithm),
         token: {
           colorPrimary: "#f97316",
         },
@@ -1283,6 +1309,8 @@ const App = () => {
           onConnectToggle={handleConnect}
           wallpaper={wallpaper}
           onWallpaperChange={handleWallpaperChange}
+          theme={theme}
+          onThemeChange={setThemeMode}
         />
         <NewTaskModal
           isOpen={isNewTaskOpen}
@@ -1301,7 +1329,7 @@ const App = () => {
           onRenameTask={handleRenameTask}
           onOpenSettings={() => setIsSettingsOpen(true)}
           theme={theme}
-          onToggleTheme={toggleTheme}
+          onThemeChange={setThemeMode}
         />
 
         {/* Main Chat Area */}

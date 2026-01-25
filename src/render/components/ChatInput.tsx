@@ -79,7 +79,7 @@ export const ChatInput = ({
 
   return (
     <div className="py-6 pb-8 bg-gradient-to-t from-bg-app to-transparent">
-      <div className="mx-10 relative bg-input border border-color rounded-xl shadow-md transition-all focus-within:border-primary focus-within:shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1),0_4px_6px_-4px_rgba(0,0,0,0.1),0_0_0_2px_var(--primary-light)]">
+      <div className="mx-10 relative bg-input border border-color rounded-xl shadow-md transition-all focus-within:border-ink-900/20 focus-within:shadow-[0_10px_15px_-3px_rgba(0,0,0,0.1),0_4px_6px_-4px_rgba(0,0,0,0.1)]">
         {/* 图片预览区域 */}
         {images.length > 0 && (
           <div className="flex flex-wrap gap-2 p-2 border-b border-color">

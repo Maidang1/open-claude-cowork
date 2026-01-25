@@ -10,11 +10,7 @@ interface ThoughtDisplayProps {
   style?: "default" | "compact";
 }
 
-export const ThoughtDisplay = ({
-  thought,
-  running,
-  onStop,
-}: ThoughtDisplayProps) => {
+export const ThoughtDisplay = ({ thought, running, onStop }: ThoughtDisplayProps) => {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -51,22 +47,13 @@ export const ThoughtDisplay = ({
     <div onKeyDown={handleKeyDown} tabIndex={0}>
       <Think
         title="AI is thinking"
-        icon={
-          <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse " />
-        }
+        icon={<span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse " />}
       >
         <div className="space-y-2">
           {running && (
-            <div className="text-xs text-slate-500 dark:text-slate-400">
-              {formatTime(elapsed)}
-            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">{formatTime(elapsed)}</div>
           )}
           <Markdown>{thought}</Markdown>
-          {running && (
-            <Button size="small" danger onClick={onStop}>
-              Stop
-            </Button>
-          )}
         </div>
       </Think>
     </div>

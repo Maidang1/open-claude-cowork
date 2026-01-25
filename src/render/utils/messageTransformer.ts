@@ -314,7 +314,9 @@ export function transformToLegacyMessages(
           status: toToolCallStatus(msg.content.status || msg.content.update?.status),
           result: {
             rawInput:
-              msg.content.rawInput ?? msg.content.update?.rawInput ?? fallbackTool?.result?.rawInput,
+              msg.content.rawInput ??
+              msg.content.update?.rawInput ??
+              fallbackTool?.result?.rawInput,
             rawOutput:
               msg.content.rawOutput ??
               msg.content.update?.rawOutput ??
@@ -362,10 +364,12 @@ export function transformToLegacyMessages(
         };
       }
     }
-    return prev ?? {
-      id: "unknown",
-      sender: "system",
-      content: "",
-    };
+    return (
+      prev ?? {
+        id: "unknown",
+        sender: "system",
+        content: "",
+      }
+    );
   });
 }

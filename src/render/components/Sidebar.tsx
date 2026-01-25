@@ -1,5 +1,5 @@
-import type { CSSProperties } from "react";
 import { Plus } from "lucide-react";
+import type { CSSProperties } from "react";
 import { useState } from "react";
 import type { Task } from "../types";
 
@@ -11,8 +11,8 @@ interface SidebarProps {
   onDeleteTask: (taskId: string) => void;
   onRenameTask: (taskId: string, newTitle: string) => void;
   onOpenSettings: () => void;
-  theme: "light" | "dark";
-  onToggleTheme: () => void;
+  theme: "light" | "dark" | "auto";
+  onThemeChange: (theme: "light" | "dark" | "auto") => void;
 }
 
 export const Sidebar = ({
@@ -24,7 +24,7 @@ export const Sidebar = ({
   onRenameTask,
   onOpenSettings,
   theme,
-  onToggleTheme,
+  onThemeChange,
 }: SidebarProps) => {
   const { Moon, Sun, Settings, Trash2, Edit2 } = require("lucide-react");
   const dragStyle = { WebkitAppRegion: "drag" } as CSSProperties;
@@ -47,7 +47,11 @@ export const Sidebar = ({
     setEditingTaskId(null);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent, taskId: string, originalTitle: string) => {
+  const handleKeyDown = (
+    e: React.KeyboardEvent,
+    taskId: string,
+    originalTitle: string,
+  ) => {
     if (e.key === "Enter") {
       handleSaveRename(taskId);
     } else if (e.key === "Escape") {
@@ -57,8 +61,7 @@ export const Sidebar = ({
   };
 
   return (
-    <aside className="fixed inset-y-0 left-0 flex h-full w-[280px] flex-col gap-4 border-r border-ink-900/5 bg-surface-cream px-4 pb-4 pt-12">
-      <div className="absolute top-0 left-0 right-0 h-12" style={dragStyle} />
+    <aside className="fixed inset-y-0 left-0 flex h-full w-[280px] flex-col gap-4 border-r border-ink-900/5 bg-surface-cream px-4 pb-4 pt-[40px]">
       <div className="flex gap-2">
         <button
           type="button"
@@ -87,31 +90,36 @@ export const Sidebar = ({
           tasks.map((task) => (
             <div
               key={task.id}
-              className={`cursor-pointer rounded-xl border px-3 py-3 text-left transition relative ${
+              className={`cursor-pointer rounded-2xl border px-4 py-4 text-left transition relative ${
                 task.id === activeTaskId
                   ? "border-accent/30 bg-accent-subtle"
                   : "border-ink-900/5 bg-surface hover:bg-surface-tertiary"
               }`}
               onClick={() => onSelectTask(task.id)}
             >
-              <div className="flex items-center gap-2">
-                {editingTaskId === task.id ? (
-                  <input
-                    type="text"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(e, task.id, task.title)}
-                    onBlur={() => handleSaveRename(task.id)}
-                    className="flex-1 rounded-lg border border-ink-900/10 bg-surface px-2 py-1 text-sm text-ink-700 focus:outline-none focus:ring-1 focus:ring-accent"
-                    autoFocus
-                  />
-                ) : (
-                  <div className="font-medium whitespace-nowrap overflow-hidden text-ellipsis flex-1 pr-12 text-ink-800 text-[12px]">
-                    {task.title}
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  {editingTaskId === task.id ? (
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, task.id, task.title)}
+                      onBlur={() => handleSaveRename(task.id)}
+                      className="flex-1 rounded-lg border border-ink-900/10 bg-surface px-2 py-1 text-sm text-ink-700 focus:outline-none focus:ring-1 focus:ring-accent"
+                      autoFocus
+                    />
+                  ) : (
+                    <div className="font-medium text-ink-800 text-sm mb-1">
+                      {task.title}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted" title={task.workspace}>
+                    {task.workspace.split("/").pop() || task.workspace}
                   </div>
-                )}
+                </div>
                 {editingTaskId === task.id ? (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+                  <div className="flex gap-1 ml-2">
                     <button
                       type="button"
                       className="rounded-md p-1 text-ink-500 transition-all hover:bg-green-500/10 hover:text-green-600"
@@ -163,7 +171,7 @@ export const Sidebar = ({
                     </button>
                   </div>
                 ) : (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
+                  <div className="flex gap-1 ml-2">
                     <button
                       type="button"
                       className="rounded-md p-1 text-ink-500 transition-all hover:bg-ink-900/10 hover:text-ink-700"
@@ -189,28 +197,9 @@ export const Sidebar = ({
                   </div>
                 )}
               </div>
-              <div
-                className="text-xs text-muted whitespace-nowrap overflow-hidden text-ellipsis"
-                title={task.workspace}
-              >
-                {task.workspace.split("/").pop() || task.workspace}
-              </div>
             </div>
           ))
         )}
-      </div>
-
-      <div className="mt-auto flex items-center justify-between border-t border-ink-900/5 pt-3">
-        <span className="text-xs text-muted">Theme</span>
-        <button
-          type="button"
-          className="rounded-full border border-ink-900/10 bg-surface p-2 text-ink-600 transition-colors hover:bg-surface-tertiary hover:text-ink-800"
-          onClick={onToggleTheme}
-          aria-label="Toggle theme"
-          title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
-        >
-          {theme === "light" ? <Moon size={14} /> : <Sun size={14} />}
-        </button>
       </div>
     </aside>
   );

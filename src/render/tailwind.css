@@ -752,4 +752,11 @@
       transform: rotate(360deg);
     }
   }
+
+  /* Dark mode: avoid light borders from ink-900 alpha utility classes */
+  [data-theme="dark"] .border-ink-900\/5,
+  [data-theme="dark"] .border-ink-900\/10,
+  [data-theme="dark"] .border-ink-900\/20 {
+    border-color: var(--border-color);
+  }
 }

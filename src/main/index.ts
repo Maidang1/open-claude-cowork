@@ -89,6 +89,16 @@ const onCreateMainWindow = () => {
     height: 900,
     minHeight: 700,
     icon: path.resolve(__dirname, "../../../../assets/icons/256x256.png"),
+    // 配置窗口样式 - 隐藏默认标题栏，使用自定义标题栏
+    titleBarStyle: "hiddenInset", // Mac OS 隐藏标题栏但保留 traffic lights（红绿灯按钮）
+    titleBarOverlay: {
+      // Windows/Linux 标题栏覆盖层样式
+      color: "#ffffff",
+      symbolColor: "#000000",
+      height: 30,
+    },
+    // 禁用窗口框架（可选，完全自定义标题栏）
+    // frame: false,
     webPreferences: {
       devTools: true, // 始终启用开发者工具
       nodeIntegration: false,
