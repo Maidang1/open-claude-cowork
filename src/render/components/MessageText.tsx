@@ -2,7 +2,7 @@ import { Check, Copy } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { dracula } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { ghcolors } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 
 interface MessageTextProps {
@@ -34,7 +34,7 @@ export const MessageText = ({ content, images = [], sender }: MessageTextProps) 
 
   return (
     <div className={`${isUser ? "text-right" : "text-left"}`}>
-      <div className="prose prose-sm max-w-none dark:prose-invert">
+      <div className="prose prose-sm max-w-none text-text-primary">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           components={{
@@ -56,10 +56,10 @@ export const MessageText = ({ content, images = [], sender }: MessageTextProps) 
                       </button>
                     </div>
                     <SyntaxHighlighter
-                      style={dracula}
+                      style={ghcolors}
                       language={match[1]}
                       PreTag="div"
-                      className="rounded-lg border border-orange-500 dark:border-orange-500"
+                      className="rounded-lg border border-color"
                       customStyle={{
                         margin: 0,
                         fontSize: "14px",

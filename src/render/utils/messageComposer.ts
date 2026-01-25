@@ -26,11 +26,7 @@ export function buildMessageIndex(list: TMessage[]): MessageIndex {
 }
 
 // 替换消息
-export function replaceMessage(
-  list: TMessage[],
-  index: number,
-  updated: TMessage,
-): TMessage[] {
+export function replaceMessage(list: TMessage[], index: number, updated: TMessage): TMessage[] {
   const newList = [...list];
   newList[index] = updated;
   return newList;
@@ -42,9 +38,7 @@ export function composeMessage(list: TMessage[], newMsg: TMessage): TMessage[] {
 
   // ACP工具调用更新
   if (newMsg.type === "acp_tool_call" && newMsg.content?.update?.toolCallId) {
-    const existingIdx = index.toolCallIdIndex.get(
-      newMsg.content.update.toolCallId,
-    );
+    const existingIdx = index.toolCallIdIndex.get(newMsg.content.update.toolCallId);
     if (existingIdx !== undefined) {
       const existingMsg = list[existingIdx];
       const merged = { ...existingMsg.content, ...newMsg.content };

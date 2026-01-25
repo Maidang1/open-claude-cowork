@@ -6,13 +6,7 @@ import type {
   TokenUsage,
 } from "@src/types/acpTypes";
 
-export type {
-  AgentCommandInfo,
-  AgentInfoState,
-  AgentModelInfo,
-  IncomingMessage,
-  TokenUsage,
-};
+export type { AgentCommandInfo, AgentInfoState, AgentModelInfo, IncomingMessage, TokenUsage };
 
 // Shared types between main and render processes
 

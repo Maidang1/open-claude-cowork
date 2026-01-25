@@ -9,10 +9,7 @@ import type {
 } from "../types/messageTypes";
 
 // 将现有消息类型转换为新的统一消息类型
-export function transformToNewMessage(
-  msg: Message,
-  conversationId: string,
-): TMessage {
+export function transformToNewMessage(msg: Message, conversationId: string): TMessage {
   // 权限请求消息
   if (msg.permissionId) {
     const acpPermissionMsg: TAcpPermissionMessage = {
@@ -65,11 +62,7 @@ export function transformToNewMessage(
   // AI消息 - 根据内容类型进行转换
   if (msg.sender === "agent") {
     // 只有思考过程的消息
-    if (
-      msg.thought &&
-      !msg.content &&
-      (!msg.toolCalls || msg.toolCalls.length === 0)
-    ) {
+    if (msg.thought && !msg.content && (!msg.toolCalls || msg.toolCalls.length === 0)) {
       const thoughtMsg: TThoughtMessage = {
         id: msg.id,
         msg_id: msg.msgId,
@@ -84,12 +77,7 @@ export function transformToNewMessage(
     }
 
     // 只有工具调用的消息
-    if (
-      msg.toolCalls &&
-      msg.toolCalls.length > 0 &&
-      !msg.content &&
-      !msg.thought
-    ) {
+    if (msg.toolCalls && msg.toolCalls.length > 0 && !msg.content && !msg.thought) {
       const toolCallMsg: TAcpToolCallMessage = {
         id: msg.id,
         msg_id: msg.msgId,
@@ -139,10 +127,7 @@ export function transformToNewMessage(
 }
 
 // 批量转换消息
-export function transformMessages(
-  messages: Message[],
-  conversationId: string,
-): TMessage[] {
+export function transformMessages(messages: Message[], conversationId: string): TMessage[] {
   return messages.map((msg) => transformToNewMessage(msg, conversationId));
 }
 
@@ -188,8 +173,7 @@ export function transformIncomingMessage(
         type: "acp_tool_call",
         content: {
           toolCallId:
-            incomingMsg.toolCallId ||
-            `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+            incomingMsg.toolCallId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
           name: incomingMsg.name || "Unknown Tool",
           kind: incomingMsg.kind,
           status: incomingMsg.status || "in_progress",
@@ -309,8 +293,7 @@ export function transformToLegacyMessages(
         id: msg.id,
         msgId: msg.msg_id ?? prev?.msgId,
         sender: "system",
-        content:
-          msg.content.content || msg.content.tool || "Permission request",
+        content: msg.content.content || msg.content.tool || "Permission request",
         permissionId: msg.content.id || prev?.permissionId,
         options: msg.content.options || prev?.options,
       };
@@ -329,24 +312,15 @@ export function transformToLegacyMessages(
 
     if (msg.type === "acp_tool_call") {
       const fallbackTool = prev?.toolCalls?.[0];
-      const toolCallId =
-        msg.content.toolCallId || msg.content.update?.toolCallId;
+      const toolCallId = msg.content.toolCallId || msg.content.update?.toolCallId;
       const tool: ToolCall = {
         id: toolCallId || fallbackTool?.id || msg.id,
-        name:
-          msg.content.name ||
-          msg.content.title ||
-          fallbackTool?.name ||
-          "Unknown Tool",
+        name: msg.content.name || msg.content.title || fallbackTool?.name || "Unknown Tool",
         kind: msg.content.kind || fallbackTool?.kind,
-        status: toToolCallStatus(
-          msg.content.status || msg.content.update?.status,
-        ),
+        status: toToolCallStatus(msg.content.status || msg.content.update?.status),
         result: {
           rawInput:
-            msg.content.rawInput ??
-            msg.content.update?.rawInput ??
-            fallbackTool?.result?.rawInput,
+            msg.content.rawInput ?? msg.content.update?.rawInput ?? fallbackTool?.result?.rawInput,
           rawOutput:
             msg.content.rawOutput ??
             msg.content.update?.rawOutput ??
@@ -370,10 +344,8 @@ export function transformToLegacyMessages(
         name: msg.content.name || fallbackTool?.name || "Unknown Tool",
         status: toToolCallStatus(msg.content.status || fallbackTool?.status),
         result: {
-          rawInput:
-            msg.content.result?.rawInput ?? fallbackTool?.result?.rawInput,
-          rawOutput:
-            msg.content.result?.rawOutput ?? fallbackTool?.result?.rawOutput,
+          rawInput: msg.content.result?.rawInput ?? fallbackTool?.result?.rawInput,
+          rawOutput: msg.content.result?.rawOutput ?? fallbackTool?.result?.rawOutput,
         },
       };
       return {

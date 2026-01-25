@@ -51,16 +51,12 @@ export const ThoughtDisplay = ({
     <div onKeyDown={handleKeyDown} tabIndex={0}>
       <Think
         title="AI is thinking"
-        icon={
-          <span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-        }
+        icon={<span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
         className={style === "compact" ? "p-3" : "p-4"}
       >
         <div className="space-y-2">
           {running && (
-            <div className="text-xs text-slate-500 dark:text-slate-400">
-              {formatTime(elapsed)}
-            </div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">{formatTime(elapsed)}</div>
           )}
           <div className="text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
             {thought}

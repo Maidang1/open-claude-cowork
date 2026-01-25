@@ -33,10 +33,7 @@ declare const DEBUG: string | undefined;
 
 const LOCAL_COMMANDS: AgentCommandInfo[] = [];
 
-const mergeCommands = (
-  agentCommands: AgentCommandInfo[],
-  localCommands: AgentCommandInfo[],
-) => {
+const mergeCommands = (agentCommands: AgentCommandInfo[], localCommands: AgentCommandInfo[]) => {
   const merged = new Map<string, AgentCommandInfo>();
   for (const cmd of localCommands) {
     merged.set(cmd.name, cmd);
@@ -55,9 +52,7 @@ const App = () => {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [inputText, setInputText] = useState("");
   const [inputImages, setInputImages] = useState<ImageAttachment[]>([]);
-  const [agentCommand, setAgentCommand] = useState(
-    getDefaultAgentPlugin().defaultCommand,
-  );
+  const [agentCommand, setAgentCommand] = useState(getDefaultAgentPlugin().defaultCommand);
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
   const [agentInfo, setAgentInfo] = useState<AgentInfoState>({
     models: [],
@@ -74,8 +69,7 @@ const App = () => {
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const [agentCapabilities, setAgentCapabilities] = useState<any | null>(null);
   const [agentMessageLog, setAgentMessageLog] = useState<string[]>([]);
-  const showDebug =
-    String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
+  const showDebug = String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     state: "disconnected",
@@ -87,9 +81,7 @@ const App = () => {
 
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window !== "undefined" && window.matchMedia) {
-      return window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     }
     return "light";
   });
@@ -127,19 +119,14 @@ const App = () => {
     }
   }, [activeTask, activeTaskId]);
 
-  const persistTaskUpdates = useCallback(
-    (taskId: string, updates: Partial<Task>) => {
-      window.electron.invoke("db:update-task", taskId, updates);
-    },
-    [],
-  );
+  const persistTaskUpdates = useCallback((taskId: string, updates: Partial<Task>) => {
+    window.electron.invoke("db:update-task", taskId, updates);
+  }, []);
 
   const applyTaskUpdates = useCallback(
     (taskId: string, updates: Partial<Task>) => {
       setTasks((prev) => {
-        const next = prev.map((task) =>
-          task.id === taskId ? { ...task, ...updates } : task,
-        );
+        const next = prev.map((task) => (task.id === taskId ? { ...task, ...updates } : task));
         // 永远按照创建时间倒序排序
         return [...next].sort((a, b) => b.createdAt - a.createdAt);
       });
@@ -192,10 +179,7 @@ const App = () => {
         root.style.setProperty("--wallpaper", wallpaper);
       } else {
         // 否则假设是图片文件
-        root.style.setProperty(
-          "--wallpaper",
-          `url('${wallpaperUrl(wallpaper)}')`,
-        );
+        root.style.setProperty("--wallpaper", `url('${wallpaperUrl(wallpaper)}')`);
       }
       root.classList.add("bg-wallpaper");
     } else {
@@ -222,11 +206,7 @@ const App = () => {
       const response = optionId
         ? { outcome: { outcome: "selected", optionId } }
         : { outcome: { outcome: "cancelled" } };
-      await window.electron.invoke(
-        "agent:permission-response",
-        permissionId,
-        response,
-      );
+      await window.electron.invoke("agent:permission-response", permissionId, response);
     },
     [],
   );
@@ -314,20 +294,17 @@ const App = () => {
       };
       if (data.type === "agent_info") {
         const resolvedTaskId = data.sessionId
-          ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)
-              ?.id ?? activeTaskIdSnapshot)
+          ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)?.id ??
+            activeTaskIdSnapshot)
           : activeTaskIdSnapshot;
         const nextUsage = data.info?.tokenUsage ?? null;
         const baseUsage = activeTaskSnapshot?.tokenUsage ?? null;
         const mergedUsage = nextUsage
           ? {
-              promptTokens:
-                (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
+              promptTokens: (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
               completionTokens:
-                (baseUsage?.completionTokens ?? 0) +
-                (nextUsage.completionTokens ?? 0),
-              totalTokens:
-                (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
+                (baseUsage?.completionTokens ?? 0) + (nextUsage.completionTokens ?? 0),
+              totalTokens: (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
             }
           : baseUsage;
         if (nextUsage) {
@@ -385,10 +362,7 @@ const App = () => {
       // System Messages
       if (data.type === "system") {
         const content = data.text || "";
-        if (
-          content.includes("Agent disconnected") ||
-          content.includes("Agent process error")
-        ) {
+        if (content.includes("Agent disconnected") || content.includes("Agent process error")) {
           setIsConnected(false);
           clearAllSessionIds();
           sessionLoadInFlight.current = false;
@@ -422,8 +396,7 @@ const App = () => {
 
       if (data.type === "permission_request") {
         const updatedAt = Date.now();
-        const resolvedTaskId =
-          resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
+        const resolvedTaskId = resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
         const targetTask = resolvedTaskId
           ? tasksSnapshot.find((task) => task.id === resolvedTaskId)
           : null;
@@ -467,9 +440,7 @@ const App = () => {
       // Agent Messages
       setTasks((prev) => {
         const resolvedTaskId = resolveTaskId(prev);
-        const targetTask = resolvedTaskId
-          ? prev.find((task) => task.id === resolvedTaskId)
-          : null;
+        const targetTask = resolvedTaskId ? prev.find((task) => task.id === resolvedTaskId) : null;
         if (!targetTask) return prev;
 
         let msgId: string | undefined;
@@ -495,10 +466,7 @@ const App = () => {
         const updatedMessages = composer.getMessages();
 
         // Convert back to legacy message shape for storage/rendering.
-        const oldFormatMessages = transformToLegacyMessages(
-          updatedMessages,
-          targetTask.messages,
-        );
+        const oldFormatMessages = transformToLegacyMessages(updatedMessages, targetTask.messages);
 
         const updatedAt = Date.now();
         if (resolvedTaskId) {
@@ -530,22 +498,16 @@ const App = () => {
     if (!window.electron) {
       return;
     }
-    const removeListener = window.electron.on(
-      "agent:message",
-      (msg: IncomingMessage | string) => {
-        const data: IncomingMessage =
-          typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
-        console.log("[agent:message]", data);
-        setAgentMessageLog((prev) => {
-          const next = [
-            `[${new Date().toISOString()}] ${JSON.stringify(data)}`,
-            ...prev,
-          ];
-          return next.slice(0, 50);
-        });
-        handleIncomingMessage(data);
-      },
-    );
+    const removeListener = window.electron.on("agent:message", (msg: IncomingMessage | string) => {
+      const data: IncomingMessage =
+        typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
+      console.log("[agent:message]", data);
+      setAgentMessageLog((prev) => {
+        const next = [`[${new Date().toISOString()}] ${JSON.stringify(data)}`, ...prev];
+        return next.slice(0, 50);
+      });
+      handleIncomingMessage(data);
+    });
 
     const loadInitialState = async () => {
       const [storedTasks, storedActiveTaskId, lastWs] = await Promise.all([
@@ -567,17 +529,13 @@ const App = () => {
       // 按创建时间倒序排序
       setTasks([...loadedTasks].sort((a, b) => b.createdAt - a.createdAt));
 
-      const resolvedActiveId = loadedTasks.find(
-        (task) => task.id === storedActiveTaskId,
-      )
+      const resolvedActiveId = loadedTasks.find((task) => task.id === storedActiveTaskId)
         ? storedActiveTaskId
         : (loadedTasks[0]?.id ?? null);
 
       if (resolvedActiveId) {
         setActiveTaskId(resolvedActiveId);
-        const nextTask = loadedTasks.find(
-          (task) => task.id === resolvedActiveId,
-        );
+        const nextTask = loadedTasks.find((task) => task.id === resolvedActiveId);
         if (nextTask) {
           syncActiveTaskState(nextTask);
         }
@@ -618,10 +576,7 @@ const App = () => {
         return null;
       }
       if (!commandName.includes("/") && !commandName.startsWith(".")) {
-        const check = await window.electron.invoke(
-          "agent:check-command",
-          commandName,
-        );
+        const check = await window.electron.invoke("agent:check-command", commandName);
         if (!check.installed) {
           setConnectionStatus({
             state: "error",
@@ -657,22 +612,14 @@ const App = () => {
 
       if (connectResult.reused && sessionId) {
         try {
-          await window.electron.invoke(
-            "agent:set-active-session",
-            sessionId,
-            task.workspace,
-          );
+          await window.electron.invoke("agent:set-active-session", sessionId, task.workspace);
         } catch {
           sessionId = null;
         }
       } else if (task.sessionId && (canResume || canLoad)) {
         try {
           if (canResume) {
-            await window.electron.invoke(
-              "agent:resume-session",
-              task.sessionId,
-              task.workspace,
-            );
+            await window.electron.invoke("agent:resume-session", task.sessionId, task.workspace);
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -680,11 +627,7 @@ const App = () => {
             });
           } else if (canLoad) {
             sessionLoadInFlight.current = true;
-            await window.electron.invoke(
-              "agent:load-session",
-              task.sessionId,
-              task.workspace,
-            );
+            await window.electron.invoke("agent:load-session", task.sessionId, task.workspace);
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -699,10 +642,7 @@ const App = () => {
       }
 
       if (!sessionId) {
-        const sessionResult = await window.electron.invoke(
-          "agent:new-session",
-          task.workspace,
-        );
+        const sessionResult = await window.electron.invoke("agent:new-session", task.workspace);
         sessionId = sessionResult.sessionId;
         applyTaskUpdates(task.id, {
           sessionId,
@@ -814,9 +754,7 @@ const App = () => {
 
     setIsNewTaskOpen(false);
     // 按创建时间倒序排序，新任务会自动在最前面
-    setTasks((prev) =>
-      [...prev, newTask].sort((a, b) => b.createdAt - a.createdAt),
-    );
+    setTasks((prev) => [...prev, newTask].sort((a, b) => b.createdAt - a.createdAt));
     window.electron.invoke("db:create-task", newTask);
     setActiveTaskId(newTask.id);
     syncActiveTaskState(newTask);
@@ -839,11 +777,7 @@ const App = () => {
     // 检查任务是否有会话ID，如果有且已经连接，则不重新连接
     if (isConnected && task.sessionId) {
       try {
-        await window.electron.invoke(
-          "agent:set-active-session",
-          task.sessionId,
-          task.workspace,
-        );
+        await window.electron.invoke("agent:set-active-session", task.sessionId, task.workspace);
         return;
       } catch (e: any) {
         console.error("Failed to set active session:", e);
@@ -859,9 +793,7 @@ const App = () => {
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    const confirmed = window.confirm(
-      "Delete this task? This cannot be undone.",
-    );
+    const confirmed = window.confirm("Delete this task? This cannot be undone.");
     if (!confirmed) {
       return;
     }
@@ -1031,9 +963,7 @@ const App = () => {
     () => mergeCommands(agentInfo.commands, LOCAL_COMMANDS),
     [agentInfo.commands],
   );
-  const commandQuery = inputText.startsWith("/")
-    ? inputText.slice(1).trim().toLowerCase()
-    : "";
+  const commandQuery = inputText.startsWith("/") ? inputText.slice(1).trim().toLowerCase() : "";
   const filteredCommands = mergedCommands.filter((cmd) =>
     commandQuery ? cmd.name.toLowerCase().includes(commandQuery) : true,
   );
@@ -1119,10 +1049,7 @@ const App = () => {
   return (
     <ConfigProvider
       theme={{
-        algorithm:
-          theme === "dark"
-            ? antdTheme.darkAlgorithm
-            : antdTheme.defaultAlgorithm,
+        algorithm: theme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
         token: {
           colorPrimary: "#f97316",
         },

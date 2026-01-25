@@ -43,9 +43,7 @@ const registerWallpaperProtocol = () => {
   protocol.registerFileProtocol("wallpaper", (request, callback) => {
     try {
       const url = new URL(request.url);
-      const encodedPath = url.pathname.startsWith("/")
-        ? url.pathname.slice(1)
-        : url.pathname;
+      const encodedPath = url.pathname.startsWith("/") ? url.pathname.slice(1) : url.pathname;
       const decodedPath = decodeURIComponent(encodedPath);
       if (!decodedPath) {
         callback({ error: -6 });
@@ -64,10 +62,7 @@ const registerWallpaperProtocol = () => {
         path.resolve(app.getAppPath(), "render"),
         process.cwd(),
       ];
-      const relativeCandidates = [
-        normalizedPath,
-        path.join("public", normalizedPath),
-      ];
+      const relativeCandidates = [normalizedPath, path.join("public", normalizedPath)];
 
       for (const base of baseCandidates) {
         for (const relPath of relativeCandidates) {

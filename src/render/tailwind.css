@@ -4,63 +4,75 @@
 
 @layer base {
   :root {
-    /* Slate Palette (Tailwind-compatible values) */
-    --slate-50: #f8fafc;
-    --slate-100: #f1f5f9;
-    --slate-200: #e2e8f0;
-    --slate-300: #cbd5e1;
-    --slate-400: #94a3b8;
-    --slate-500: #64748b;
-    --slate-600: #475569;
-    --slate-700: #334155;
-    --slate-800: #1e293b;
-    --slate-900: #0f172a;
-    --slate-950: #020617;
+    /* 继承 theme.css 中的变量 */
+    --slate-50: var(--color-bg-100);
+    --slate-100: var(--color-bg-200);
+    --slate-200: var(--color-ink-400);
+    --slate-300: var(--color-ink-400);
+    --slate-400: var(--color-ink-600);
+    --slate-500: var(--color-ink-900);
+    --slate-600: var(--color-bg-300);
+    --slate-700: var(--color-bg-200);
+    --slate-800: var(--color-ink-900);
+    --slate-900: var(--color-ink-900);
+    --slate-950: var(--color-bg-000);
 
     /* Brand Colors (Orange/Coral) */
-    --orange-50: #fff7ed;
-    --orange-100: #ffedd5;
-    --orange-400: #fb923c;
-    --orange-500: #f97316;
-    --orange-600: #ea580c;
+    --orange-50: var(--color-accent-subtle);
+    --orange-100: var(--color-accent-light);
+    --orange-400: var(--color-accent);
+    --orange-500: var(--color-accent);
+    --orange-600: var(--color-accent-hover);
 
     /* Semantic Defaults (Light Mode) */
-    --bg-app: var(--slate-50);
-    --bg-sidebar: #ffffff;
-    --bg-surface: #ffffff;
-    --bg-surface-muted: var(--slate-50);
-    --bg-surface-hover: var(--slate-100);
-    --bg-input: #ffffff;
+    --bg-app: var(--color-bg-100);
+    --bg-sidebar: var(--color-bg-100);
+    --bg-surface: var(--color-surface-secondary);
+    --bg-surface-muted: var(--color-surface-tertiary);
+    --bg-surface-hover: var(--color-surface-tertiary);
+    --bg-input: var(--color-surface);
 
-    --text-primary: var(--slate-900);
-    --text-secondary: var(--slate-500);
-    --text-tertiary: var(--slate-400);
+    --text-primary: var(--color-ink-900);
+    --text-secondary: var(--color-ink-600);
+    --text-tertiary: var(--color-ink-400);
 
-    --border-color: var(--slate-200);
-    --border-hover: var(--slate-300);
+    --border-color: var(--color-ink-900);
+    --border-hover: var(--color-ink-600);
 
     --primary: var(--orange-500);
     --primary-hover: var(--orange-600);
-    --primary-light: var(--orange-100);
-    --primary-fg: #ffffff;
+    --primary-light: var(--color-accent-light);
+    --primary-fg: #fff;
   }
 
   [data-theme="dark"] {
-    --bg-app: var(--slate-950);
-    --bg-sidebar: var(--slate-900);
-    --bg-surface: var(--slate-900);
-    --bg-surface-muted: var(--slate-900);
-    --bg-surface-hover: var(--slate-800);
-    --bg-input: var(--slate-900);
+    --slate-50: var(--color-bg-100);
+    --slate-100: var(--color-bg-200);
+    --slate-200: var(--color-ink-700);
+    --slate-300: var(--color-ink-500);
+    --slate-400: var(--color-ink-500);
+    --slate-500: var(--color-ink-900);
+    --slate-600: var(--color-bg-300);
+    --slate-700: var(--color-bg-200);
+    --slate-800: var(--color-ink-900);
+    --slate-900: var(--color-ink-900);
+    --slate-950: var(--color-bg-000);
 
-    --text-primary: var(--slate-50);
-    --text-secondary: var(--slate-400);
-    --text-tertiary: var(--slate-500);
+    --bg-app: var(--color-bg-100);
+    --bg-sidebar: var(--color-bg-100);
+    --bg-surface: var(--color-surface-secondary);
+    --bg-surface-muted: var(--color-surface-tertiary);
+    --bg-surface-hover: var(--color-surface-tertiary);
+    --bg-input: var(--color-surface-tertiary);
 
-    --border-color: var(--slate-800);
-    --border-hover: var(--slate-700);
+    --text-primary: var(--color-ink-900);
+    --text-secondary: var(--color-ink-700);
+    --text-tertiary: var(--color-ink-500);
 
-    --primary-light: rgba(249, 115, 22, 0.15);
+    --border-color: var(--color-ink-400);
+    --border-hover: var(--color-ink-500);
+
+    --primary-light: var(--color-accent-light);
   }
 
   html,
