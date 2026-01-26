@@ -87,7 +87,6 @@ const App = () => {
   const isConnectedByTaskRef = useRef<Record<string, boolean>>({});
   const composerRef = useRef<MessageComposer | null>(null);
   const agentTextMsgIdByTaskRef = useRef<Record<string, string | null>>({});
-  const agentThoughtMsgIdByTaskRef = useRef<Record<string, string | null>>({});
 
   useEffect(() => {
     tasksRef.current = tasks;
@@ -429,7 +428,6 @@ const App = () => {
     });
     delete sessionLoadInFlightByTask.current[taskId];
     delete agentTextMsgIdByTaskRef.current[taskId];
-    delete agentThoughtMsgIdByTaskRef.current[taskId];
     if (pendingConnectTaskIdRef.current === taskId) {
       pendingConnectTaskIdRef.current = null;
     }
@@ -660,11 +658,6 @@ const App = () => {
             agentTextMsgIdByTaskRef.current[resolvedTaskId] = Date.now().toString();
           }
           msgId = agentTextMsgIdByTaskRef.current[resolvedTaskId] ?? undefined;
-        } else if (data.type === "agent_thought") {
-          if (!agentThoughtMsgIdByTaskRef.current[resolvedTaskId]) {
-            agentThoughtMsgIdByTaskRef.current[resolvedTaskId] = Date.now().toString();
-          }
-          msgId = agentThoughtMsgIdByTaskRef.current[resolvedTaskId] ?? undefined;
         }
 
         const newMessage = transformIncomingMessage(data, resolvedTaskId, {
@@ -940,7 +933,6 @@ const App = () => {
       clearAllSessionIds();
       sessionLoadInFlightByTask.current = {};
       agentTextMsgIdByTaskRef.current = {};
-      agentThoughtMsgIdByTaskRef.current = {};
       pendingConnectTaskIdRef.current = null;
       return;
     }
@@ -1139,7 +1131,6 @@ const App = () => {
       setTaskWaiting(activeTaskId, true);
     }
     agentTextMsgIdByTaskRef.current[activeTaskId] = null;
-    agentThoughtMsgIdByTaskRef.current[activeTaskId] = null;
 
     try {
       await window.electron.invoke("agent:send", text, images);

@@ -95,16 +95,6 @@ export function composeMessage(list: TMessage[], newMsg: TMessage): TMessage[] {
         return replaceMessage(list, existingIdx, updated);
       }
 
-      if (existingMsg.type === "thought" && newMsg.type === "thought") {
-        const merged: TThoughtMessage["content"] = {
-          ...existingMsg.content,
-          ...newMsg.content,
-          thought: `${existingMsg.content.thought || ""}${newMsg.content.thought || ""}`,
-        };
-        const updated: TThoughtMessage = { ...existingMsg, content: merged };
-        return replaceMessage(list, existingIdx, updated);
-      }
-
       return replaceMessage(list, existingIdx, newMsg);
     }
   }
