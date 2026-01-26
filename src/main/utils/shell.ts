@@ -122,7 +122,12 @@ export const getLocalAgentBin = (command: string) => {
 
 export const readInstalledPackageVersion = async (packageName: string) => {
   const parts = packageName.split("/").filter(Boolean);
-  const pkgJsonPath = path.join(getAgentsDir(), "node_modules", ...parts, "package.json");
+  const pkgJsonPath = path.join(
+    getAgentsDir(),
+    "node_modules",
+    ...parts,
+    "package.json",
+  );
   try {
     const data = await fs.readFile(pkgJsonPath, "utf-8");
     const parsed = JSON.parse(data);
@@ -133,7 +138,9 @@ export const readInstalledPackageVersion = async (packageName: string) => {
 };
 
 // System command resolution
-export const resolveSystemCommand = async (command: string): Promise<string | null> => {
+export const resolveSystemCommand = async (
+  command: string,
+): Promise<string | null> => {
   try {
     const whichCmd = process.platform === "win32" ? "where" : "which";
     const { stdout } = await execAsync(`${whichCmd} ${command}`);

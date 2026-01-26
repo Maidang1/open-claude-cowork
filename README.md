@@ -29,6 +29,7 @@ Open Claude Cowork is a powerful desktop application built with Electron and Rea
   - Markdown support with syntax highlighting.
   - Visibility into agent thought processes.
   - Real-time tool call status and logs.
+  - Stop button to cancel ongoing prompt requests.
 - **🔌 Plugin Architecture**: Extensible design allowing easy addition of new agent types via a plugin system.
 - **💾 Local Persistence**: All tasks and settings are stored locally using SQLite for privacy and offline access.
 - **🌗 Dark/Light Mode**: Built-in support for both dark and light themes.

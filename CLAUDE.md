@@ -118,6 +118,11 @@ open-claude-cowork/
 - **Markdown Support**: react-markdown with remark-gfm
 - **Code Highlighting**: react-syntax-highlighter
 - **Tool Calls**: `src/render/components/MessageAcpToolCall.tsx`
+- **Stop Button**: `src/render/components/SendBox.tsx` and `src/render/components/ThoughtDisplay.tsx`
+  - Displayed when agent is processing a prompt
+  - Click to cancel ongoing request
+  - Uses ACP `session/cancel` notification
+  - Agent responds with `StopReason::Cancelled`
 
 ### Configuration Files
 

@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react";
 import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 
@@ -6,6 +7,7 @@ interface ThoughtDisplayProps {
   running: boolean;
   onStop: () => void;
   style?: "default" | "compact";
+  label?: string;
 }
 
 export const ThoughtDisplay = ({
@@ -13,8 +15,10 @@ export const ThoughtDisplay = ({
   running,
   onStop,
   style = "default",
+  label,
 }: ThoughtDisplayProps) => {
   const [elapsed, setElapsed] = useState(0);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     let timer: number;
@@ -40,37 +44,49 @@ export const ThoughtDisplay = ({
       : `${remainingSeconds}s`;
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Escape") {
       onStop();
     }
   };
 
-  const containerPadding = style === "compact" ? "p-3" : "p-4";
-  const contentPadding = style === "compact" ? "p-3" : "p-4";
+  const containerPadding = style === "compact" ? "py-1" : "py-2";
+  const contentSpacing = style === "compact" ? "mt-2" : "mt-3";
 
   return (
     <div onKeyDown={handleKeyDown} tabIndex={0}>
       <div
-        className={`rounded-2xl border border-amber-100/70 bg-amber-50/80 text-ink-800 shadow-soft focus:outline-none focus:ring-2 focus:ring-amber-200 ${containerPadding}`}
+        className={`text-ink-800 focus:outline-none focus:ring-2 focus:ring-accent/20 ${containerPadding}`}
       >
-        <div className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-amber-700">
+        <div className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-ink-500">
           <div className="flex items-center gap-2 font-medium">
             <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-50" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
             </span>
             <span>Thinking</span>
+            {label ? (
+              <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-600">
+                ID: {label}
+              </span>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCollapsed((prev) => !prev)}
+              className="rounded-full border border-ink-900/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-600 transition hover:bg-surface-tertiary"
+            >
+              {collapsed ? "Show" : "Hide"}
+            </button>
             {running && (
-              <span className="font-mono text-[11px] text-amber-700/80">{formatTime(elapsed)}</span>
+              <span className="font-mono text-[11px] text-ink-500">{formatTime(elapsed)}</span>
             )}
             {running && (
               <button
                 type="button"
                 onClick={onStop}
-                className="rounded-full border border-amber-300 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 transition hover:bg-amber-500/10"
+                className="rounded-full border border-ink-900/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-600 transition hover:bg-surface-tertiary"
               >
                 Stop
               </button>
@@ -78,11 +94,13 @@ export const ThoughtDisplay = ({
           </div>
         </div>
 
-        <div
-          className={`mt-3 rounded-xl bg-white/90 ${contentPadding} text-sm text-ink-900 shadow-inner`}
-        >
-          <Markdown className="prose prose-sm max-w-none text-ink-900">{thought}</Markdown>
-        </div>
+        {!collapsed && (
+          <div className={`${contentSpacing} text-sm text-ink-800`}>
+            <div className="prose prose-sm max-w-none text-ink-800">
+              <Markdown>{thought}</Markdown>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

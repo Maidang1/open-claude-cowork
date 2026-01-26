@@ -10,6 +10,8 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
   const [copied, setCopied] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [isOutputExpanded, setIsOutputExpanded] = useState(false);
+  const [outputHeight, setOutputHeight] = useState<number | null>(null);
+  const outputRef = useState<HTMLDivElement | null>(null);
 
   const mergedContent = useMemo(
     () => ({
@@ -19,7 +21,8 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
     [msg.content],
   );
 
-  const { toolCallId, name, kind, title, description, rawInput, rawOutput } = mergedContent;
+  const { toolCallId, name, kind, title, description, rawInput, rawOutput } =
+    mergedContent;
 
   const handleCopy = async (text: string, key: string) => {
     try {
@@ -47,7 +50,12 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
         if (parts.length > 0) return parts.join(" ");
       }
       const candidate =
-        input.command || input.cmd || input.input || input.query || input.prompt || input.script;
+        input.command ||
+        input.cmd ||
+        input.input ||
+        input.query ||
+        input.prompt ||
+        input.script;
       if (typeof candidate === "string") return candidate;
       try {
         return JSON.stringify(input);
@@ -102,15 +110,15 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
     }
   }, [rawOutput]);
 
-  const outputLines = useMemo(() => {
-    if (!outputText) return [];
-    return outputText.split("\n");
-  }, [outputText]);
+  const handleOutputRef = (node: HTMLDivElement | null) => {
+    outputRef[1](node);
+    if (node) {
+      setOutputHeight(node.scrollHeight);
+    }
+  };
 
-  const maxPreviewLines = 6;
-  const hasHiddenLines = outputLines.length > maxPreviewLines;
-  const visibleLines = isOutputExpanded ? outputLines : outputLines.slice(0, maxPreviewLines);
-  const hiddenLineCount = Math.max(outputLines.length - visibleLines.length, 0);
+  const maxHeight = 200;
+  const hasHiddenContent = outputHeight !== null && outputHeight > maxHeight;
 
   const rawToolLabel = kind || name || title || "Tool";
   const rawToolParts = rawToolLabel.split(/\s+/).filter(Boolean);
@@ -134,27 +142,36 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-success" />
           <span className="text-accent font-semibold">{toolLabel}</span>
-          {commandLabel && <span className="truncate font-mono text-ink-600">{commandLabel}</span>}
+          {commandLabel && (
+            <span className="truncate font-mono text-ink-600">
+              {commandLabel}
+            </span>
+          )}
         </div>
       </div>
 
       {rawOutput !== undefined && (
         <div className="mt-2">
-          <div className="text-[14px] font-medium text-accent my-2 ">{outputLabel}</div>
-          <div className="rounded-[8px] bg-surface-secondary px-4 py-2 text-[14px] leading-relaxed text-text-secondary shadow-soft">
-            <pre className="whitespace-pre-wrap font-mono">
-              {visibleLines.length > 0 ? visibleLines.join("\n") : ""}
-            </pre>
+          <div className="text-[14px] font-medium text-accent my-2 ">
+            {outputLabel}
           </div>
-          {hasHiddenLines && (
+          <div
+            ref={handleOutputRef}
+            className={`rounded-[8px] bg-surface-secondary px-4 py-2 text-[14px] leading-relaxed text-text-secondary shadow-soft overflow-auto transition-all duration-200 ${
+              !isOutputExpanded && hasHiddenContent
+                ? "max-h-[200px]"
+                : "max-h-none"
+            }`}
+          >
+            <pre className="whitespace-pre-wrap font-mono">{outputText}</pre>
+          </div>
+          {hasHiddenContent && (
             <button
               type="button"
               onClick={() => setIsOutputExpanded((prev) => !prev)}
               className="mt-2 text-[12px] font-medium text-accent hover:text-accent-hover"
             >
-              {isOutputExpanded
-                ? "▲ Collapse"
-                : `▼ Show ${hiddenLineCount} more line${hiddenLineCount > 1 ? "s" : ""}`}
+              {isOutputExpanded ? "▲ Collapse" : "▼ Expand"}
             </button>
           )}
         </div>
@@ -167,7 +184,11 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
             onClick={() => setShowDetails(!showDetails)}
             className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary"
           >
-            {showDetails ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            {showDetails ? (
+              <ChevronDown size={14} />
+            ) : (
+              <ChevronRight size={14} />
+            )}
             {showDetails ? "Hide details" : "Show details"}
           </button>
         </div>
@@ -175,28 +196,44 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
 
       {showDetails && (
         <div className="mt-3 space-y-3">
-          {description && <div className="text-xs text-text-secondary">{description}</div>}
-          {kind && <div className="text-xs text-text-secondary">Kind: {kind}</div>}
+          {description && (
+            <div className="text-xs text-text-secondary">{description}</div>
+          )}
+          {kind && (
+            <div className="text-xs text-text-secondary">Kind: {kind}</div>
+          )}
           {rawInput !== undefined && (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <h4 className="text-[11px] font-medium text-text-secondary uppercase">Input</h4>
+                <h4 className="text-[11px] font-medium text-text-secondary uppercase">
+                  Input
+                </h4>
                 <button
                   type="button"
-                  onClick={() => handleCopy(JSON.stringify(rawInput, null, 2), "input")}
+                  onClick={() =>
+                    handleCopy(JSON.stringify(rawInput, null, 2), "input")
+                  }
                   className="flex items-center gap-1 text-[11px] text-text-secondary hover:text-text-primary"
                 >
-                  {copied === "input" ? <Check size={12} /> : <Copy size={12} />}
+                  {copied === "input" ? (
+                    <Check size={12} />
+                  ) : (
+                    <Copy size={12} />
+                  )}
                   {copied === "input" ? "Copied" : "Copy"}
                 </button>
               </div>
-              <pre className="rounded-lg bg-input px-3 py-2 text-[11px] text-text-secondary shadow-soft">
-                {typeof rawInput === "string" ? rawInput : JSON.stringify(rawInput, null, 2)}
+              <pre className="rounded-lg bg-input px-3 py-2 text-[11px] text-text-secondary shadow-soft whitespace-break-spaces">
+                {typeof rawInput === "string"
+                  ? rawInput
+                  : JSON.stringify(rawInput, null, 2)}
               </pre>
             </div>
           )}
           {toolCallId && (
-            <div className="text-[11px] text-text-tertiary">Tool Call ID: {toolCallId}</div>
+            <div className="text-[11px] text-text-tertiary">
+              Tool Call ID: {toolCallId}
+            </div>
           )}
         </div>
       )}

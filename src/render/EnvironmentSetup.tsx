@@ -49,8 +49,7 @@ const getInstallSteps = (platform: string): InstallStep[] => {
       return [
         {
           name: "Install Chocolatey",
-          command:
-            'powershell -c "irm https://community.chocolatey.org/install.ps1|iex"',
+          command: 'powershell -c "irm https://community.chocolatey.org/install.ps1|iex"',
           status: "pending",
         },
         {
@@ -79,12 +78,9 @@ const getInstallSteps = (platform: string): InstallStep[] => {
 };
 
 export default function EnvironmentSetup({ onReady }: Props) {
-  const [status, setStatus] = useState<
-    "checking" | "missing" | "outdated" | "ready"
-  >("checking");
+  const [status, setStatus] = useState<"checking" | "missing" | "outdated" | "ready">("checking");
   const [envStatus, setEnvStatus] = useState<EnvStatus | null>(null);
-  const [nodeRuntime, setNodeRuntime] =
-    useState<NodeRuntimePreference>("custom");
+  const [nodeRuntime, setNodeRuntime] = useState<NodeRuntimePreference>("custom");
   const [customNodePath, setCustomNodePath] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -108,9 +104,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
       if (runtime === "custom") {
         setNodeRuntime(runtime);
       }
-      const storedPath = await window.electron.invoke(
-        "env:get-custom-node-path",
-      );
+      const storedPath = await window.electron.invoke("env:get-custom-node-path");
       if (storedPath) {
         setCustomNodePath(storedPath);
       }
@@ -138,9 +132,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
       }
 
       if (!result.npm.installed) {
-        console.warn(
-          "[EnvSetup] npm not detected; agent installs may require manual setup.",
-        );
+        console.warn("[EnvSetup] npm not detected; agent installs may require manual setup.");
       }
     } catch (e) {
       console.error("Environment check failed:", e);
@@ -184,17 +176,11 @@ export default function EnvironmentSetup({ onReady }: Props) {
 
     setValidating(true);
     try {
-      const result = await window.electron.invoke(
-        "env:validate-node-path",
-        customNodePath,
-      );
+      const result = await window.electron.invoke("env:validate-node-path", customNodePath);
       if (result.valid) {
         await window.electron.invoke("env:set-node-runtime", "custom");
         setNodeRuntime("custom");
-        await window.electron.invoke(
-          "env:set-custom-node-path",
-          customNodePath,
-        );
+        await window.electron.invoke("env:set-custom-node-path", customNodePath);
         checkEnvironment();
       } else {
         alert(result.error || "Invalid Node.js path");
@@ -228,10 +214,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
       );
 
       try {
-        const result = await window.electron.invoke(
-          "env:run-install-command",
-          steps[i].command,
-        );
+        const result = await window.electron.invoke("env:run-install-command", steps[i].command);
 
         setInstallSteps((prev) =>
           prev.map((s, idx) =>
@@ -240,9 +223,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
         );
       } catch (e: any) {
         setInstallSteps((prev) =>
-          prev.map((s, idx) =>
-            idx === i ? { ...s, status: "error", output: e.message } : s,
-          ),
+          prev.map((s, idx) => (idx === i ? { ...s, status: "error", output: e.message } : s)),
         );
         setInstallError(e.message || "Installation failed");
         setInstalling(false);
@@ -285,14 +266,10 @@ export default function EnvironmentSetup({ onReady }: Props) {
         ? "Linux"
         : "your system";
 
-  const canAutoInstall = Boolean(
-    envStatus && getInstallSteps(envStatus.platform).length > 0,
-  );
+  const canAutoInstall = Boolean(envStatus && getInstallSteps(envStatus.platform).length > 0);
 
   const summaryTitle =
-    status === "outdated"
-      ? "Node.js Update Required"
-      : "Node.js Installation Needed";
+    status === "outdated" ? "Node.js Update Required" : "Node.js Installation Needed";
   const summaryMessage =
     status === "outdated"
       ? `Detected ${envStatus?.node.version ?? "an older version"}. Please upgrade to Node.js ${MIN_NODE_VERSION}+ to continue.`
@@ -308,12 +285,9 @@ export default function EnvironmentSetup({ onReady }: Props) {
               <span className="text-2xl animate-spin">⏳</span>
             </div>
           </div>
-          <h1 className="text-2xl font-semibold text-white">
-            Checking your environment…
-          </h1>
+          <h1 className="text-2xl font-semibold text-white">Checking your environment…</h1>
           <p className="mt-3 text-white/70">
-            Detecting Node.js and npm on this machine. This usually takes just a
-            moment.
+            Detecting Node.js and npm on this machine. This usually takes just a moment.
           </p>
         </div>
       </div>
@@ -325,12 +299,10 @@ export default function EnvironmentSetup({ onReady }: Props) {
       <div className="min-h-screen bg-app flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-xl rounded-3xl border border-green-500/30 bg-green-500/10 px-10 py-12 text-center shadow-[0_30px_80px_rgba(34,197,94,0.35)]">
           <div className="text-5xl mb-5">✅</div>
-          <h1 className="text-2xl font-semibold text-white">
-            Environment Ready
-          </h1>
+          <h1 className="text-2xl font-semibold text-white">Environment Ready</h1>
           <p className="mt-3 text-white/80">
-            Detected Node.js {envStatus?.node.version} with npm{" "}
-            {envStatus?.npm.version}. Launching the app…
+            Detected Node.js {envStatus?.node.version} with npm {envStatus?.npm.version}. Launching
+            the app…
           </p>
         </div>
       </div>
@@ -345,13 +317,9 @@ export default function EnvironmentSetup({ onReady }: Props) {
             <div className="flex items-start gap-4">
               <div className="text-4xl">{statusIcon}</div>
               <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-white/60">
-                  Environment
-                </p>
+                <p className="text-xs uppercase tracking-[0.2em] text-white/60">Environment</p>
                 <h2 className="text-2xl font-semibold mt-2">{summaryTitle}</h2>
-                <p className="text-white/70 mt-3 leading-relaxed">
-                  {summaryMessage}
-                </p>
+                <p className="text-white/70 mt-3 leading-relaxed">{summaryMessage}</p>
               </div>
             </div>
 
@@ -361,9 +329,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
                 { label: "npm", value: envStatus?.npm.version ?? "—" },
                 {
                   label: "Platform",
-                  value: envStatus
-                    ? `${envStatus.platform} · ${envStatus.arch}`
-                    : "Detecting…",
+                  value: envStatus ? `${envStatus.platform} · ${envStatus.arch}` : "Detecting…",
                 },
               ].map((row) => (
                 <div
@@ -399,13 +365,10 @@ export default function EnvironmentSetup({ onReady }: Props) {
 
           <section className="p-8 space-y-8 bg-[#05070f]/40 backdrop-blur-lg text-white">
             <div>
-              <h3 className="text-xl font-semibold">
-                Install or Configure Node.js
-              </h3>
+              <h3 className="text-xl font-semibold">Install or Configure Node.js</h3>
               <p className="mt-2 text-white/70 text-sm leading-relaxed">
-                Use the guided installer or point us to an existing Node.js
-                binary. You need Node.js {MIN_NODE_VERSION}+ plus npm to run
-                agents locally.
+                Use the guided installer or point us to an existing Node.js binary. You need Node.js{" "}
+                {MIN_NODE_VERSION}+ plus npm to run agents locally.
               </p>
             </div>
 
@@ -416,15 +379,13 @@ export default function EnvironmentSetup({ onReady }: Props) {
                 disabled={!canAutoInstall || installing}
                 className="w-full rounded-2xl bg-gradient-to-r from-[#f97316] to-[#fb923c] py-4 text-base font-semibold shadow-[0_12px_35px_rgba(249,115,22,0.35)] transition hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {installing
-                  ? "Installing Node.js…"
-                  : `Install Node.js on ${platformName}`}
+                {installing ? "Installing Node.js…" : `Install Node.js on ${platformName}`}
               </button>
               <p className="text-xs text-white/60">{installHint}</p>
               {!canAutoInstall && (
                 <p className="text-xs text-amber-300/80">
-                  Auto-install is unavailable on this platform. Please install
-                  Node.js manually and re-run detection.
+                  Auto-install is unavailable on this platform. Please install Node.js manually and
+                  re-run detection.
                 </p>
               )}
             </div>
@@ -437,10 +398,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
                     {installing ? "Running" : "History"}
                   </span>
                 </div>
-                <div
-                  ref={outputRef}
-                  className="flex flex-col gap-3 max-h-80 overflow-y-auto pr-1"
-                >
+                <div ref={outputRef} className="flex flex-col gap-3 max-h-80 overflow-y-auto pr-1">
                   {installSteps.map((step, index) => (
                     <div
                       key={index}
@@ -505,12 +463,9 @@ export default function EnvironmentSetup({ onReady }: Props) {
             {showAdvanced && (
               <div className="rounded-2xl border border-white/10 bg-white/5 p-6 space-y-4">
                 <div>
-                  <h4 className="font-semibold text-white">
-                    Custom Node.js Path
-                  </h4>
+                  <h4 className="font-semibold text-white">Custom Node.js Path</h4>
                   <p className="text-sm text-white/70 mt-1">
-                    If Node.js is installed but not on PATH, point directly to
-                    the executable.
+                    If Node.js is installed but not on PATH, point directly to the executable.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-3">
@@ -536,12 +491,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
                     type="button"
                     className="rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 disabled:opacity-50"
                     onClick={handleValidateCustomPath}
-                    disabled={
-                      !customNodePath.trim() ||
-                      validating ||
-                      runtimeSaving ||
-                      installing
-                    }
+                    disabled={!customNodePath.trim() || validating || runtimeSaving || installing}
                   >
                     {validating ? "Validating…" : "Save Path"}
                   </button>

@@ -108,7 +108,7 @@ export const ChatHeader = ({
             <div className="relative inline-flex flex-col gap-1.5">
               <button
                 type="button"
-                className="flex items-center justify-between gap-2 rounded-xl border border-ink-900/10 bg-surface px-3 py-1.5 text-xs font-medium text-ink-700 transition-colors hover:bg-surface-tertiary hover:border-ink-900/20"
+                className="flex items-center justify-between gap-2 rounded-xl border border-ink-900/10 bg-input px-3 py-1.5 text-xs font-medium text-ink-700 transition-colors hover:bg-orange-50 hover:border-orange-200 dark:hover:bg-orange-500/20 dark:hover:border-orange-500/40"
                 onClick={onToggleModelMenu}
               >
                 <span className="max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap">
@@ -117,15 +117,15 @@ export const ChatHeader = ({
                 <ChevronDown size={12} className="text-ink-500" />
               </button>
               {isModelMenuOpen && (
-                <div className="absolute top-[calc(100%+6px)] right-0 w-60 rounded-xl border border-ink-900/10 bg-surface p-1 shadow-card z-50 max-h-72 overflow-y-auto">
+                <div className="absolute top-[calc(100%+6px)] right-0 w-60 rounded-xl border border-ink-900/10 bg-input p-1 shadow-card z-50 max-h-72 overflow-y-auto">
                   {modelMenuItems.map((model) => (
                     <button
                       key={model.modelId}
                       type="button"
-                      className={`w-full rounded-lg px-3 py-2 text-left transition hover:bg-ink-900/5 ${
+                      className={`w-full rounded-lg px-3 py-2 text-left transition ${
                         model.modelId === currentModelId
-                          ? "bg-accent/10 text-ink-800"
-                          : "text-ink-700"
+                          ? "bg-orange-100 text-ink-800 dark:bg-orange-500/30 dark:text-white"
+                          : "text-ink-700 hover:bg-orange-50 dark:hover:bg-orange-500/20"
                       }`}
                       onClick={() => onModelPick(model.modelId)}
                     >
