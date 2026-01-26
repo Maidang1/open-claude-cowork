@@ -475,10 +475,10 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                 <div className="preset-buttons" style={{ maxWidth: "420px" }}>
                   <button
                     type="button"
-                    className={`preset-button ${nodeRuntime === "bundled" ? "active" : ""}`}
-                    onClick={() => setNodeRuntime("bundled")}
+                    className={`preset-button ${nodeRuntime === "system" ? "active" : ""}`}
+                    onClick={() => setNodeRuntime("system")}
                   >
-                    Bundled (Electron)
+                    System Node
                   </button>
                   <button
                     type="button"
@@ -591,7 +591,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
                     >
                       No Node.js runtime found. Some agents may fail to start.
                       If using a custom path, verify it; otherwise ensure the
-                      bundled runtime is available.
+                      system Node runtime is available.
                     </div>
                   </div>
                 </div>

@@ -2,14 +2,14 @@ import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getSetting, setSetting } from "../db/store";
-import { getLocalAgentBin, parseCommandLine } from "./shell";
+import { getLocalAgentBin, parseCommandLine, resolveSystemCommand } from "./shell";
 
-export type NodeRuntimePreference = "bundled" | "custom";
+export type NodeRuntimePreference = "system" | "custom";
 
 export type NodeRuntime = {
   file: string;
   env?: Record<string, string>;
-  source: "custom" | "bundled";
+  source: "custom" | "system";
 };
 
 export type ResolvedEntry = {
@@ -27,20 +27,27 @@ const NODE_RUNTIME_KEY = "node_runtime_preference";
 const PATH_KEY = "PATH";
 
 let pathEnrichedFromShell = false;
+let pathEnrichmentInFlight: Promise<void> | null = null;
 let lastCustomNodePathApplied: string | null = null;
 
 export const normalizeNodeRuntimePreference = (
   value: string | null,
 ): NodeRuntimePreference | null => {
-  if (value === "bundled" || value === "custom") return value;
+  if (value === "system" || value === "custom") return value;
   return null;
 };
 
 export const getNodeRuntimePreference = (): NodeRuntimePreference => {
   const stored = normalizeNodeRuntimePreference(getSetting(NODE_RUNTIME_KEY));
-  if (stored) return stored;
   const hasCustom = Boolean(getSetting("custom_node_path"));
-  return hasCustom ? "custom" : "bundled";
+
+  if (stored === "custom" && !hasCustom) {
+    setSetting(NODE_RUNTIME_KEY, "system");
+    return "system";
+  }
+
+  if (stored) return stored;
+  return hasCustom ? "custom" : "system";
 };
 
 export const setNodeRuntimePreference = (value: NodeRuntimePreference) => {
@@ -62,14 +69,31 @@ const ensureCustomNodeOnPath = (nodePath: string) => {
 export const getCustomNodePath = (): string | null => {
   try {
     const customPath = getSetting("custom_node_path");
-    if (customPath && existsSync(customPath)) {
+    if (!customPath) {
+      return null;
+    }
+
+    if (existsSync(customPath)) {
       ensureCustomNodeOnPath(customPath);
       return customPath;
     }
-  } catch {
-    // ignore
+
+    console.warn(`[Main] Custom Node.js path ${customPath} no longer exists. Clearing setting.`);
+    setSetting("custom_node_path", "");
+    setSetting(NODE_RUNTIME_KEY, "system");
+  } catch (e) {
+    console.warn("[Main] Failed to read custom Node.js path:", e);
   }
   return null;
+};
+
+export const resolveSystemNode = async (): Promise<string> => {
+  await enrichPathFromLoginShell();
+  const systemNode = await resolveSystemCommand("node");
+  if (!systemNode) {
+    throw new Error("Node.js executable not found on PATH");
+  }
+  return systemNode;
 };
 
 export const resolveNodeRuntime = async (): Promise<NodeRuntime> => {
@@ -82,9 +106,8 @@ export const resolveNodeRuntime = async (): Promise<NodeRuntime> => {
     return { file: customPath, source: "custom" };
   }
   return {
-    file: process.execPath,
-    env: { ELECTRON_RUN_AS_NODE: "1" },
-    source: "bundled",
+    file: await resolveSystemNode(),
+    source: "system",
   };
 };
 
@@ -155,21 +178,31 @@ export const resolveAuthCommand = async (command: string): Promise<ResolvedComma
 
 // PATH enrichment from login shell
 export const enrichPathFromLoginShell = async () => {
-  if (pathEnrichedFromShell || process.platform === "win32") return;
-  try {
-    const { runInLoginShell } = await import("./shell");
-    const { stdout } = await runInLoginShell('echo "$PATH"');
-    const loginPath = stdout.trim();
-    if (loginPath) {
-      const current = process.env[PATH_KEY] || "";
-      const merged = [...new Set([...loginPath.split(":"), ...current.split(":")])]
-        .filter(Boolean)
-        .join(":");
-      (process.env as Record<string, string>)[PATH_KEY] = merged;
-    }
-  } catch (e) {
-    console.warn("[Main] Failed to enrich PATH from login shell:", e);
-  } finally {
-    pathEnrichedFromShell = true;
+  if (process.platform === "win32" || pathEnrichedFromShell) return;
+  if (pathEnrichmentInFlight) {
+    await pathEnrichmentInFlight;
+    return;
   }
+
+  pathEnrichmentInFlight = (async () => {
+    try {
+      const { runInLoginShell } = await import("./shell");
+      const { stdout } = await runInLoginShell('echo "$PATH"');
+      const loginPath = stdout.trim();
+      if (loginPath) {
+        const current = process.env[PATH_KEY] || "";
+        const merged = [...new Set([...loginPath.split(":"), ...current.split(":")])]
+          .filter(Boolean)
+          .join(":");
+        (process.env as Record<string, string>)[PATH_KEY] = merged;
+      }
+      pathEnrichedFromShell = true;
+    } catch (e) {
+      console.warn("[Main] Failed to enrich PATH from login shell:", e);
+    } finally {
+      pathEnrichmentInFlight = null;
+    }
+  })();
+
+  await pathEnrichmentInFlight;
 };

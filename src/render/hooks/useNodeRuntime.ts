@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type NodeRuntimePreference = "bundled" | "custom";
+export type NodeRuntimePreference = "custom";
 
 interface NodeRuntimeState {
   nodeRuntime: NodeRuntimePreference;
@@ -22,7 +22,7 @@ interface NodeRuntimeActions {
 }
 
 export function useNodeRuntime(isOpen: boolean): NodeRuntimeState & NodeRuntimeActions {
-  const [nodeRuntime, setNodeRuntime] = useState<NodeRuntimePreference>("bundled");
+  const [nodeRuntime, setNodeRuntime] = useState<NodeRuntimePreference>("custom");
   const [customNodePath, setCustomNodePath] = useState("");
   const [nodeStatus, setNodeStatus] = useState<"checking" | "installed" | "not-installed">(
     "checking",
@@ -43,7 +43,7 @@ export function useNodeRuntime(isOpen: boolean): NodeRuntimeState & NodeRuntimeA
   const loadRuntimeSettings = useCallback(async () => {
     try {
       const runtime = await window.electron.invoke("env:get-node-runtime");
-      if (runtime === "bundled" || runtime === "custom") {
+      if (runtime === "custom") {
         setNodeRuntime(runtime);
       }
       const storedPath = await window.electron.invoke("env:get-custom-node-path");

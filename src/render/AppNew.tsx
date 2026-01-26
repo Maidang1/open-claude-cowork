@@ -1219,13 +1219,12 @@ const App = () => {
     const checkEnv = async () => {
       try {
         const result = await window.electron.invoke("env:check");
-        if (result.node.installed && result.npm.installed) {
-          // Check version
-          const versionMatch = result.node.version?.match(/^v?(\d+)/);
-          const majorVersion = versionMatch ? parseInt(versionMatch[1], 10) : 0;
-          setEnvReady(majorVersion >= 18);
-        } else {
-          setEnvReady(false);
+        const versionMatch = result.node.version?.match(/^v?(\d+)/);
+        const majorVersion = versionMatch ? parseInt(versionMatch[1], 10) : 0;
+        const nodeOk = result.node.installed && majorVersion >= 18;
+        setEnvReady(nodeOk);
+        if (!result.npm.installed) {
+          console.warn("[Env] npm not detected; agent installs may fail.");
         }
       } catch {
         setEnvReady(false);
