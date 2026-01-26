@@ -6,6 +6,7 @@ import type {
   TSystemMessage,
   TTextMessage,
   TThoughtMessage,
+  TTodoMessage,
 } from "../types/messageTypes";
 
 // 将现有消息类型转换为新的统一消息类型
@@ -74,6 +75,23 @@ export function transformToNewMessage(msg: Message, conversationId: string): TMe
         position: "left",
       };
       return thoughtMsg;
+    }
+
+    // TODO/todoWrite 消息
+    if ((msg as any).todo) {
+      const todoPayload = (msg as any).todo;
+      const todoMsg: TTodoMessage = {
+        id: msg.id,
+        msg_id: msg.msgId,
+        conversation_id: conversationId,
+        type: "todo",
+        content: {
+          ...todoPayload,
+          rawText: todoPayload?.rawText ?? msg.content,
+        },
+        position: "left",
+      };
+      return todoMsg;
     }
 
     // 只有工具调用的消息
@@ -161,6 +179,24 @@ export function transformIncomingMessage(
         type: "thought",
         content: {
           thought: incomingMsg.text || "",
+        },
+        position: "left",
+      };
+
+    case "todoWrite":
+    case "agent_todo":
+    case "todo":
+      return {
+        id,
+        msg_id: msgId,
+        conversation_id: conversationId,
+        type: "todo",
+        content: {
+          title: incomingMsg.title,
+          description: incomingMsg.description,
+          items: incomingMsg.items,
+          rawText: incomingMsg.text,
+          raw: incomingMsg,
         },
         position: "left",
       };
@@ -304,6 +340,15 @@ export function transformToLegacyMessages(
           thought: msg.content.thought || "",
           tokenUsage: prev?.tokenUsage,
         };
+      case "todo":
+        return {
+          id: msg.id,
+          msgId: msg.msg_id ?? prev?.msgId,
+          sender: "agent",
+          content: msg.content.rawText || msg.content.description || prev?.content || "",
+          tokenUsage: prev?.tokenUsage,
+          todo: msg.content,
+        } as Message & { todo?: TTodoMessage["content"] };
       case "acp_tool_call": {
         const fallbackTool = prev?.toolCalls?.[0];
         const toolCallId = msg.content.toolCallId || msg.content.update?.toolCallId;

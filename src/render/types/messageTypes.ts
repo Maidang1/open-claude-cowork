@@ -21,6 +21,7 @@ export type TMessageType =
   | "acp_permission" // ACP 权限请求
   | "tool_call" // 工具调用
   | "thought" // 思考过程
+  | "todo" // 待办/计划
   | "system"; // 系统消息
 
 // 文本消息内容
@@ -87,6 +88,25 @@ export interface IThoughtContent {
   thought: string;
 }
 
+// TODO 列表项
+export type TTodoStatus = "todo" | "in_progress" | "done";
+
+export interface ITodoItem {
+  id?: string;
+  text: string;
+  status?: TTodoStatus;
+  note?: string;
+}
+
+// TODO 消息内容
+export interface ITodoContent {
+  title?: string;
+  description?: string;
+  items?: ITodoItem[];
+  rawText?: string;
+  raw?: any;
+}
+
 // 系统消息内容
 export interface ISystemContent {
   text: string;
@@ -98,6 +118,7 @@ export type TAcpToolCallMessage = IMessage<"acp_tool_call", IAcpToolCallContent>
 export type TAcpPermissionMessage = IMessage<"acp_permission", IAcpPermissionContent>;
 export type TToolCallMessage = IMessage<"tool_call", IToolCallContent>;
 export type TThoughtMessage = IMessage<"thought", IThoughtContent>;
+export type TTodoMessage = IMessage<"todo", ITodoContent>;
 export type TSystemMessage = IMessage<"system", ISystemContent>;
 
 // 联合类型
@@ -107,6 +128,7 @@ export type TMessage =
   | TAcpPermissionMessage
   | TToolCallMessage
   | TThoughtMessage
+  | TTodoMessage
   | TSystemMessage;
 
 // 消息索引接口（用于优化合并）
