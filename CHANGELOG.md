@@ -1,5 +1,11 @@
 # open-claude-cowork
 
+## 0.1.3
+
+### Patch Changes
+
+- 修复体验上的功能
+
 ## 0.1.2
 
 ### Patch Changes
