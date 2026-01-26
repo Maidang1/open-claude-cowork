@@ -42,20 +42,35 @@ export const registerEnvHandlers = (_mainWindow: BrowserWindow | null) => {
         result.node.version = nodeVersion.trim();
         result.node.path = nodeRuntime.file;
       }
-    } catch {
-      // Node not found
+    } catch (primaryErr) {
+      // Try system node before giving up
+      try {
+        getCustomNodePath();
+        await enrichPathFromLoginShell();
+        const systemNode = await resolveSystemCommand("node");
+        const nodeCmd = shellQuote(systemNode || "node");
+        const { stdout: nodeVersion } = await execAsync(`${nodeCmd} --version`);
+        result.node.installed = true;
+        result.node.version = nodeVersion.trim();
+        result.node.path = systemNode || "node";
+      } catch (fallbackErr) {
+        console.warn("[Env] Failed to resolve Node.js runtime", primaryErr, fallbackErr);
+      }
     }
 
     try {
       getCustomNodePath();
       await enrichPathFromLoginShell();
       const systemNpm = await resolveSystemCommand("npm");
-      const pmCmd = shellQuote(systemNpm || "npm");
+      if (!systemNpm) {
+        throw new Error("npm not found on PATH");
+      }
+      const pmCmd = shellQuote(systemNpm);
       const { stdout: pmVersion } = await execAsync(`${pmCmd} --version`);
       result.npm.installed = true;
       result.npm.version = pmVersion.trim();
-    } catch {
-      // npm not found
+    } catch (npmErr) {
+      console.warn("[Env] Failed to resolve npm", npmErr);
     }
 
     return result;
@@ -86,7 +101,13 @@ export const registerEnvHandlers = (_mainWindow: BrowserWindow | null) => {
   });
 
   ipcMain.handle("env:set-custom-node-path", async (_, nodePath: string) => {
-    setSetting("custom_node_path", nodePath);
+    if (!nodePath) {
+      setSetting("custom_node_path", "");
+      setSetting("node_runtime_preference", "system");
+    } else {
+      setSetting("custom_node_path", nodePath);
+      setSetting("node_runtime_preference", "custom");
+    }
     return { success: true };
   });
 

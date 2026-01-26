@@ -110,6 +110,18 @@ export class AcpAgent {
           info: { tokenUsage: usage },
         });
       }
+      // 处理停止原因
+      if (response?.stopReason) {
+        console.log(`[AcpAgent] Prompt completed with stop reason: ${response.stopReason}`);
+        // 如果是 cancelled，可能需要额外处理
+        if (response.stopReason === "cancelled") {
+          this.onMessage({
+            type: "system",
+            sessionId: this.activeSessionId ?? undefined,
+            text: "System: Prompt cancelled by user.",
+          });
+        }
+      }
     } catch (err: any) {
       if (err?.message?.includes("timed out")) {
         this.onMessage({

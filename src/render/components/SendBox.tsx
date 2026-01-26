@@ -36,8 +36,8 @@ export const SendBox = ({
 
   // 处理粘贴事件
   const handlePaste = (e: React.ClipboardEvent) => {
-    const imageFilesFromClipboard = Array.from(e.clipboardData.files).filter((file) =>
-      file.type.startsWith("image/"),
+    const imageFilesFromClipboard = Array.from(e.clipboardData.files).filter(
+      (file) => file.type.startsWith("image/"),
     );
     const imageFiles =
       imageFilesFromClipboard.length > 0
@@ -120,7 +120,9 @@ export const SendBox = ({
 
   // 处理文件上传
   const handleFiles = (files: File[]) => {
-    const validFiles = files.filter((file) => supportedExts.includes(file.type));
+    const validFiles = files.filter((file) =>
+      supportedExts.includes(file.type),
+    );
     if (validFiles.length > 0 && onFilesAdded) {
       onFilesAdded(validFiles);
     }
@@ -158,13 +160,15 @@ export const SendBox = ({
   return (
     <section className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-surface via-surface to-transparent pb-6 px-2 lg:pb-8 lg:ml-[280px]">
       <div
-        className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-2xl border border-ink-900/10 bg-surface px-4 py-3 shadow-card transition-colors  focus-within:border-[#d97757]"
+        className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-2xl border border-ink-900/10 px-4 py-3 shadow-card transition-colors  focus-within:border-[#d97757] bg-input"
         onDrop={handleDrop}
         onDragOver={handleDragOver}
       >
         {prefix}
         {tools && (
-          <div className="flex items-center gap-2 border-b border-ink-900/10 pb-2">{tools}</div>
+          <div className="flex items-center gap-2 border-b border-ink-900/10 pb-2">
+            {tools}
+          </div>
         )}
 
         {/* 图片预览区域 */}
@@ -192,7 +196,7 @@ export const SendBox = ({
         <div className="flex items-center gap-3">
           <textarea
             ref={textareaRef}
-            className="flex-1 resize-none bg-transparent py-1.5 text-sm text-ink-800 placeholder:text-muted focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 resize-none bg-input py-1.5 text-sm text-ink-800 placeholder:text-muted focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}

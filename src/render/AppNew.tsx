@@ -34,14 +34,10 @@ const App = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [inputTextByTask, setInputTextByTask] = useState<Record<string, string>>({});
-  const [inputImagesByTask, setInputImagesByTask] = useState<
-    Record<string, ImageAttachment[]>
-  >({});
+  const [inputImagesByTask, setInputImagesByTask] = useState<Record<string, ImageAttachment[]>>({});
   const [agentCommand, setAgentCommand] = useState(getDefaultAgentPlugin().defaultCommand);
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
-  const [agentInfoByTask, setAgentInfoByTask] = useState<Record<string, AgentInfoState>>(
-    {},
-  );
+  const [agentInfoByTask, setAgentInfoByTask] = useState<Record<string, AgentInfoState>>({});
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isConnectedByTask, setIsConnectedByTask] = useState<Record<string, boolean>>({});
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -50,9 +46,7 @@ const App = () => {
   const [agentCapabilitiesByTask, setAgentCapabilitiesByTask] = useState<
     Record<string, any | null>
   >({});
-  const [agentMessageLogByTask, setAgentMessageLogByTask] = useState<
-    Record<string, string[]>
-  >({});
+  const [agentMessageLogByTask, setAgentMessageLogByTask] = useState<Record<string, string[]>>({});
   const showDebug = String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
 
   const [connectionStatusByTask, setConnectionStatusByTask] = useState<
@@ -128,13 +122,11 @@ const App = () => {
     defaultAgentInfo,
   ]);
   const activeAgentCapabilities = activeTaskId
-    ? agentCapabilitiesByTask[activeTaskId] ?? null
+    ? (agentCapabilitiesByTask[activeTaskId] ?? null)
     : null;
-  const activeAgentMessageLog = activeTaskId
-    ? agentMessageLogByTask[activeTaskId] ?? []
-    : [];
-  const inputText = activeTaskId ? inputTextByTask[activeTaskId] ?? "" : "";
-  const inputImages = activeTaskId ? inputImagesByTask[activeTaskId] ?? [] : [];
+  const activeAgentMessageLog = activeTaskId ? (agentMessageLogByTask[activeTaskId] ?? []) : [];
+  const inputText = activeTaskId ? (inputTextByTask[activeTaskId] ?? "") : "";
+  const inputImages = activeTaskId ? (inputImagesByTask[activeTaskId] ?? []) : [];
   const activeIsConnected = activeTaskId ? Boolean(isConnectedByTask[activeTaskId]) : false;
   const defaultConnectionStatus = useMemo<ConnectionStatus>(
     () => ({
@@ -144,7 +136,7 @@ const App = () => {
     [],
   );
   const activeConnectionStatus = activeTaskId
-    ? connectionStatusByTask[activeTaskId] ?? defaultConnectionStatus
+    ? (connectionStatusByTask[activeTaskId] ?? defaultConnectionStatus)
     : defaultConnectionStatus;
   const anyConnected = useMemo(
     () => Object.values(isConnectedByTask).some(Boolean),
@@ -316,9 +308,17 @@ const App = () => {
       window.electron
         .invoke("agent:get-capabilities")
         .then((caps) =>
-          setAgentCapabilitiesByTask((prev) => ({ ...prev, [activeTaskId]: caps })),
+          setAgentCapabilitiesByTask((prev) => ({
+            ...prev,
+            [activeTaskId]: caps,
+          })),
         )
-        .catch(() => setAgentCapabilitiesByTask((prev) => ({ ...prev, [activeTaskId]: null })));
+        .catch(() =>
+          setAgentCapabilitiesByTask((prev) => ({
+            ...prev,
+            [activeTaskId]: null,
+          })),
+        );
     }
   }, [activeIsConnected, activeTaskId]);
 
@@ -326,6 +326,8 @@ const App = () => {
     if (!activeTaskId && Object.keys(agentMessageLogByTask).length > 0) {
       setAgentMessageLogByTask({});
     }
+    // 当任务切换时，滚动到聊天区域底部
+    setTimeout(scrollToBottom, 100);
   }, [activeTaskId, agentMessageLogByTask]);
 
   const scrollToBottom = useCallback(() => {
@@ -373,18 +375,15 @@ const App = () => {
     });
   }, []);
 
-  const setTaskConnectionStatus = useCallback(
-    (taskId: string, status: ConnectionStatus) => {
-      setConnectionStatusByTask((prev) => {
-        const existing = prev[taskId];
-        if (existing?.state === status.state && existing?.message === status.message) {
-          return prev;
-        }
-        return { ...prev, [taskId]: status };
-      });
-    },
-    [],
-  );
+  const setTaskConnectionStatus = useCallback((taskId: string, status: ConnectionStatus) => {
+    setConnectionStatusByTask((prev) => {
+      const existing = prev[taskId];
+      if (existing?.state === status.state && existing?.message === status.message) {
+        return prev;
+      }
+      return { ...prev, [taskId]: status };
+    });
+  }, []);
 
   const clearTaskState = useCallback((taskId: string) => {
     setInputTextByTask((prev) => {
@@ -654,17 +653,29 @@ const App = () => {
         const targetTask = resolvedTaskId ? prev.find((task) => task.id === resolvedTaskId) : null;
         if (!targetTask) return prev;
 
+        const lastLegacyMsg = targetTask.messages[targetTask.messages.length - 1];
+        const isLegacyThought =
+          lastLegacyMsg &&
+          lastLegacyMsg.sender === "agent" &&
+          Boolean(lastLegacyMsg.thought) &&
+          !lastLegacyMsg.content &&
+          (!lastLegacyMsg.toolCalls || lastLegacyMsg.toolCalls.length === 0);
+
         let msgId: string | undefined;
         if (data.type === "agent_text") {
           if (!agentTextMsgIdByTaskRef.current[resolvedTaskId]) {
             agentTextMsgIdByTaskRef.current[resolvedTaskId] = Date.now().toString();
           }
           msgId = agentTextMsgIdByTaskRef.current[resolvedTaskId] ?? undefined;
+          agentThoughtMsgIdByTaskRef.current[resolvedTaskId] = null;
         } else if (data.type === "agent_thought") {
-          if (!agentThoughtMsgIdByTaskRef.current[resolvedTaskId]) {
-            agentThoughtMsgIdByTaskRef.current[resolvedTaskId] = Date.now().toString();
+          if (isLegacyThought && lastLegacyMsg?.msgId) {
+            msgId = lastLegacyMsg.msgId;
+            agentThoughtMsgIdByTaskRef.current[resolvedTaskId] = msgId;
+          } else {
+            msgId = Date.now().toString();
+            agentThoughtMsgIdByTaskRef.current[resolvedTaskId] = msgId;
           }
-          msgId = agentThoughtMsgIdByTaskRef.current[resolvedTaskId] ?? undefined;
         }
 
         const newMessage = transformIncomingMessage(data, resolvedTaskId, {
@@ -723,16 +734,13 @@ const App = () => {
         typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
       console.log("[agent:message]", data);
       const resolvedTaskId = data.sessionId
-        ? tasksRef.current.find((task) => task.sessionId === data.sessionId)?.id ??
-          activeTaskIdRef.current
+        ? (tasksRef.current.find((task) => task.sessionId === data.sessionId)?.id ??
+          activeTaskIdRef.current)
         : activeTaskIdRef.current;
       if (resolvedTaskId) {
         setAgentMessageLogByTask((prev) => {
           const existing = prev[resolvedTaskId] ?? [];
-          const next = [
-            `[${new Date().toISOString()}] ${JSON.stringify(data)}`,
-            ...existing,
-          ];
+          const next = [`[${new Date().toISOString()}] ${JSON.stringify(data)}`, ...existing];
           return { ...prev, [resolvedTaskId]: next.slice(0, 50) };
         });
       }
@@ -1219,13 +1227,12 @@ const App = () => {
     const checkEnv = async () => {
       try {
         const result = await window.electron.invoke("env:check");
-        if (result.node.installed && result.npm.installed) {
-          // Check version
-          const versionMatch = result.node.version?.match(/^v?(\d+)/);
-          const majorVersion = versionMatch ? parseInt(versionMatch[1], 10) : 0;
-          setEnvReady(majorVersion >= 18);
-        } else {
-          setEnvReady(false);
+        const versionMatch = result.node.version?.match(/^v?(\d+)/);
+        const majorVersion = versionMatch ? parseInt(versionMatch[1], 10) : 0;
+        const nodeOk = result.node.installed && majorVersion >= 18;
+        setEnvReady(nodeOk);
+        if (!result.npm.installed) {
+          console.warn("[Env] npm not detected; agent installs may fail.");
         }
       } catch {
         setEnvReady(false);
@@ -1268,8 +1275,7 @@ const App = () => {
   return (
     <ConfigProvider
       theme={{
-        algorithm:
-          effectiveTheme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        algorithm: effectiveTheme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
         token: {
           colorPrimary: "#f97316",
         },

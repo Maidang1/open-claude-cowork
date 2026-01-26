@@ -62,4 +62,4 @@ export interface ConnectionStatus {
   message: string;
 }
 
-export type NodeRuntimePreference = "bundled" | "custom";
+export type NodeRuntimePreference = "custom";

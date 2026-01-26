@@ -80,7 +80,7 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
         }
         return { installed: false, source: "custom" };
       }
-      return { installed: true, source: "bundled" };
+      return { installed: true, source: "system" };
     }
 
     try {

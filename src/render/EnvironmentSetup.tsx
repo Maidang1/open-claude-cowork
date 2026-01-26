@@ -25,7 +25,7 @@ type InstallStep = {
   output?: string;
 };
 
-type NodeRuntimePreference = "bundled" | "custom";
+type NodeRuntimePreference = "custom";
 
 const MIN_NODE_VERSION = 18;
 
@@ -80,7 +80,7 @@ const getInstallSteps = (platform: string): InstallStep[] => {
 export default function EnvironmentSetup({ onReady }: Props) {
   const [status, setStatus] = useState<"checking" | "missing" | "outdated" | "ready">("checking");
   const [envStatus, setEnvStatus] = useState<EnvStatus | null>(null);
-  const [nodeRuntime, setNodeRuntime] = useState<NodeRuntimePreference>("bundled");
+  const [nodeRuntime, setNodeRuntime] = useState<NodeRuntimePreference>("custom");
   const [customNodePath, setCustomNodePath] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [validating, setValidating] = useState(false);
@@ -101,7 +101,7 @@ export default function EnvironmentSetup({ onReady }: Props) {
   const loadRuntimeSettings = async () => {
     try {
       const runtime = await window.electron.invoke("env:get-node-runtime");
-      if (runtime === "bundled" || runtime === "custom") {
+      if (runtime === "custom") {
         setNodeRuntime(runtime);
       }
       const storedPath = await window.electron.invoke("env:get-custom-node-path");
@@ -119,20 +119,20 @@ export default function EnvironmentSetup({ onReady }: Props) {
       const result = await window.electron.invoke("env:check");
       setEnvStatus(result);
 
-      if (result.node.installed && result.npm.installed) {
-        // Check version
-        const versionMatch = result.node.version?.match(/^v?(\d+)/);
-        const majorVersion = versionMatch ? parseInt(versionMatch[1], 10) : 0;
+      const versionMatch = result.node.version?.match(/^v?(\d+)/);
+      const majorVersion = versionMatch ? parseInt(versionMatch[1], 10) : 0;
 
-        if (majorVersion >= MIN_NODE_VERSION) {
-          setStatus("ready");
-          // Small delay to show success state
-          setTimeout(() => onReady(), 500);
-        } else {
-          setStatus("outdated");
-        }
-      } else {
+      if (result.node.installed && majorVersion >= MIN_NODE_VERSION) {
+        setStatus("ready");
+        setTimeout(() => onReady(), 500);
+      } else if (!result.node.installed) {
         setStatus("missing");
+      } else {
+        setStatus("outdated");
+      }
+
+      if (!result.npm.installed) {
+        console.warn("[EnvSetup] npm not detected; agent installs may require manual setup.");
       }
     } catch (e) {
       console.error("Environment check failed:", e);
@@ -254,18 +254,41 @@ export default function EnvironmentSetup({ onReady }: Props) {
           ? "Linux"
           : "your system";
 
-  const installHint =
-    envStatus?.platform === "win32"
-      ? "Requires PowerShell and may prompt for administrator approval."
-      : "Uses nvm under your login shell; PATH will be updated automatically.";
+  envStatus?.platform === "win32"
+    ? "Requires PowerShell and may prompt for administrator approval."
+    : "Uses nvm under your login shell; PATH will be updated automatically.";
+
+  envStatus?.platform === "darwin"
+    ? "macOS"
+    : envStatus?.platform === "win32"
+      ? "Windows"
+      : envStatus?.platform === "linux"
+        ? "Linux"
+        : "your system";
+
+  const canAutoInstall = Boolean(envStatus && getInstallSteps(envStatus.platform).length > 0);
+
+  const summaryTitle =
+    status === "outdated" ? "Node.js Update Required" : "Node.js Installation Needed";
+  const summaryMessage =
+    status === "outdated"
+      ? `Detected ${envStatus?.node.version ?? "an older version"}. Please upgrade to Node.js ${MIN_NODE_VERSION}+ to continue.`
+      : `Open Claude Cowork needs a system-wide Node.js ${MIN_NODE_VERSION}+ runtime (plus npm) to run ACP agents. Install Node or point us to an existing binary.`;
+  const statusIcon = status === "outdated" ? "⏱️" : "🛠️";
 
   if (status === "checking") {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#1a1a2e] to-[#16213e] p-5">
-        <div className="bg-white/5 rounded-2xl p-10 text-center max-w-sm w-full border border-white/10">
-          <div className="text-5xl mb-5 animate-pulse">⏳</div>
-          <h1 className="text-white text-2xl font-semibold mb-3">Checking Environment...</h1>
-          <p className="text-white/70">Detecting Node.js installation on your system</p>
+      <div className="min-h-screen bg-app flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-white/5 px-10 py-12 text-center shadow-[0_30px_80px_rgba(8,7,20,0.6)]">
+          <div className="mb-6 flex items-center justify-center">
+            <div className="h-14 w-14 rounded-2xl border border-white/10 bg-white/10 flex items-center justify-center">
+              <span className="text-2xl animate-spin">⏳</span>
+            </div>
+          </div>
+          <h1 className="text-2xl font-semibold text-white">Checking your environment…</h1>
+          <p className="mt-3 text-white/70">
+            Detecting Node.js and npm on this machine. This usually takes just a moment.
+          </p>
         </div>
       </div>
     );
@@ -273,210 +296,213 @@ export default function EnvironmentSetup({ onReady }: Props) {
 
   if (status === "ready") {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#1a1a2e] to-[#16213e] p-5">
-        <div className="bg-white/5 rounded-2xl p-10 text-center max-w-sm w-full border border-white/10">
-          <div className="text-[#4ade80] text-6xl mb-5">✓</div>
-          <h1 className="text-white text-2xl font-semibold mb-3">Environment Ready!</h1>
-          <p className="text-white/70">Node.js {envStatus?.node.version} detected</p>
+      <div className="min-h-screen bg-app flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-xl rounded-3xl border border-green-500/30 bg-green-500/10 px-10 py-12 text-center shadow-[0_30px_80px_rgba(34,197,94,0.35)]">
+          <div className="text-5xl mb-5">✅</div>
+          <h1 className="text-2xl font-semibold text-white">Environment Ready</h1>
+          <p className="mt-3 text-white/80">
+            Detected Node.js {envStatus?.node.version} with npm {envStatus?.npm.version}. Launching
+            the app…
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-[#1a1a2e] to-[#16213e] p-5">
-      <div className="bg-white/5 rounded-2xl p-10 text-center max-w-lg w-full border border-white/10">
-        <div className="text-6xl mb-">⚠️</div>
-        <h1 className="text-white text-2xl font-semibold mb-3">
-          {status === "outdated" ? "Node.js Update Required" : "Node.js Not Found"}
-        </h1>
+    <div className="min-h-screen bg-app px-6 py-10 flex items-center justify-center">
+      <div className="w-full max-w-5xl rounded-3xl border border-white/10 bg-white/5 shadow-[0_30px_90px_rgba(8,7,20,0.65)] overflow-hidden backdrop-blur-md">
+        <div className="grid gap-0 lg:grid-cols-[2fr_3fr]">
+          <section className="border-b border-white/10 bg-white/5 p-8 text-white space-y-6 lg:border-b-0 lg:border-r">
+            <div className="flex items-start gap-4">
+              <div className="text-4xl">{statusIcon}</div>
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-white/60">Environment</p>
+                <h2 className="text-2xl font-semibold mt-2">{summaryTitle}</h2>
+                <p className="text-white/70 mt-3 leading-relaxed">{summaryMessage}</p>
+              </div>
+            </div>
 
-        {status === "outdated" ? (
-          <p className="text-white/70 mb-6">
-            Your Node.js version ({envStatus?.node.version}) is outdated.
-            <br />
-            Please install Node.js {MIN_NODE_VERSION} or later.
-          </p>
-        ) : (
-          <p className="text-white/70 mb-6">
-            This application requires Node.js {MIN_NODE_VERSION}+ and a package manager (npm) to run
-            agents.
-            <br />
-            Please install Node.js to continue.
-          </p>
-        )}
-
-        {/* One-click install section */}
-        {!installing && !installError && installSteps.length === 0 && (
-          <div className="my-6 text-center">
-            <button
-              type="button"
-              className="bg-gradient-to-br from-[#22c55e] to-[#16a34a] text-white border-none rounded-xl py-3.5 px-7 text-base font-semibold cursor-pointer transition-all shadow-[0_4px_15px_rgba(34,197,94,0.3)] hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(34,197,94,0.4)]"
-              onClick={handleInstall}
-            >
-              🚀 One-Click Install Node.js on {platformName}
-            </button>
-            <p className="text-white/50 text-xs mt-3">
-              {envStatus?.platform === "win32"
-                ? "This will install Chocolatey and Node.js LTS"
-                : "This will install nvm and Node.js LTS"}
-              <br />
-              {installHint}
-            </p>
-          </div>
-        )}
-
-        {/* Installation progress */}
-        {(installing || installSteps.length > 0) && (
-          <div className="my-6">
-            <h2 className="text-white text-base mb-4">Installation Progress</h2>
-            <div className="flex flex-col gap-3">
-              {installSteps.map((step, index) => (
+            <div className="space-y-3">
+              {[
+                { label: "Node.js", value: envStatus?.node.version ?? "—" },
+                { label: "npm", value: envStatus?.npm.version ?? "—" },
+                {
+                  label: "Platform",
+                  value: envStatus ? `${envStatus.platform} · ${envStatus.arch}` : "Detecting…",
+                },
+              ].map((row) => (
                 <div
-                  key={index}
-                  className={`bg-black/20 rounded-lg p-3 pl-4 border-l-3 border-l-white/20 transition-all ${
-                    step.status === "running"
-                      ? "border-l-blue-500 bg-blue-500/10"
-                      : step.status === "success"
-                        ? "border-l-green-500"
-                        : step.status === "error"
-                          ? "border-l-red-500 bg-red-500/10"
-                          : ""
-                  }`}
+                  key={row.label}
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm"
                 >
-                  <div className="flex items-center gap-2.5 mb-1.5">
-                    <span className="text-base">
-                      {step.status === "pending" && "⏳"}
-                      {step.status === "running" && "🔄"}
-                      {step.status === "success" && "✅"}
-                      {step.status === "error" && "❌"}
-                    </span>
-                    <span className="text-white text-sm font-medium">{step.name}</span>
-                  </div>
-                  <code className="block bg-black/30 rounded px-2.5 py-2 font-mono text-xs text-white/70 mt-2 overflow-x-auto whitespace-nowrap">
-                    {step.command}
-                  </code>
-                  {step.output && (
-                    <pre className="bg-black/40 rounded p-2.5 mt-2 font-mono text-xs text-white/60 max-h-36 overflow-y-auto whitespace-pre-wrap break-all">
-                      {step.output}
-                    </pre>
-                  )}
+                  <span className="text-white/70">{row.label}</span>
+                  <span className="font-mono text-white">{row.value}</span>
                 </div>
               ))}
             </div>
 
-            {installError && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 mt-4 text-center">
-                <p className="text-red-400 mb-3">❌ Installation failed: {installError}</p>
-                <button
-                  type="button"
-                  className="bg-red-500 text-white border-none rounded-lg px-4 py-2 text-sm cursor-pointer transition-colors hover:bg-red-600"
-                  onClick={() => {
-                    setInstallSteps([]);
-                    setInstallError(null);
-                  }}
-                >
-                  Try Again
-                </button>
+            <div className="flex flex-wrap gap-3 pt-3">
+              <button
+                type="button"
+                onClick={checkEnvironment}
+                disabled={installing}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/20 px-4 py-2 text-sm font-medium text-white transition hover:border-white/40 disabled:opacity-50"
+              >
+                <span>🔄</span> Refresh Detection
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((prev) => !prev)}
+                disabled={installing}
+                className="inline-flex items-center gap-1 rounded-xl px-4 py-2 text-sm font-medium text-white/70 transition hover:text-white disabled:opacity-50"
+              >
+                {showAdvanced ? "Hide Advanced" : "Advanced Options"}
+                <span>{showAdvanced ? "▲" : "▼"}</span>
+              </button>
+            </div>
+          </section>
+
+          <section className="p-8 space-y-8 bg-[#05070f]/40 backdrop-blur-lg text-white">
+            <div>
+              <h3 className="text-xl font-semibold">Install or Configure Node.js</h3>
+              <p className="mt-2 text-white/70 text-sm leading-relaxed">
+                Use the guided installer or point us to an existing Node.js binary. You need Node.js{" "}
+                {MIN_NODE_VERSION}+ plus npm to run agents locally.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleInstall}
+                disabled={!canAutoInstall || installing}
+                className="w-full rounded-2xl bg-gradient-to-r from-[#f97316] to-[#fb923c] py-4 text-base font-semibold shadow-[0_12px_35px_rgba(249,115,22,0.35)] transition hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {installing ? "Installing Node.js…" : `Install Node.js on ${platformName}`}
+              </button>
+              <p className="text-xs text-white/60">{installHint}</p>
+              {!canAutoInstall && (
+                <p className="text-xs text-amber-300/80">
+                  Auto-install is unavailable on this platform. Please install Node.js manually and
+                  re-run detection.
+                </p>
+              )}
+            </div>
+
+            {(installing || installSteps.length > 0) && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium">Installation Progress</h4>
+                  <span className="text-xs uppercase tracking-widest text-white/60">
+                    {installing ? "Running" : "History"}
+                  </span>
+                </div>
+                <div ref={outputRef} className="flex flex-col gap-3 max-h-80 overflow-y-auto pr-1">
+                  {installSteps.map((step, index) => (
+                    <div
+                      key={index}
+                      className={`rounded-2xl border px-4 py-3 text-sm ${
+                        step.status === "running"
+                          ? "border-blue-500/50 bg-blue-500/10"
+                          : step.status === "success"
+                            ? "border-green-500/40 bg-green-500/10"
+                            : step.status === "error"
+                              ? "border-red-500/40 bg-red-500/10"
+                              : "border-white/10 bg-white/5"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>{step.name}</span>
+                        <span className="text-white/70">
+                          {step.status === "pending" && "Pending"}
+                          {step.status === "running" && "Running…"}
+                          {step.status === "success" && "Done"}
+                          {step.status === "error" && "Failed"}
+                        </span>
+                      </div>
+                      <code className="mt-2 block rounded-lg bg-black/40 px-3 py-2 font-mono text-xs text-white/70">
+                        {step.command}
+                      </code>
+                      {step.output && (
+                        <pre className="mt-2 rounded-lg bg-black/60 px-3 py-2 font-mono text-xs text-white/60 whitespace-pre-wrap break-words">
+                          {step.output}
+                        </pre>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {installError && (
+                  <div className="rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+                    <p>Installation failed: {installError}</p>
+                    <button
+                      type="button"
+                      className="mt-2 inline-flex items-center gap-2 rounded-lg bg-red-500/80 px-3 py-2 text-xs font-semibold text-white"
+                      onClick={() => {
+                        setInstallSteps([]);
+                        setInstallError(null);
+                      }}
+                    >
+                      Try Again
+                    </button>
+                  </div>
+                )}
+
+                {!installing &&
+                  !installError &&
+                  installSteps.length > 0 &&
+                  installSteps.every((s) => s.status === "success") && (
+                    <div className="rounded-2xl border border-green-500/40 bg-green-500/10 px-4 py-3 text-sm text-green-100">
+                      Installation completed! Re-checking your environment…
+                    </div>
+                  )}
               </div>
             )}
 
-            {!installing && !installError && installSteps.every((s) => s.status === "success") && (
-              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mt-4 text-center">
-                <p className="text-green-400">✅ Installation completed! Checking environment...</p>
+            {showAdvanced && (
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-6 space-y-4">
+                <div>
+                  <h4 className="font-semibold text-white">Custom Node.js Path</h4>
+                  <p className="text-sm text-white/70 mt-1">
+                    If Node.js is installed but not on PATH, point directly to the executable.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <input
+                    type="text"
+                    className="flex-1 min-w-[220px] rounded-xl border border-white/20 bg-black/40 px-4 py-2 font-mono text-sm text-white focus:border-white/60 focus:outline-none disabled:opacity-50"
+                    placeholder="/usr/local/bin/node"
+                    value={customNodePath}
+                    onChange={(e) => setCustomNodePath(e.target.value)}
+                    disabled={runtimeSaving || installing}
+                  />
+                  <button
+                    type="button"
+                    className="rounded-xl border border-white/20 px-4 py-2 text-sm text-white/80 transition hover:border-white/40 disabled:opacity-50"
+                    onClick={handleBrowseNodePath}
+                    disabled={runtimeSaving || installing}
+                  >
+                    Browse…
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    className="rounded-xl bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20 disabled:opacity-50"
+                    onClick={handleValidateCustomPath}
+                    disabled={!customNodePath.trim() || validating || runtimeSaving || installing}
+                  >
+                    {validating ? "Validating…" : "Save Path"}
+                  </button>
+                </div>
+                <p className="text-xs text-white/50">
+                  App restart is required after changing the runtime.
+                </p>
               </div>
             )}
-          </div>
-        )}
-
-        <div className="flex gap-3 justify-center mt-6 flex-wrap">
-          <button
-            type="button"
-            className="bg-white/10 text-white border border-white/20 rounded-lg px-5 py-2.5 text-sm cursor-pointer transition-all hover:bg-white/15 hover:border-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={checkEnvironment}
-            disabled={installing}
-          >
-            🔄 Refresh Detection
-          </button>
-
-          <button
-            type="button"
-            className="bg-none text-white/50 border-none px-2.5 py-2.5 text-sm cursor-pointer transition-colors hover:text-white/80 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            disabled={installing}
-          >
-            {showAdvanced ? "▲ Hide Advanced" : "▼ Advanced Options"}
-          </button>
+          </section>
         </div>
-
-        {showAdvanced && (
-          <div className="mt-5 pt-5 border-t border-white/10 text-left">
-            <h3 className="text-white text-sm font-medium mb-2">Node Runtime</h3>
-            <p className="text-white/70 text-sm mb-3">
-              Choose which Node.js runtime to use for agents.
-            </p>
-            <div className="flex gap-2 flex-wrap my-2">
-              <button
-                type="button"
-                className={`bg-white/10 text-white border border-white/20 rounded-lg px-3 py-2 text-sm cursor-pointer transition-all ${
-                  nodeRuntime === "bundled" ? "bg-blue-500 border-blue-500" : ""
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                onClick={() => handleRuntimeChange("bundled")}
-                disabled={runtimeSaving || installing}
-              >
-                Bundled (Electron)
-              </button>
-              <button
-                type="button"
-                className={`bg-white/10 text-white border border-white/20 rounded-lg px-3 py-2 text-sm cursor-pointer transition-all ${
-                  nodeRuntime === "custom" ? "bg-blue-500 border-blue-500" : ""
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-                onClick={() => handleRuntimeChange("custom")}
-                disabled={runtimeSaving || installing}
-              >
-                Custom Path
-              </button>
-            </div>
-            <div className="text-white/50 text-xs mb-3">Restart required to apply changes.</div>
-
-            <h3 className="text-white text-sm font-medium mb-2 mt-4">Custom Node.js Path</h3>
-            <p className="text-white/70 text-sm mb-3">
-              If Node.js is installed but not in your PATH, specify its location:
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              <input
-                type="text"
-                className="flex-1 min-w-52 bg-black/30 border border-white/20 rounded-lg px-3 py-2 text-white font-mono text-sm placeholder:text-white/30 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:border-blue-500"
-                placeholder="/path/to/node"
-                value={customNodePath}
-                onChange={(e) => setCustomNodePath(e.target.value)}
-                disabled={nodeRuntime !== "custom" || runtimeSaving || installing}
-              />
-              <button
-                type="button"
-                className="bg-white/10 text-white border border-white/20 rounded-lg px-3 py-2 text-sm cursor-pointer transition-all hover:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                onClick={handleBrowseNodePath}
-                disabled={nodeRuntime !== "custom" || runtimeSaving || installing}
-              >
-                Browse...
-              </button>
-              <button
-                type="button"
-                className="bg-white/10 text-white border border-white/20 rounded-lg px-3 py-2 text-sm cursor-pointer transition-all hover:bg-white/15 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                onClick={handleValidateCustomPath}
-                disabled={
-                  nodeRuntime !== "custom" ||
-                  !customNodePath.trim() ||
-                  validating ||
-                  runtimeSaving ||
-                  installing
-                }
-              >
-                {validating ? "Validating..." : "Apply"}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

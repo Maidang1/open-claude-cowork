@@ -47,11 +47,7 @@ export const Sidebar = ({
     setEditingTaskId(null);
   };
 
-  const handleKeyDown = (
-    e: React.KeyboardEvent,
-    taskId: string,
-    originalTitle: string,
-  ) => {
+  const handleKeyDown = (e: React.KeyboardEvent, taskId: string, originalTitle: string) => {
     if (e.key === "Enter") {
       handleSaveRename(taskId);
     } else if (e.key === "Escape") {
@@ -110,9 +106,7 @@ export const Sidebar = ({
                       autoFocus
                     />
                   ) : (
-                    <div className="font-medium text-ink-800 text-sm mb-1">
-                      {task.title}
-                    </div>
+                    <div className="font-medium text-ink-800 text-sm mb-1">{task.title}</div>
                   )}
                   <div className="text-xs text-muted" title={task.workspace}>
                     {task.workspace.split("/").pop() || task.workspace}

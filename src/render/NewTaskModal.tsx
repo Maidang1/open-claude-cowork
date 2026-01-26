@@ -1,6 +1,6 @@
+import { Check, ChevronDown } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Check } from "lucide-react";
 import { AgentIcon } from "./agents/AgentIcon";
 import { AGENT_PLUGINS, getAgentPlugin } from "./agents/registry";
 import { useClickOutside } from "./hooks";
@@ -8,11 +8,7 @@ import { useClickOutside } from "./hooks";
 interface NewTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (payload: {
-    title: string;
-    workspace: string;
-    agentCommand: string;
-  }) => void;
+  onCreate: (payload: { title: string; workspace: string; agentCommand: string }) => void;
   initialWorkspace: string | null;
   initialAgentCommand: string;
   defaultQwenCommand?: string;
@@ -31,9 +27,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   const [workspacePath, setWorkspacePath] = useState(initialWorkspace || "");
   const [selectedPluginId, setSelectedPluginId] = useState<string>("custom");
   const [customCommand, setCustomCommand] = useState(initialAgentCommand);
-  const [pluginInstallStatuses, setPluginInstallStatuses] = useState<
-    Record<string, string>
-  >({});
+  const [pluginInstallStatuses, setPluginInstallStatuses] = useState<Record<string, string>>({});
   const [isAgentDropdownOpen, setIsAgentDropdownOpen] = useState(false);
 
   // Check install status for all plugins
@@ -43,10 +37,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
       for (const plugin of AGENT_PLUGINS) {
         try {
           if (plugin.checkCommand) {
-            const res = await window.electron.invoke(
-              "agent:check-command",
-              plugin.checkCommand,
-            );
+            const res = await window.electron.invoke("agent:check-command", plugin.checkCommand);
             statuses[plugin.id] = res.installed ? "installed" : "not-installed";
           } else {
             statuses[plugin.id] = "installed";
@@ -71,8 +62,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
     // Determine plugin from initial command
     let found = false;
     for (const plugin of AGENT_PLUGINS) {
-      const heuristic =
-        plugin.checkCommand || plugin.defaultCommand.split(" ")[0];
+      const heuristic = plugin.checkCommand || plugin.defaultCommand.split(" ")[0];
       if (initialAgentCommand.includes(heuristic)) {
         setSelectedPluginId(plugin.id);
         // If the command is exactly the default, we might just set it, but user might have modified arguments.
@@ -123,9 +113,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   };
 
   const selectedPlugin = getAgentPlugin(selectedPluginId);
-  const resolvedCommand = selectedPlugin
-    ? selectedPlugin.defaultCommand
-    : customCommand.trim();
+  const resolvedCommand = selectedPlugin ? selectedPlugin.defaultCommand : customCommand.trim();
 
   const canCreate = Boolean(workspacePath && resolvedCommand);
 
@@ -150,9 +138,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
         <div className="flex flex-col flex-1 w-full">
           <div className="modal-header" style={{ display: "block" }}>
             <div className="modal-title">Create New Task</div>
-            <div className="modal-subtitle">
-              Choose a workspace folder and agent to start.
-            </div>
+            <div className="modal-subtitle">Choose a workspace folder and agent to start.</div>
           </div>
 
           <div className="modal-section">
@@ -169,11 +155,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
           <div className="modal-section">
             <label className="modal-label">Workspace Folder</label>
             <div className="input-group">
-              <button
-                type="button"
-                onClick={handlePickFolder}
-                className="btn-secondary"
-              >
+              <button type="button" onClick={handlePickFolder} className="btn-secondary">
                 Select Folder
               </button>
               <div
@@ -205,9 +187,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
                   }}
                 >
                   {selectedPlugin?.icon && (
-                    <span
-                      style={{ display: "inline-flex", alignItems: "center" }}
-                    >
+                    <span style={{ display: "inline-flex", alignItems: "center" }}>
                       <AgentIcon icon={selectedPlugin.icon} size={16} />
                     </span>
                   )}
@@ -270,8 +250,7 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
                             (已安装)
                           </span>
                         )}
-                        {pluginInstallStatuses[plugin.id] ===
-                          "not-installed" && (
+                        {pluginInstallStatuses[plugin.id] === "not-installed" && (
                           <span
                             style={{
                               fontSize: "0.75rem",
@@ -289,21 +268,14 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
               )}
             </div>
 
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "6px" }}
-            >
-              <label
-                htmlFor="new-task-agent-command"
-                className="modal-input-hint"
-              >
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              <label htmlFor="new-task-agent-command" className="modal-input-hint">
                 Agent Command
               </label>
               <input
                 id="new-task-agent-command"
                 type="text"
-                value={
-                  selectedPlugin ? selectedPlugin.defaultCommand : customCommand
-                }
+                value={selectedPlugin ? selectedPlugin.defaultCommand : customCommand}
                 onChange={(e) => setCustomCommand(e.target.value)}
                 disabled={!!selectedPlugin}
                 placeholder="Enter agent command"

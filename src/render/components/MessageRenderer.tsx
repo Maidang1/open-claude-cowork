@@ -3,6 +3,7 @@ import { MessageAcpPermission } from "./MessageAcpPermission";
 import { MessageAcpToolCall } from "./MessageAcpToolCall";
 import { MessageText } from "./MessageText";
 import { ThoughtDisplay } from "./ThoughtDisplay";
+import { TodoMessage } from "./TodoMessage";
 
 interface MessageRendererProps {
   msg: TMessage;
@@ -36,13 +37,26 @@ export const MessageRenderer = ({
       <div className={`my-3 ${!isCenter ? "text-left" : "text-center"}`}>
         <div className="flex flex-col gap-1.5">
           <div className={roleLabelClassName}>Assistant</div>
+          <ThoughtDisplay
+            thought={(msg.content as any).thought}
+            label={msg.msg_id || msg.id}
+            running={isLoading}
+            onStop={onStop || (() => {})}
+            style="compact"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (msg.type === "todo") {
+    const isCenter = msg.position === "center";
+    return (
+      <div className={`my-3 ${!isCenter ? "text-left" : "text-center"}`}>
+        <div className="flex flex-col gap-1.5">
+          <div className={roleLabelClassName}>Plan</div>
           <div className={cardClassName}>
-            <ThoughtDisplay
-              thought={(msg.content as any).thought}
-              running={isLoading}
-              onStop={onStop || (() => {})}
-              style="compact"
-            />
+            <TodoMessage content={msg.content} />
           </div>
         </div>
       </div>

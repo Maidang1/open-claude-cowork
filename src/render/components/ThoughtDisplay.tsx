@@ -1,5 +1,4 @@
-import { Think } from "@ant-design/x";
-import { Button } from "antd";
+import type { KeyboardEvent } from "react";
 import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 
@@ -8,10 +7,18 @@ interface ThoughtDisplayProps {
   running: boolean;
   onStop: () => void;
   style?: "default" | "compact";
+  label?: string;
 }
 
-export const ThoughtDisplay = ({ thought, running, onStop }: ThoughtDisplayProps) => {
+export const ThoughtDisplay = ({
+  thought,
+  running,
+  onStop,
+  style = "default",
+  label,
+}: ThoughtDisplayProps) => {
   const [elapsed, setElapsed] = useState(0);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     let timer: number;
@@ -37,25 +44,64 @@ export const ThoughtDisplay = ({ thought, running, onStop }: ThoughtDisplayProps
       : `${remainingSeconds}s`;
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key === "Escape") {
       onStop();
     }
   };
 
+  const containerPadding = style === "compact" ? "py-1" : "py-2";
+  const contentSpacing = style === "compact" ? "mt-2" : "mt-3";
+
   return (
     <div onKeyDown={handleKeyDown} tabIndex={0}>
-      <Think
-        title="AI is thinking"
-        icon={<span className="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse " />}
+      <div
+        className={`text-ink-800 focus:outline-none focus:ring-2 focus:ring-accent/20 ${containerPadding}`}
       >
-        <div className="space-y-2">
-          {running && (
-            <div className="text-xs text-slate-500 dark:text-slate-400">{formatTime(elapsed)}</div>
-          )}
-          <Markdown>{thought}</Markdown>
+        <div className="flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-ink-500">
+          <div className="flex items-center gap-2 font-medium">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-50" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-accent" />
+            </span>
+            <span>Thinking</span>
+            {label ? (
+              <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-600">
+                ID: {label}
+              </span>
+            ) : null}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCollapsed((prev) => !prev)}
+              className="rounded-full border border-ink-900/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-600 transition hover:bg-surface-tertiary"
+            >
+              {collapsed ? "Show" : "Hide"}
+            </button>
+            {running && (
+              <span className="font-mono text-[11px] text-ink-500">{formatTime(elapsed)}</span>
+            )}
+            {running && (
+              <button
+                type="button"
+                onClick={onStop}
+                className="rounded-full border border-ink-900/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-600 transition hover:bg-surface-tertiary"
+              >
+                Stop
+              </button>
+            )}
+          </div>
         </div>
-      </Think>
+
+        {!collapsed && (
+          <div className={`${contentSpacing} text-sm text-ink-800`}>
+            <div className="prose prose-sm max-w-none text-ink-800">
+              <Markdown>{thought}</Markdown>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
