@@ -36,8 +36,8 @@ export const SendBox = ({
 
   // 处理粘贴事件
   const handlePaste = (e: React.ClipboardEvent) => {
-    const imageFilesFromClipboard = Array.from(e.clipboardData.files).filter(
-      (file) => file.type.startsWith("image/"),
+    const imageFilesFromClipboard = Array.from(e.clipboardData.files).filter((file) =>
+      file.type.startsWith("image/"),
     );
     const imageFiles =
       imageFilesFromClipboard.length > 0
@@ -120,9 +120,7 @@ export const SendBox = ({
 
   // 处理文件上传
   const handleFiles = (files: File[]) => {
-    const validFiles = files.filter((file) =>
-      supportedExts.includes(file.type),
-    );
+    const validFiles = files.filter((file) => supportedExts.includes(file.type));
     if (validFiles.length > 0 && onFilesAdded) {
       onFilesAdded(validFiles);
     }
@@ -166,9 +164,7 @@ export const SendBox = ({
       >
         {prefix}
         {tools && (
-          <div className="flex items-center gap-2 border-b border-ink-900/10 pb-2">
-            {tools}
-          </div>
+          <div className="flex items-center gap-2 border-b border-ink-900/10 pb-2">{tools}</div>
         )}
 
         {/* 图片预览区域 */}

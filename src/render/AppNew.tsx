@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./tailwind.css";
 import "./theme.css";
 import { getDefaultAgentPlugin } from "./agents/registry";
-import { ChatHeader, MessageRenderer, SendBox, Sidebar } from "./components";
+import { ChatHeader, SendBox, Sidebar, VirtualizedMessageList } from "./components";
 import EnvironmentSetup from "./EnvironmentSetup";
 import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
@@ -71,7 +71,6 @@ const App = () => {
       : "light";
   }, [theme]);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const autoConnectAttempted = useRef(false);
   const connectInFlight = useRef(false);
   const sessionLoadInFlightByTask = useRef<Record<string, boolean>>({});
@@ -326,13 +325,7 @@ const App = () => {
     if (!activeTaskId && Object.keys(agentMessageLogByTask).length > 0) {
       setAgentMessageLogByTask({});
     }
-    // 当任务切换时，滚动到聊天区域底部
-    setTimeout(scrollToBottom, 100);
   }, [activeTaskId, agentMessageLogByTask]);
-
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
 
   const setCurrentInputText = useCallback(
     (value: string) => {
@@ -709,14 +702,12 @@ const App = () => {
             : task,
         );
       });
-
-      setTimeout(scrollToBottom, 100);
     },
+
     [
       applyTaskUpdates,
       clearAllSessionIds,
       defaultAgentInfo,
-      scrollToBottom,
       setAgentInfoByTask,
       setTaskConnected,
       setTaskConnectionStatus,
@@ -1140,7 +1131,6 @@ const App = () => {
         lastActiveAt: updatedAt,
       });
     }
-    setTimeout(scrollToBottom, 100);
 
     // Set loading state after scroll to ensure the loading bubble is visible
     if (activeTaskId) {
@@ -1333,43 +1323,14 @@ const App = () => {
             agentMessageLog={activeAgentMessageLog}
           />
 
-          <div className="flex-1 overflow-y-auto bg-surface-cream">
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-1 px-4 pb-28 pt-5">
-              {/* Welcome / Empty State */}
-              {renderMessages.length === 0 ? (
-                <div className="text-center text-muted mt-10">
-                  <div className="mb-2">Beginning of conversation</div>
-                  <div className="mx-auto h-px w-10 bg-ink-900/10" />
-                </div>
-              ) : null}
-
-              {renderMessages.map((msg) => (
-                <MessageRenderer
-                  key={msg.id}
-                  msg={msg}
-                  onPermissionResponse={handlePermissionResponse}
-                />
-              ))}
-
-              {/* Loading message bubble */}
-              {isWaitingForResponse && (
-                <MessageRenderer
-                  msg={{
-                    id: "loading",
-                    conversation_id: activeTaskId || "default",
-                    type: "thought",
-                    content: {
-                      thought: "Thinking...",
-                    },
-                    position: "left",
-                  }}
-                  isLoading
-                  onStop={handleStop}
-                />
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
+          <div className="flex-1 overflow-hidden bg-surface-cream">
+            <VirtualizedMessageList
+              key={activeTaskId ?? "default"}
+              messages={renderMessages}
+              onPermissionResponse={handlePermissionResponse}
+              isLoading={isWaitingForResponse}
+              onStop={handleStop}
+            />
           </div>
 
           <SendBox

@@ -7,3 +7,4 @@ export { MessageText } from "./MessageText";
 export { SendBox } from "./SendBox";
 export { Sidebar } from "./Sidebar";
 export { ThoughtDisplay } from "./ThoughtDisplay";
+export { VirtualizedMessageList } from "./VirtualizedMessageList";
