@@ -1,6 +1,15 @@
 import { theme as antdTheme, ConfigProvider } from "antd";
 import { Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  type HTMLAttributes,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import "./tailwind.css";
 import "./theme.css";
 import { getDefaultAgentPlugin } from "./agents/registry";
@@ -33,28 +42,51 @@ const App = () => {
   const [envReady, setEnvReady] = useState<boolean | null>(null); // null = checking
   const [tasks, setTasks] = useState<Task[]>([]);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const [inputTextByTask, setInputTextByTask] = useState<Record<string, string>>({});
-  const [inputImagesByTask, setInputImagesByTask] = useState<Record<string, ImageAttachment[]>>({});
-  const [agentCommand, setAgentCommand] = useState(getDefaultAgentPlugin().defaultCommand);
+  const [inputTextByTask, setInputTextByTask] = useState<
+    Record<string, string>
+  >({});
+  const [inputImagesByTask, setInputImagesByTask] = useState<
+    Record<string, ImageAttachment[]>
+  >({});
+  const [agentCommand, setAgentCommand] = useState(
+    getDefaultAgentPlugin().defaultCommand,
+  );
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
-  const [agentInfoByTask, setAgentInfoByTask] = useState<Record<string, AgentInfoState>>({});
+  const [agentInfoByTask, setAgentInfoByTask] = useState<
+    Record<string, AgentInfoState>
+  >({});
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
-  const [isConnectedByTask, setIsConnectedByTask] = useState<Record<string, boolean>>({});
+  const [isConnectedByTask, setIsConnectedByTask] = useState<
+    Record<string, boolean>
+  >({});
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
+  const [autoFollowOutput, setAutoFollowOutput] = useState(true);
+  const handleAtBottomStateChange = useCallback((atBottom: boolean) => {
+    setAutoFollowOutput((prev) => (prev === atBottom ? prev : atBottom));
+  }, []);
+  const handleAtTopStateChange = useCallback((atTop: boolean) => {
+    if (!atTop) return;
+    setAutoFollowOutput((prev) => (prev ? prev : true));
+  }, []);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const [agentCapabilitiesByTask, setAgentCapabilitiesByTask] = useState<
     Record<string, any | null>
   >({});
-  const [agentMessageLogByTask, setAgentMessageLogByTask] = useState<Record<string, string[]>>({});
-  const showDebug = String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
+  const [agentMessageLogByTask, setAgentMessageLogByTask] = useState<
+    Record<string, string[]>
+  >({});
+  const showDebug =
+    String(DEBUG || "").toLowerCase() === "true" || DEBUG === "1";
 
   const [connectionStatusByTask, setConnectionStatusByTask] = useState<
     Record<string, ConnectionStatus>
   >({});
 
   // Track waiting state per task
-  const [waitingByTask, setWaitingByTask] = useState<Record<string, boolean>>({});
+  const [waitingByTask, setWaitingByTask] = useState<Record<string, boolean>>(
+    {},
+  );
 
   const [theme, setTheme] = useState<"light" | "dark" | "auto">(() => {
     if (typeof window !== "undefined" && window.matchMedia) {
@@ -66,12 +98,13 @@ const App = () => {
   const [wallpaper, setWallpaper] = useState<string | null>(null);
   const effectiveTheme = useMemo(() => {
     if (theme !== "auto") return theme;
-    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+    return window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark"
       : "light";
   }, [theme]);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const autoConnectAttempted = useRef(false);
   const connectInFlightByTask = useRef<Record<string, boolean>>({});
   const sessionLoadInFlightByTask = useRef<Record<string, boolean>>({});
@@ -124,10 +157,16 @@ const App = () => {
   const activeAgentCapabilities = activeTaskId
     ? (agentCapabilitiesByTask[activeTaskId] ?? null)
     : null;
-  const activeAgentMessageLog = activeTaskId ? (agentMessageLogByTask[activeTaskId] ?? []) : [];
+  const activeAgentMessageLog = activeTaskId
+    ? (agentMessageLogByTask[activeTaskId] ?? [])
+    : [];
   const inputText = activeTaskId ? (inputTextByTask[activeTaskId] ?? "") : "";
-  const inputImages = activeTaskId ? (inputImagesByTask[activeTaskId] ?? []) : [];
-  const activeIsConnected = activeTaskId ? Boolean(isConnectedByTask[activeTaskId]) : false;
+  const inputImages = activeTaskId
+    ? (inputImagesByTask[activeTaskId] ?? [])
+    : [];
+  const activeIsConnected = activeTaskId
+    ? Boolean(isConnectedByTask[activeTaskId])
+    : false;
   const defaultConnectionStatus = useMemo<ConnectionStatus>(
     () => ({
       state: "disconnected",
@@ -138,6 +177,31 @@ const App = () => {
   const activeConnectionStatus = activeTaskId
     ? (connectionStatusByTask[activeTaskId] ?? defaultConnectionStatus)
     : defaultConnectionStatus;
+  const renderMessages = useMemo(() => {
+    if (!activeTask) return [];
+    return transformMessages(activeTask.messages, activeTaskId || "default");
+  }, [activeTask, activeTaskId]);
+  const isWaitingForResponse = activeTaskId
+    ? Boolean(waitingByTask[activeTaskId])
+    : false;
+  const loadingMessage = useMemo(
+    () => ({
+      id: "loading",
+      conversation_id: activeTaskId || "default",
+      type: "thought" as const,
+      content: {
+        thought: "Thinking...",
+      },
+      position: "left" as const,
+    }),
+    [activeTaskId],
+  );
+  const virtualMessages = useMemo(() => {
+    if (isWaitingForResponse) {
+      return [...renderMessages, loadingMessage];
+    }
+    return renderMessages;
+  }, [isWaitingForResponse, loadingMessage, renderMessages]);
 
   // 初始化消息合并器
   useEffect(() => {
@@ -150,14 +214,19 @@ const App = () => {
     }
   }, [activeTask, activeTaskId]);
 
-  const persistTaskUpdates = useCallback((taskId: string, updates: Partial<Task>) => {
-    window.electron.invoke("db:update-task", taskId, updates);
-  }, []);
+  const persistTaskUpdates = useCallback(
+    (taskId: string, updates: Partial<Task>) => {
+      window.electron.invoke("db:update-task", taskId, updates);
+    },
+    [],
+  );
 
   const applyTaskUpdates = useCallback(
     (taskId: string, updates: Partial<Task>) => {
       setTasks((prev) => {
-        const next = prev.map((task) => (task.id === taskId ? { ...task, ...updates } : task));
+        const next = prev.map((task) =>
+          task.id === taskId ? { ...task, ...updates } : task,
+        );
         // 永远按照创建时间倒序排序
         return [...next].sort((a, b) => b.createdAt - a.createdAt);
       });
@@ -169,7 +238,9 @@ const App = () => {
   const clearTaskSessionId = useCallback(
     (taskId: string) => {
       setTasks((prev) =>
-        prev.map((task) => (task.id === taskId ? { ...task, sessionId: null } : task)),
+        prev.map((task) =>
+          task.id === taskId ? { ...task, sessionId: null } : task,
+        ),
       );
       persistTaskUpdates(taskId, { sessionId: null });
     },
@@ -197,7 +268,8 @@ const App = () => {
   useEffect(() => {
     const effectiveTheme =
       theme === "auto"
-        ? window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? window.matchMedia &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches
           ? "dark"
           : "light"
         : theme;
@@ -208,7 +280,10 @@ const App = () => {
     if (theme !== "auto") return;
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
     const handleChange = (e: MediaQueryListEvent) => {
-      document.documentElement.setAttribute("data-theme", e.matches ? "dark" : "light");
+      document.documentElement.setAttribute(
+        "data-theme",
+        e.matches ? "dark" : "light",
+      );
     };
     mediaQuery.addEventListener("change", handleChange);
     return () => mediaQuery.removeEventListener("change", handleChange);
@@ -218,7 +293,8 @@ const App = () => {
     // Load wallpaper from settings
     const loadWallpaper = async () => {
       const savedWallpaper = await window.electron.invoke("env:get-wallpaper");
-      const normalized = typeof savedWallpaper === "string" ? savedWallpaper.trim() : "";
+      const normalized =
+        typeof savedWallpaper === "string" ? savedWallpaper.trim() : "";
       setWallpaper(normalized ? normalized : null);
     };
     loadWallpaper();
@@ -233,7 +309,10 @@ const App = () => {
         root.style.setProperty("--wallpaper", wallpaper);
       } else {
         // 否则假设是图片文件
-        root.style.setProperty("--wallpaper", `url('${wallpaperUrl(wallpaper)}')`);
+        root.style.setProperty(
+          "--wallpaper",
+          `url('${wallpaperUrl(wallpaper)}')`,
+        );
       }
       root.classList.add("bg-wallpaper");
     } else {
@@ -265,7 +344,12 @@ const App = () => {
       if (!resolvedTaskId) {
         return;
       }
-      await window.electron.invoke("agent:permission-response", resolvedTaskId, permissionId, response);
+      await window.electron.invoke(
+        "agent:permission-response",
+        resolvedTaskId,
+        permissionId,
+        response,
+      );
     },
     [],
   );
@@ -326,13 +410,25 @@ const App = () => {
     if (!activeTaskId && Object.keys(agentMessageLogByTask).length > 0) {
       setAgentMessageLogByTask({});
     }
-    // 当任务切换时，滚动到聊天区域底部
-    setTimeout(scrollToBottom, 100);
   }, [activeTaskId, agentMessageLogByTask]);
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
+  const scrollToBottom = useCallback(
+    (behavior: ScrollBehavior = "smooth") => {
+      const targetIndex = virtualMessages.length - 1;
+      if (targetIndex < 0) return;
+      virtuosoRef.current?.scrollToIndex({
+        index: targetIndex,
+        align: "end",
+        behavior,
+      });
+    },
+    [virtualMessages.length],
+  );
+
+  useEffect(() => {
+    // 当任务切换时，滚动到聊天区域底部
+    setTimeout(() => scrollToBottom("auto"), 0);
+  }, [activeTaskId, scrollToBottom]);
 
   const setCurrentInputText = useCallback(
     (value: string) => {
@@ -375,15 +471,21 @@ const App = () => {
     });
   }, []);
 
-  const setTaskConnectionStatus = useCallback((taskId: string, status: ConnectionStatus) => {
-    setConnectionStatusByTask((prev) => {
-      const existing = prev[taskId];
-      if (existing?.state === status.state && existing?.message === status.message) {
-        return prev;
-      }
-      return { ...prev, [taskId]: status };
-    });
-  }, []);
+  const setTaskConnectionStatus = useCallback(
+    (taskId: string, status: ConnectionStatus) => {
+      setConnectionStatusByTask((prev) => {
+        const existing = prev[taskId];
+        if (
+          existing?.state === status.state &&
+          existing?.message === status.message
+        ) {
+          return prev;
+        }
+        return { ...prev, [taskId]: status };
+      });
+    },
+    [],
+  );
 
   const clearTaskState = useCallback((taskId: string) => {
     setInputTextByTask((prev) => {
@@ -494,10 +596,13 @@ const App = () => {
         const baseUsage = targetTask?.tokenUsage ?? null;
         const mergedUsage = nextUsage
           ? {
-              promptTokens: (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
+              promptTokens:
+                (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
               completionTokens:
-                (baseUsage?.completionTokens ?? 0) + (nextUsage.completionTokens ?? 0),
-              totalTokens: (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
+                (baseUsage?.completionTokens ?? 0) +
+                (nextUsage.completionTokens ?? 0),
+              totalTokens:
+                (baseUsage?.totalTokens ?? 0) + (nextUsage.totalTokens ?? 0),
             }
           : baseUsage;
         if (nextUsage) {
@@ -536,7 +641,8 @@ const App = () => {
               ...prev,
               [resolvedTaskId]: {
                 models: data.info?.models ?? existing.models,
-                currentModelId: data.info?.currentModelId ?? existing.currentModelId,
+                currentModelId:
+                  data.info?.currentModelId ?? existing.currentModelId,
                 commands: data.info?.commands ?? existing.commands,
                 tokenUsage: mergedUsage,
               },
@@ -563,7 +669,10 @@ const App = () => {
       // System Messages
       if (data.type === "system") {
         const content = data.text || "";
-        if (content.includes("Agent disconnected") || content.includes("Agent process error")) {
+        if (
+          content.includes("Agent disconnected") ||
+          content.includes("Agent process error")
+        ) {
           const message = content.replace(/^System:\s*/, "");
           const resolvedTaskId = resolveTaskId(tasksSnapshot);
           if (!resolvedTaskId) {
@@ -614,7 +723,8 @@ const App = () => {
 
       if (data.type === "permission_request") {
         const updatedAt = Date.now();
-        const resolvedTaskId = resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
+        const resolvedTaskId =
+          resolveTaskId(tasksSnapshot) ?? tasksSnapshot[0]?.id ?? null;
         const targetTask = resolvedTaskId
           ? tasksSnapshot.find((task) => task.id === resolvedTaskId)
           : null;
@@ -660,10 +770,13 @@ const App = () => {
       setTasks((prev) => {
         const resolvedTaskId = resolveTaskId(prev);
         if (!resolvedTaskId) return prev;
-        const targetTask = resolvedTaskId ? prev.find((task) => task.id === resolvedTaskId) : null;
+        const targetTask = resolvedTaskId
+          ? prev.find((task) => task.id === resolvedTaskId)
+          : null;
         if (!targetTask) return prev;
 
-        const lastLegacyMsg = targetTask.messages[targetTask.messages.length - 1];
+        const lastLegacyMsg =
+          targetTask.messages[targetTask.messages.length - 1];
         const isLegacyThought =
           lastLegacyMsg &&
           lastLegacyMsg.sender === "agent" &&
@@ -674,7 +787,8 @@ const App = () => {
         let msgId: string | undefined;
         if (data.type === "agent_text") {
           if (!agentTextMsgIdByTaskRef.current[resolvedTaskId]) {
-            agentTextMsgIdByTaskRef.current[resolvedTaskId] = Date.now().toString();
+            agentTextMsgIdByTaskRef.current[resolvedTaskId] =
+              Date.now().toString();
           }
           msgId = agentTextMsgIdByTaskRef.current[resolvedTaskId] ?? undefined;
           agentThoughtMsgIdByTaskRef.current[resolvedTaskId] = null;
@@ -698,7 +812,10 @@ const App = () => {
         const updatedMessages = composer.getMessages();
 
         // Convert back to legacy message shape for storage/rendering.
-        const oldFormatMessages = transformToLegacyMessages(updatedMessages, targetTask.messages);
+        const oldFormatMessages = transformToLegacyMessages(
+          updatedMessages,
+          targetTask.messages,
+        );
 
         const updatedAt = Date.now();
         if (resolvedTaskId) {
@@ -719,14 +836,11 @@ const App = () => {
             : task,
         );
       });
-
-      setTimeout(scrollToBottom, 100);
     },
     [
       applyTaskUpdates,
       clearTaskSessionId,
       defaultAgentInfo,
-      scrollToBottom,
       setAgentInfoByTask,
       setTaskConnected,
       setTaskConnectionStatus,
@@ -739,25 +853,32 @@ const App = () => {
     if (!window.electron) {
       return;
     }
-    const removeListener = window.electron.on("agent:message", (msg: IncomingMessage | string) => {
-      const data: IncomingMessage =
-        typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
-      console.log("[agent:message]", data);
-      const resolvedTaskId =
-        data.taskId ||
-        (data.sessionId
-          ? (tasksRef.current.find((task) => task.sessionId === data.sessionId)?.id ??
-            activeTaskIdRef.current)
-          : activeTaskIdRef.current);
-      if (resolvedTaskId) {
-        setAgentMessageLogByTask((prev) => {
-          const existing = prev[resolvedTaskId] ?? [];
-          const next = [`[${new Date().toISOString()}] ${JSON.stringify(data)}`, ...existing];
-          return { ...prev, [resolvedTaskId]: next.slice(0, 50) };
-        });
-      }
-      handleIncomingMessage(data);
-    });
+    const removeListener = window.electron.on(
+      "agent:message",
+      (msg: IncomingMessage | string) => {
+        const data: IncomingMessage =
+          typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
+        console.log("[agent:message]", data);
+        const resolvedTaskId =
+          data.taskId ||
+          (data.sessionId
+            ? (tasksRef.current.find(
+                (task) => task.sessionId === data.sessionId,
+              )?.id ?? activeTaskIdRef.current)
+            : activeTaskIdRef.current);
+        if (resolvedTaskId) {
+          setAgentMessageLogByTask((prev) => {
+            const existing = prev[resolvedTaskId] ?? [];
+            const next = [
+              `[${new Date().toISOString()}] ${JSON.stringify(data)}`,
+              ...existing,
+            ];
+            return { ...prev, [resolvedTaskId]: next.slice(0, 50) };
+          });
+        }
+        handleIncomingMessage(data);
+      },
+    );
 
     const loadInitialState = async () => {
       const [storedTasks, storedActiveTaskId, lastWs] = await Promise.all([
@@ -779,13 +900,17 @@ const App = () => {
       // 按创建时间倒序排序
       setTasks([...loadedTasks].sort((a, b) => b.createdAt - a.createdAt));
 
-      const resolvedActiveId = loadedTasks.find((task) => task.id === storedActiveTaskId)
+      const resolvedActiveId = loadedTasks.find(
+        (task) => task.id === storedActiveTaskId,
+      )
         ? storedActiveTaskId
         : (loadedTasks[0]?.id ?? null);
 
       if (resolvedActiveId) {
         setActiveTaskId(resolvedActiveId);
-        const nextTask = loadedTasks.find((task) => task.id === resolvedActiveId);
+        const nextTask = loadedTasks.find(
+          (task) => task.id === resolvedActiveId,
+        );
         if (nextTask) {
           syncActiveTaskState(nextTask);
         }
@@ -823,7 +948,10 @@ const App = () => {
         return null;
       }
       if (!commandName.includes("/") && !commandName.startsWith(".")) {
-        const check = await window.electron.invoke("agent:check-command", commandName);
+        const check = await window.electron.invoke(
+          "agent:check-command",
+          commandName,
+        );
         if (!check.installed) {
           setTaskConnectionStatus(task.id, {
             state: "error",
@@ -854,20 +982,33 @@ const App = () => {
       }
 
       let sessionId = connectResult.reused ? task.sessionId : null;
-      const caps = await window.electron.invoke("agent:get-capabilities", task.id);
+      const caps = await window.electron.invoke(
+        "agent:get-capabilities",
+        task.id,
+      );
       const canResume = Boolean(caps?.sessionCapabilities?.resume);
       const canLoad = Boolean(caps?.loadSession);
 
       if (connectResult.reused && sessionId) {
         try {
-          await window.electron.invoke("agent:set-active-session", task.id, sessionId, task.workspace);
+          await window.electron.invoke(
+            "agent:set-active-session",
+            task.id,
+            sessionId,
+            task.workspace,
+          );
         } catch {
           sessionId = null;
         }
       } else if (task.sessionId && (canResume || canLoad)) {
         try {
           if (canResume) {
-            await window.electron.invoke("agent:resume-session", task.id, task.sessionId, task.workspace);
+            await window.electron.invoke(
+              "agent:resume-session",
+              task.id,
+              task.sessionId,
+              task.workspace,
+            );
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -875,7 +1016,12 @@ const App = () => {
             });
           } else if (canLoad) {
             sessionLoadInFlightByTask.current[task.id] = true;
-            await window.electron.invoke("agent:load-session", task.id, task.sessionId, task.workspace);
+            await window.electron.invoke(
+              "agent:load-session",
+              task.id,
+              task.sessionId,
+              task.workspace,
+            );
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -890,7 +1036,11 @@ const App = () => {
       }
 
       if (!sessionId) {
-        const sessionResult = await window.electron.invoke("agent:new-session", task.id, task.workspace);
+        const sessionResult = await window.electron.invoke(
+          "agent:new-session",
+          task.id,
+          task.workspace,
+        );
         sessionId = sessionResult.sessionId;
         applyTaskUpdates(task.id, {
           sessionId,
@@ -921,7 +1071,9 @@ const App = () => {
       delete connectInFlightByTask.current[task.id];
       if (pendingConnectByTaskRef.current[task.id]) {
         delete pendingConnectByTaskRef.current[task.id];
-        const pendingTask = tasksRef.current.find((entry) => entry.id === task.id);
+        const pendingTask = tasksRef.current.find(
+          (entry) => entry.id === task.id,
+        );
         if (pendingTask && !isConnectedByTaskRef.current[task.id]) {
           ensureTaskSession(pendingTask);
         }
@@ -1026,7 +1178,9 @@ const App = () => {
 
     setIsNewTaskOpen(false);
     // 按创建时间倒序排序，新任务会自动在最前面
-    setTasks((prev) => [...prev, newTask].sort((a, b) => b.createdAt - a.createdAt));
+    setTasks((prev) =>
+      [...prev, newTask].sort((a, b) => b.createdAt - a.createdAt),
+    );
     window.electron.invoke("db:create-task", newTask);
     setActiveTaskId(newTask.id);
     syncActiveTaskState(newTask);
@@ -1066,7 +1220,11 @@ const App = () => {
         );
         // 当切换任务时，同时更新模型到该任务的模型
         if (task.modelId) {
-          await window.electron.invoke("agent:set-model", task.id, task.modelId);
+          await window.electron.invoke(
+            "agent:set-model",
+            task.id,
+            task.modelId,
+          );
         }
         setTaskConnected(task.id, true);
         setTaskConnectionStatus(task.id, {
@@ -1088,7 +1246,9 @@ const App = () => {
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    const confirmed = window.confirm("Delete this task? This cannot be undone.");
+    const confirmed = window.confirm(
+      "Delete this task? This cannot be undone.",
+    );
     if (!confirmed) {
       return;
     }
@@ -1169,8 +1329,6 @@ const App = () => {
         lastActiveAt: updatedAt,
       });
     }
-    setTimeout(scrollToBottom, 100);
-
     // Set loading state after scroll to ensure the loading bubble is visible
     if (activeTaskId) {
       setTaskWaiting(activeTaskId, true);
@@ -1196,7 +1354,11 @@ const App = () => {
       if (!activeTaskId) {
         return;
       }
-      const res = await window.electron.invoke("agent:set-model", activeTaskId, modelId);
+      const res = await window.electron.invoke(
+        "agent:set-model",
+        activeTaskId,
+        modelId,
+      );
       if (!res.success) {
         handleIncomingMessage({
           type: "system",
@@ -1273,12 +1435,6 @@ const App = () => {
     checkEnv();
   }, []);
 
-  const renderMessages = useMemo(() => {
-    if (!activeTask) return [];
-    return transformMessages(activeTask.messages, activeTaskId || "default");
-  }, [activeTask, activeTaskId]);
-  const isWaitingForResponse = activeTaskId ? Boolean(waitingByTask[activeTaskId]) : false;
-
   // Show environment setup if not ready
   if (envReady === null) {
     // Still checking
@@ -1307,7 +1463,10 @@ const App = () => {
   return (
     <ConfigProvider
       theme={{
-        algorithm: effectiveTheme === "dark" ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        algorithm:
+          effectiveTheme === "dark"
+            ? antdTheme.darkAlgorithm
+            : antdTheme.defaultAlgorithm,
         token: {
           colorPrimary: "#f97316",
         },
@@ -1365,43 +1524,57 @@ const App = () => {
             agentMessageLog={activeAgentMessageLog}
           />
 
-          <div className="flex-1 overflow-y-auto bg-surface-cream">
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-1 px-4 pb-28 pt-5">
-              {/* Welcome / Empty State */}
-              {renderMessages.length === 0 ? (
-                <div className="text-center text-muted mt-10">
-                  <div className="mb-2">Beginning of conversation</div>
-                  <div className="mx-auto h-px w-10 bg-ink-900/10" />
-                </div>
-              ) : null}
-
-              {renderMessages.map((msg) => (
-                <MessageRenderer
-                  key={msg.id}
-                  msg={msg}
-                  onPermissionResponse={handlePermissionResponse}
-                />
-              ))}
-
-              {/* Loading message bubble */}
-              {isWaitingForResponse && (
-                <MessageRenderer
-                  msg={{
-                    id: "loading",
-                    conversation_id: activeTaskId || "default",
-                    type: "thought",
-                    content: {
-                      thought: "Thinking...",
-                    },
-                    position: "left",
+          <div className="relative flex-1 bg-surface-cream">
+            {activeTask ? (
+              <>
+                <Virtuoso
+                  key={activeTask.id}
+                  ref={virtuosoRef}
+                  data={virtualMessages}
+                  style={{ height: "100%" }}
+                  followOutput={autoFollowOutput ? "smooth" : false}
+                  atBottomStateChange={handleAtBottomStateChange}
+                  atTopStateChange={handleAtTopStateChange}
+                  computeItemKey={(index, msg) =>
+                    msg.id ? msg.id + index : index
+                  }
+                  increaseViewportBy={{ top: 400, bottom: 800 }}
+                  components={{
+                    List: forwardRef<
+                      HTMLDivElement,
+                      HTMLAttributes<HTMLDivElement>
+                    >((props, ref) => (
+                      <div
+                        ref={ref}
+                        {...props}
+                        className={`mx-auto flex w-full max-w-3xl flex-col gap-1 px-4 pt-5 ${
+                          props.className || ""
+                        }`}
+                      />
+                    )),
+                    EmptyPlaceholder: () => (
+                      <div className="mx-auto w-full max-w-3xl px-4 pt-5 text-center text-muted">
+                        <div className="mb-2">Beginning of conversation</div>
+                        <div className="mx-auto h-px w-10 bg-ink-900/10" />
+                      </div>
+                    ),
                   }}
-                  isLoading
-                  onStop={handleStop}
+                  itemContent={(_, msg) => (
+                    <MessageRenderer
+                      msg={msg}
+                      onPermissionResponse={handlePermissionResponse}
+                      isLoading={msg.id === "loading" && isWaitingForResponse}
+                      onStop={msg.id === "loading" ? handleStop : undefined}
+                    />
+                  )}
                 />
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
+              </>
+            ) : (
+              <div className="mx-auto w-full max-w-3xl px-4 pt-5 text-center text-muted">
+                <div className="mb-2">Beginning of conversation</div>
+                <div className="mx-auto h-px w-10 bg-ink-900/10" />
+              </div>
+            )}
           </div>
 
           <SendBox
