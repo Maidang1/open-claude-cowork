@@ -105,7 +105,7 @@
 
 ### `resolveWorkspacePath` 扩展 `~` 和允许绝对路径
 
-文件: `src/main/acp/paths.ts` (行 4-20)
+文件: `src/main/acp/paths.ts` (行 4-13) - 片段 A: 处理路径裁剪与 `~` 扩展
 ```typescript
 export const resolveWorkspacePath = (workspace: string, targetPath: string) => {
   const trimmed = targetPath.trim();
@@ -117,7 +117,11 @@ export const resolveWorkspacePath = (workspace: string, targetPath: string) => {
   if (normalized.startsWith("~")) {
     normalized = path.join(os.homedir(), normalized.slice(1));
   }
+};
+```
 
+文件: `src/main/acp/paths.ts` (行 15-20) - 片段 B: 处理绝对路径与相对路径解析
+```typescript
   if (path.isAbsolute(normalized)) {
     return path.normalize(normalized);
   }
@@ -152,14 +156,17 @@ export const resolveWorkspacePath = (workspace: string, targetPath: string) => {
 
 ### `runShellCommand` 权限门控与 `execAsync` 执行
 
-文件: `src/main/acp/AcpConnection.ts` (行 153-185)
+文件: `src/main/acp/AcpConnection.ts` (行 153-157) - 片段 A: 命令验证
 ```typescript
   private async handleRunShellCommand(params: any) {
     const command = typeof params?.command === "string" ? params.command : "";
     if (!command) {
       throw new Error("Missing shell command");
     }
+```
 
+文件: `src/main/acp/AcpConnection.ts` (行 159-172) - 片段 B: 权限请求
+```typescript
     this.pausePromptTimeout();
     let response: any;
     try {
@@ -174,7 +181,10 @@ export const resolveWorkspacePath = (workspace: string, targetPath: string) => {
     } finally {
       this.resumePromptTimeout();
     }
+```
 
+文件: `src/main/acp/AcpConnection.ts` (行 174-185) - 片段 C: 命令执行与错误处理
+```typescript
     if (response?.outcome?.outcome === "selected" && response.outcome.optionId === "allow") {
       this.handlers.onToolLog?.(`Executing shell command: ${command}`);
       try {

@@ -1,14 +1,14 @@
+import crypto from "node:crypto";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import crypto from "node:crypto";
-import { app } from "electron";
 import type {
   CheckpointEntry,
   CheckpointIndex,
   CheckpointMeta,
   CheckpointReason,
 } from "@src/types/checkpointTypes";
+import { app } from "electron";
 
 const MAX_CHECKPOINTS_PER_TASK = 10;
 const CHECKPOINT_ROOT_DIRNAME = "acp-checkpoints";
@@ -202,10 +202,7 @@ export const createCheckpoint = async (
     const destPath = path.join(filesDir, file.relPath);
     await ensureDir(path.dirname(destPath));
     await fs.copyFile(file.absPath, destPath);
-    const [stat, hash] = await Promise.all([
-      fs.stat(file.absPath),
-      hashFile(file.absPath),
-    ]);
+    const [stat, hash] = await Promise.all([fs.stat(file.absPath), hashFile(file.absPath)]);
     filesMeta.push({
       path: file.relPath,
       size: stat.size,

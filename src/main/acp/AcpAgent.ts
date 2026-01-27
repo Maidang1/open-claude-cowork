@@ -1,10 +1,10 @@
 import fs from "node:fs/promises";
 import type { ContentBlock } from "@agentclientprotocol/sdk";
 import type { AgentInfoState, IncomingMessage } from "@src/types/acpTypes";
+import { ensurePreWriteCheckpoint } from "../utils/checkpoints";
 import { AcpAdapter, extractTokenUsage } from "./AcpAdapter";
 import { AcpConnection } from "./AcpConnection";
 import { resolveWorkspacePath } from "./paths";
-import { ensurePreWriteCheckpoint } from "../utils/checkpoints";
 
 const buildPromptContent = (
   text: string,
