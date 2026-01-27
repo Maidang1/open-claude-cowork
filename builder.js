@@ -6,8 +6,7 @@ require("dotenv").config({
 });
 
 const buildEnv = process.env?.BUILD_ENV || "production"; // production, staging, development
-const buildTarget =
-  process.env?.BUILD_TARGET || process.env?.ENV_FILE || "unknown";
+const buildTarget = process.env?.BUILD_TARGET || process.env?.ENV_FILE || "unknown";
 
 // Determine which architectures to build based on BUILD_TARGET
 const getMacArch = () => {
@@ -25,9 +24,7 @@ const bundleVersion = versionArr[1] || versionArr[0];
 const productName = process.env?._PRODUCT_NAME ?? name;
 
 const getAppId = () => {
-  const baseId =
-    process.env?._APP_ID ||
-    `com.yourcompany.${name.replace(/[^a-z0-9]/gi, "")}`;
+  const baseId = process.env?._APP_ID || `com.yourcompany.${name.replace(/[^a-z0-9]/gi, "")}`;
   if (buildEnv === "development") return `${baseId}.dev`;
   if (buildEnv === "staging") return `${baseId}.staging`;
   return baseId;
@@ -41,6 +38,13 @@ const config = {
   asar: true,
   productName: productName,
   appId: getAppId(),
+  publish: [
+    {
+      provider: "github",
+      owner: "Maidang1",
+      repo: "open-claude-cowork",
+    },
+  ],
   directories: {
     output: `./release/app/${buildTarget}/${buildEnv}`,
   },

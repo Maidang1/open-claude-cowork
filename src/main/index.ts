@@ -8,6 +8,7 @@ import {
   registerDbHandlers,
   registerDialogHandlers,
   registerEnvHandlers,
+  registerUpdaterHandlers,
 } from "./ipc";
 
 export let mainWindow: BrowserWindow | null = null;
@@ -37,6 +38,7 @@ const initIpc = () => {
   registerDialogHandlers(mainWindow);
   registerDbHandlers();
   registerAgentHandlers(mainWindow);
+  registerUpdaterHandlers(mainWindow);
 };
 
 const registerWallpaperProtocol = () => {

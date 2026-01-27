@@ -73,6 +73,8 @@
     "@lobehub/icons": "^4.0.3",
     "antd": "^6.2.1",
     "better-sqlite3": "^12.6.2",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.7.3",
     "lucide-react": "^0.562.0",
     "react-markdown": "^10.1.0",
     "react-syntax-highlighter": "^16.1.0",

@@ -31,16 +31,19 @@ jobs:
             npm_script: build:mac-arm64
             artifacts: |
               release/app/darwin-arm64/**/*.dmg
+              release/app/darwin-arm64/**/latest-mac.yml
           - os: macos-15-intel
             build_target: darwin-x64
             npm_script: build:mac-x64
             artifacts: |
               release/app/darwin-x64/**/*.dmg
+              release/app/darwin-x64/**/latest-mac.yml
           - os: windows-latest
             build_target: win32
             npm_script: build:win32
             artifacts: |
               release/app/win32/**/*-setup.exe
+              release/app/win32/**/latest.yml
           - os: ubuntu-latest
             build_target: linux
             npm_script: build:linux
@@ -48,6 +51,7 @@ jobs:
               release/app/linux/**/*.AppImage
               release/app/linux/**/*.deb
               release/app/linux/**/*.rpm
+              release/app/linux/**/latest-linux.yml
 
     steps:
       - name: Check out Git repository
