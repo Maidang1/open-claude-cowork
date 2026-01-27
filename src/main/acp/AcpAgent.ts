@@ -61,8 +61,10 @@ export class AcpAgent {
       onPermissionRequest: async (payload) => {
         return this.handlePermissionRequest(payload);
       },
-      onSystemMessage: (msg) => this.onMessage(msg),
-      onToolLog: (text) => this.onMessage({ type: "tool_log", text }),
+      onSystemMessage: (msg) =>
+        this.onMessage({ ...msg, sessionId: this.activeSessionId ?? undefined }),
+      onToolLog: (text) =>
+        this.onMessage({ type: "tool_log", text, sessionId: this.activeSessionId ?? undefined }),
     });
 
     await this.connection.connect(command, args, this.cwd, env);
@@ -79,6 +81,7 @@ export class AcpAgent {
       this.onMessage({
         type: "system",
         text: "System: Connected.",
+        sessionId: this.activeSessionId ?? undefined,
       });
 
       return { sessionId: null };
@@ -86,6 +89,7 @@ export class AcpAgent {
       this.onMessage({
         type: "system",
         text: `System: Init failed: ${e.message}`,
+        sessionId: this.activeSessionId ?? undefined,
       });
       await this.disconnect();
       throw e;
@@ -127,6 +131,7 @@ export class AcpAgent {
         this.onMessage({
           type: "system",
           text: `System Error: ${err.message}`,
+          sessionId: this.activeSessionId ?? undefined,
         });
         return;
       }
@@ -134,6 +139,7 @@ export class AcpAgent {
       this.onMessage({
         type: "system",
         text: `System Error: ${err.message}`,
+        sessionId: this.activeSessionId ?? undefined,
       });
     }
   }
@@ -148,6 +154,7 @@ export class AcpAgent {
       this.onMessage({
         type: "system",
         text: `System Error: ${err.message}`,
+        sessionId: this.activeSessionId ?? undefined,
       });
     }
   }
@@ -164,6 +171,7 @@ export class AcpAgent {
     this.onMessage({
       type: "system",
       text: isInitial ? "System: Connected and Session Created." : "System: Session Created.",
+      sessionId: this.activeSessionId ?? undefined,
     });
     this.handleSessionInitUpdate(sessionResult);
     return sessionResult.sessionId;
@@ -181,6 +189,7 @@ export class AcpAgent {
     this.onMessage({
       type: "system",
       text: "System: Session Loaded.",
+      sessionId: this.activeSessionId ?? undefined,
     });
     this.handleSessionInitUpdate(result);
   }
@@ -197,6 +206,7 @@ export class AcpAgent {
     this.onMessage({
       type: "system",
       text: "System: Session Resumed.",
+      sessionId: this.activeSessionId ?? undefined,
     });
     this.handleSessionInitUpdate(result);
   }
@@ -217,17 +227,14 @@ export class AcpAgent {
     return this.agentCapabilities;
   }
 
-  resolvePermission(id: string, response: any) {
+  resolvePermission(id: string, response: any): boolean {
     const resolver = this.pendingPermissions.get(id);
     if (resolver) {
       resolver(response);
       this.pendingPermissions.delete(id);
-    } else {
-      this.onMessage({
-        type: "system",
-        text: `System: No pending permission found for id: ${id}`,
-      });
+      return true;
     }
+    return false;
   }
 
   async setModel(modelId: string) {

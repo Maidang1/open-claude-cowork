@@ -10,12 +10,31 @@ import { AcpAgent } from "./AcpAgent";
 import { acpDetector } from "./AcpDetector";
 
 export class AcpAgentManager {
-  private agent: AcpAgent | null = null;
+  private agents = new Map<string, AcpAgent>();
   private activeConnectionKey: string | null = null;
+  private sessionToConnectionKey = new Map<string, string>();
   private onMessage: (msg: IncomingMessage) => void;
 
   constructor(onMessage: (msg: IncomingMessage) => void) {
     this.onMessage = onMessage;
+  }
+
+  private get activeAgent(): AcpAgent | null {
+    if (!this.activeConnectionKey) return null;
+    return this.agents.get(this.activeConnectionKey) || null;
+  }
+
+  private sortEnv(env?: Record<string, string>): Record<string, string> | undefined {
+    if (!env) return undefined;
+    return Object.keys(env)
+      .sort()
+      .reduce(
+        (acc, key) => {
+          acc[key] = env[key];
+          return acc;
+        },
+        {} as Record<string, string>,
+      );
   }
 
   async connect(
@@ -24,30 +43,43 @@ export class AcpAgentManager {
     env?: Record<string, string>,
     options?: { reuseIfSame?: boolean; createSession?: boolean },
   ) {
-    if (!this.agent) {
-      this.agent = new AcpAgent(this.onMessage);
-    }
-
     const { cmd, args, resolvedEnv } = await this.resolveCommand(command, env);
+    const stableEnv = this.sortEnv(resolvedEnv);
 
     const connectionKey = JSON.stringify({
       cmd,
       args,
-      env: resolvedEnv || null,
+      env: stableEnv || null,
     });
 
-    if (
-      options?.reuseIfSame &&
-      this.agent.isConnected() &&
-      this.activeConnectionKey === connectionKey
-    ) {
-      return { success: true, reused: true, sessionId: null };
+    const reuseIfSame = options?.reuseIfSame ?? true;
+
+    if (this.agents.has(connectionKey)) {
+      if (reuseIfSame) {
+        const agent = this.agents.get(connectionKey)!;
+        if (agent.isConnected()) {
+          this.activeConnectionKey = connectionKey;
+          return { success: true, reused: true, sessionId: null };
+        }
+      }
     }
 
-    const result = await this.agent.connect(cmd, args, cwd, resolvedEnv, {
+    let agent = this.agents.get(connectionKey);
+    if (!agent) {
+      agent = new AcpAgent(this.onMessage);
+      this.agents.set(connectionKey, agent);
+    }
+
+    this.activeConnectionKey = connectionKey;
+
+    const result = await agent.connect(cmd, args, cwd, stableEnv, {
       createSession: options?.createSession ?? true,
     });
-    this.activeConnectionKey = connectionKey;
+
+    if (result.sessionId) {
+      this.sessionToConnectionKey.set(result.sessionId, connectionKey);
+    }
+
     return {
       success: true,
       reused: false,
@@ -56,77 +88,109 @@ export class AcpAgentManager {
   }
 
   async disconnect() {
-    if (this.agent) {
-      await this.agent.disconnect();
-      this.agent = null;
-      this.activeConnectionKey = null;
-    }
+    const promises = Array.from(this.agents.values()).map((agent) => agent.disconnect());
+    await Promise.all(promises);
+    this.agents.clear();
+    this.activeConnectionKey = null;
+    this.sessionToConnectionKey.clear();
     return { success: true };
   }
 
   isConnected() {
-    return this.agent?.isConnected() ?? false;
+    return this.activeAgent?.isConnected() ?? false;
   }
 
   getCapabilities() {
-    return this.agent?.getCapabilities() ?? null;
+    return this.activeAgent?.getCapabilities() ?? null;
   }
 
   async sendMessage(message: string, images?: Array<{ mimeType: string; dataUrl: string }>) {
-    if (!this.agent) {
+    if (!this.activeAgent) {
       throw new Error("Agent not connected");
     }
-    await this.agent.sendMessage(message, images);
+    await this.activeAgent.sendMessage(message, images);
   }
 
   resolvePermission(id: string, response: any) {
-    this.agent?.resolvePermission(id, response);
+    for (const agent of this.agents.values()) {
+      if (agent.resolvePermission(id, response)) {
+        return;
+      }
+    }
+    this.onMessage({
+      type: "system",
+      text: `System: No pending permission found for id: ${id}`,
+    });
   }
 
   async createSession(cwd?: string) {
-    if (!this.agent) {
+    if (!this.activeAgent) {
       throw new Error("Agent not connected");
     }
-    const sessionId = await this.agent.createSession(cwd);
+    const sessionId = await this.activeAgent.createSession(cwd);
+    if (this.activeConnectionKey) {
+      this.sessionToConnectionKey.set(sessionId, this.activeConnectionKey);
+    }
     return { success: true, sessionId };
   }
 
   async loadSession(sessionId: string, cwd?: string) {
-    if (!this.agent) {
+    const key = this.sessionToConnectionKey.get(sessionId);
+    if (key && this.agents.has(key)) {
+      this.activeConnectionKey = key;
+    }
+
+    if (!this.activeAgent) {
       throw new Error("Agent not connected");
     }
-    await this.agent.loadSession(sessionId, cwd);
+    await this.activeAgent.loadSession(sessionId, cwd);
+    if (this.activeConnectionKey) {
+      this.sessionToConnectionKey.set(sessionId, this.activeConnectionKey);
+    }
     return { success: true };
   }
 
   async resumeSession(sessionId: string, cwd?: string) {
-    if (!this.agent) {
+    const key = this.sessionToConnectionKey.get(sessionId);
+    if (key && this.agents.has(key)) {
+      this.activeConnectionKey = key;
+    }
+
+    if (!this.activeAgent) {
       throw new Error("Agent not connected");
     }
-    await this.agent.resumeSession(sessionId, cwd);
+    await this.activeAgent.resumeSession(sessionId, cwd);
+    if (this.activeConnectionKey) {
+      this.sessionToConnectionKey.set(sessionId, this.activeConnectionKey);
+    }
     return { success: true };
   }
 
   async setActiveSession(sessionId: string, cwd?: string) {
-    if (!this.agent) {
+    const key = this.sessionToConnectionKey.get(sessionId);
+    if (key && this.agents.has(key)) {
+      this.activeConnectionKey = key;
+    }
+
+    if (!this.activeAgent) {
       throw new Error("Agent not connected");
     }
-    this.agent.setActiveSession(sessionId, cwd);
+    this.activeAgent.setActiveSession(sessionId, cwd);
     return { success: true };
   }
 
   async setModel(modelId: string) {
-    if (!this.agent) {
+    if (!this.activeAgent) {
       throw new Error("Agent not connected");
     }
-    return await this.agent.setModel(modelId);
+    return await this.activeAgent.setModel(modelId);
   }
 
   async stopCurrentRequest() {
-    if (!this.agent) {
+    if (!this.activeAgent) {
       throw new Error("Agent not connected");
     }
-    await this.agent.stopCurrentRequest();
+    await this.activeAgent.stopCurrentRequest();
     return { success: true };
   }
 

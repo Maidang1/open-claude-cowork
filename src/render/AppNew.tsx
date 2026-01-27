@@ -557,6 +557,33 @@ const App = () => {
         const content = data.text || "";
         if (content.includes("Agent disconnected") || content.includes("Agent process error")) {
           const message = content.replace(/^System:\s*/, "");
+
+          if (data.sessionId) {
+            const task = tasksSnapshot.find((t) => t.sessionId === data.sessionId);
+            if (task) {
+              setTaskConnected(task.id, false);
+              setTaskWaiting(task.id, false);
+              setTaskConnectionStatus(task.id, { state: "error", message });
+
+              setAgentInfoByTask((prev) => {
+                const next = { ...prev };
+                delete next[task.id];
+                return next;
+              });
+              setAgentCapabilitiesByTask((prev) => {
+                const next = { ...prev };
+                delete next[task.id];
+                return next;
+              });
+
+              delete sessionLoadInFlightByTask.current[task.id];
+              if (pendingConnectTaskIdRef.current === task.id) {
+                pendingConnectTaskIdRef.current = null;
+              }
+              return;
+            }
+          }
+
           setIsConnectedByTask({});
           setWaitingByTask({});
           setAgentInfoByTask({});
@@ -825,10 +852,6 @@ const App = () => {
           message: `Connection failed: ${connectResult.error}`,
         });
         return null;
-      }
-
-      if (!connectResult.reused) {
-        clearAllSessionIds();
       }
 
       let sessionId = connectResult.reused ? task.sessionId : null;
