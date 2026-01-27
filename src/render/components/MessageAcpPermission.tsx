@@ -3,7 +3,7 @@ import type { TAcpPermissionMessage } from "../types/messageTypes";
 
 interface MessageAcpPermissionProps {
   msg: TAcpPermissionMessage;
-  onPermissionResponse: (permissionId: string, optionId: string | null) => void;
+  onPermissionResponse: (permissionId: string, optionId: string | null, taskId?: string) => void;
 }
 
 export const MessageAcpPermission = ({ msg, onPermissionResponse }: MessageAcpPermissionProps) => {
@@ -11,13 +11,13 @@ export const MessageAcpPermission = ({ msg, onPermissionResponse }: MessageAcpPe
 
   const handleAccept = (optionId: string | null) => {
     if (permissionId) {
-      onPermissionResponse(permissionId, optionId);
+      onPermissionResponse(permissionId, optionId, msg.conversation_id);
     }
   };
 
   const handleCancel = () => {
     if (permissionId) {
-      onPermissionResponse(permissionId, null);
+      onPermissionResponse(permissionId, null, msg.conversation_id);
     }
   };
 

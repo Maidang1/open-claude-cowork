@@ -25,7 +25,18 @@ import {
 
 const execAsync = promisify(exec);
 
-let acpManager: AcpAgentManager | null = null;
+const acpManagers = new Map<string, AcpAgentManager>();
+
+const getAcpManager = (taskId?: string) => {
+  if (!taskId) {
+    throw new Error("Task id is required");
+  }
+  const manager = acpManagers.get(taskId);
+  if (!manager) {
+    throw new Error("Agent not connected");
+  }
+  return manager;
+};
 
 type PackageManager = {
   kind: "npm";
@@ -45,20 +56,34 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
     "agent:connect",
     async (
       _,
+      taskId: string,
       command: string,
       cwd?: string,
       env?: Record<string, string>,
       options?: { reuseIfSame?: boolean; createSession?: boolean },
     ) => {
       try {
-        if (!acpManager) {
-          acpManager = new AcpAgentManager((msg) => {
+        if (!taskId) {
+          return { success: false, error: "Task id is required" };
+        }
+        let manager = acpManagers.get(taskId);
+        if (!manager) {
+          manager = new AcpAgentManager((msg) => {
             if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send("agent:message", msg);
+              if (typeof msg === "string") {
+                mainWindow.webContents.send("agent:message", {
+                  type: "agent_text",
+                  text: msg,
+                  taskId,
+                });
+                return;
+              }
+              mainWindow.webContents.send("agent:message", { ...msg, taskId });
             }
           });
+          acpManagers.set(taskId, manager);
         }
-        return await acpManager.connect(command, cwd, env, options);
+        return await manager.connect(command, cwd, env, options);
       } catch (e: any) {
         console.error("Connect error:", e);
         return { success: false, error: e.message || "Connection failed" };
@@ -233,77 +258,93 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
     }
   });
 
-  ipcMain.handle("agent:permission-response", (_, id: string, response: any) => {
-    acpManager?.resolvePermission(id, response);
+  ipcMain.handle("agent:permission-response", (_, taskId: string, id: string, response: any) => {
+    try {
+      const manager = getAcpManager(taskId);
+      manager.resolvePermission(id, response);
+    } catch (e: any) {
+      console.warn("Permission response error:", e?.message || e);
+    }
   });
 
   ipcMain.handle(
     "agent:send",
-    async (_, message: string, images?: Array<{ mimeType: string; dataUrl: string }>) => {
-      if (!acpManager) {
-        throw new Error("Agent not connected");
-      }
-      await acpManager.sendMessage(message, images);
+    async (
+      _,
+      taskId: string,
+      message: string,
+      images?: Array<{ mimeType: string; dataUrl: string }>,
+    ) => {
+      const manager = getAcpManager(taskId);
+      await manager.sendMessage(message, images);
     },
   );
 
-  ipcMain.handle("agent:get-capabilities", async () => {
-    return acpManager?.getCapabilities() ?? null;
+  ipcMain.handle("agent:get-capabilities", async (_, taskId: string) => {
+    const manager = getAcpManager(taskId);
+    return manager.getCapabilities() ?? null;
   });
 
-  ipcMain.handle("agent:new-session", async (_, cwd?: string) => {
-    if (!acpManager) {
-      throw new Error("Agent not connected");
-    }
-    return await acpManager.createSession(cwd);
+  ipcMain.handle("agent:new-session", async (_, taskId: string, cwd?: string) => {
+    const manager = getAcpManager(taskId);
+    return await manager.createSession(cwd);
   });
 
-  ipcMain.handle("agent:load-session", async (_, sessionId: string, cwd?: string) => {
-    if (!acpManager) {
-      throw new Error("Agent not connected");
-    }
-    return await acpManager.loadSession(sessionId, cwd);
-  });
+  ipcMain.handle(
+    "agent:load-session",
+    async (_, taskId: string, sessionId: string, cwd?: string) => {
+      const manager = getAcpManager(taskId);
+      return await manager.loadSession(sessionId, cwd);
+    },
+  );
 
-  ipcMain.handle("agent:resume-session", async (_, sessionId: string, cwd?: string) => {
-    if (!acpManager) {
-      throw new Error("Agent not connected");
-    }
-    return await acpManager.resumeSession(sessionId, cwd);
-  });
+  ipcMain.handle(
+    "agent:resume-session",
+    async (_, taskId: string, sessionId: string, cwd?: string) => {
+      const manager = getAcpManager(taskId);
+      return await manager.resumeSession(sessionId, cwd);
+    },
+  );
 
-  ipcMain.handle("agent:set-active-session", async (_, sessionId: string, cwd?: string) => {
-    if (!acpManager) {
-      throw new Error("Agent not connected");
-    }
-    return await acpManager.setActiveSession(sessionId, cwd);
-  });
+  ipcMain.handle(
+    "agent:set-active-session",
+    async (_, taskId: string, sessionId: string, cwd?: string) => {
+      const manager = getAcpManager(taskId);
+      return await manager.setActiveSession(sessionId, cwd);
+    },
+  );
 
-  ipcMain.handle("agent:set-model", async (_, modelId: string) => {
+  ipcMain.handle("agent:set-model", async (_, taskId: string, modelId: string) => {
     try {
-      if (!acpManager) {
-        throw new Error("Agent not connected");
-      }
-      return await acpManager.setModel(modelId);
+      const manager = getAcpManager(taskId);
+      return await manager.setModel(modelId);
     } catch (e: any) {
       console.error("Set model error:", e);
       return { success: false, error: e.message };
     }
   });
 
-  ipcMain.handle("agent:disconnect", async () => {
-    if (!acpManager) {
+  ipcMain.handle("agent:disconnect", async (_, taskId: string) => {
+    if (!taskId) {
       return { success: true };
     }
-    const result = await acpManager.disconnect();
-    acpManager = null;
+    const manager = acpManagers.get(taskId);
+    if (!manager) {
+      return { success: true };
+    }
+    const result = await manager.disconnect();
+    acpManagers.delete(taskId);
     return result;
   });
 
-  ipcMain.handle("agent:stop", async () => {
-    if (!acpManager) {
+  ipcMain.handle("agent:stop", async (_, taskId: string) => {
+    if (!taskId) {
       return { success: true };
     }
-    return await acpManager.stopCurrentRequest();
+    const manager = acpManagers.get(taskId);
+    if (!manager) {
+      return { success: true };
+    }
+    return await manager.stopCurrentRequest();
   });
 };

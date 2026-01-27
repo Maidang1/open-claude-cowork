@@ -73,9 +73,9 @@ const App = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const autoConnectAttempted = useRef(false);
-  const connectInFlight = useRef(false);
+  const connectInFlightByTask = useRef<Record<string, boolean>>({});
   const sessionLoadInFlightByTask = useRef<Record<string, boolean>>({});
-  const pendingConnectTaskIdRef = useRef<string | null>(null);
+  const pendingConnectByTaskRef = useRef<Record<string, boolean>>({});
   const tasksRef = useRef<Task[]>([]);
   const activeTaskIdRef = useRef<string | null>(null);
   const isConnectedByTaskRef = useRef<Record<string, boolean>>({});
@@ -138,10 +138,6 @@ const App = () => {
   const activeConnectionStatus = activeTaskId
     ? (connectionStatusByTask[activeTaskId] ?? defaultConnectionStatus)
     : defaultConnectionStatus;
-  const anyConnected = useMemo(
-    () => Object.values(isConnectedByTask).some(Boolean),
-    [isConnectedByTask],
-  );
 
   // 初始化消息合并器
   useEffect(() => {
@@ -170,15 +166,15 @@ const App = () => {
     [persistTaskUpdates],
   );
 
-  const clearAllSessionIds = useCallback(() => {
-    setTasks((prev) => {
-      const next = prev.map((task) => ({ ...task, sessionId: null }));
-      next.forEach((task) => {
-        persistTaskUpdates(task.id, { sessionId: null });
-      });
-      return next;
-    });
-  }, [persistTaskUpdates]);
+  const clearTaskSessionId = useCallback(
+    (taskId: string) => {
+      setTasks((prev) =>
+        prev.map((task) => (task.id === taskId ? { ...task, sessionId: null } : task)),
+      );
+      persistTaskUpdates(taskId, { sessionId: null });
+    },
+    [persistTaskUpdates],
+  );
 
   const syncActiveTaskState = (task: Task | null) => {
     if (!task) return;
@@ -261,11 +257,15 @@ const App = () => {
   };
 
   const handlePermissionResponse = useCallback(
-    async (permissionId: string, optionId: string | null) => {
+    async (permissionId: string, optionId: string | null, taskId?: string) => {
       const response = optionId
         ? { outcome: { outcome: "selected", optionId } }
         : { outcome: { outcome: "cancelled" } };
-      await window.electron.invoke("agent:permission-response", permissionId, response);
+      const resolvedTaskId = taskId || activeTaskIdRef.current;
+      if (!resolvedTaskId) {
+        return;
+      }
+      await window.electron.invoke("agent:permission-response", resolvedTaskId, permissionId, response);
     },
     [],
   );
@@ -306,7 +306,7 @@ const App = () => {
     }
     if (window.electron) {
       window.electron
-        .invoke("agent:get-capabilities")
+        .invoke("agent:get-capabilities", activeTaskId)
         .then((caps) =>
           setAgentCapabilitiesByTask((prev) => ({
             ...prev,
@@ -429,9 +429,8 @@ const App = () => {
     delete sessionLoadInFlightByTask.current[taskId];
     delete agentTextMsgIdByTaskRef.current[taskId];
     delete agentThoughtMsgIdByTaskRef.current[taskId];
-    if (pendingConnectTaskIdRef.current === taskId) {
-      pendingConnectTaskIdRef.current = null;
-    }
+    delete pendingConnectByTaskRef.current[taskId];
+    delete connectInFlightByTask.current[taskId];
   }, []);
 
   const setTaskWaiting = useCallback((taskId: string, waiting: boolean) => {
@@ -452,9 +451,10 @@ const App = () => {
     (data: IncomingMessage) => {
       const tasksSnapshot = tasksRef.current;
       const activeTaskIdSnapshot = activeTaskIdRef.current;
-      const activeTaskSnapshot =
-        tasksSnapshot.find((task) => task.id === activeTaskIdSnapshot) ?? null;
       const resolveTaskId = (list: Task[]) => {
+        if (data.taskId) {
+          return data.taskId;
+        }
         if (data.sessionId) {
           const match = list.find((task) => task.sessionId === data.sessionId);
           return match?.id ?? activeTaskIdSnapshot;
@@ -478,6 +478,7 @@ const App = () => {
       if (
         !activeTaskIdSnapshot &&
         !data.sessionId &&
+        !data.taskId &&
         data.type !== "system" &&
         data.type !== "agent_info" &&
         data.type !== "permission_request"
@@ -485,12 +486,12 @@ const App = () => {
         return;
       }
       if (data.type === "agent_info") {
-        const resolvedTaskId = data.sessionId
-          ? (tasksSnapshot.find((task) => task.sessionId === data.sessionId)?.id ??
-            activeTaskIdSnapshot)
-          : activeTaskIdSnapshot;
+        const resolvedTaskId = resolveTaskId(tasksSnapshot);
+        const targetTask = resolvedTaskId
+          ? tasksSnapshot.find((task) => task.id === resolvedTaskId)
+          : null;
         const nextUsage = data.info?.tokenUsage ?? null;
-        const baseUsage = activeTaskSnapshot?.tokenUsage ?? null;
+        const baseUsage = targetTask?.tokenUsage ?? null;
         const mergedUsage = nextUsage
           ? {
               promptTokens: (baseUsage?.promptTokens ?? 0) + (nextUsage.promptTokens ?? 0),
@@ -564,20 +565,29 @@ const App = () => {
         const content = data.text || "";
         if (content.includes("Agent disconnected") || content.includes("Agent process error")) {
           const message = content.replace(/^System:\s*/, "");
-          setIsConnectedByTask({});
-          setWaitingByTask({});
-          setAgentInfoByTask({});
-          setAgentCapabilitiesByTask({});
-          clearAllSessionIds();
-          sessionLoadInFlightByTask.current = {};
-          pendingConnectTaskIdRef.current = null;
-          setConnectionStatusByTask(() => {
-            const next: Record<string, ConnectionStatus> = {};
-            tasksSnapshot.forEach((task) => {
-              next[task.id] = { state: "error", message };
-            });
+          const resolvedTaskId = resolveTaskId(tasksSnapshot);
+          if (!resolvedTaskId) {
+            return;
+          }
+          setTaskConnected(resolvedTaskId, false);
+          setTaskWaiting(resolvedTaskId, false);
+          setAgentInfoByTask((prev) => {
+            const next = { ...prev };
+            delete next[resolvedTaskId];
             return next;
           });
+          setAgentCapabilitiesByTask((prev) => {
+            const next = { ...prev };
+            delete next[resolvedTaskId];
+            return next;
+          });
+          clearTaskSessionId(resolvedTaskId);
+          delete sessionLoadInFlightByTask.current[resolvedTaskId];
+          delete pendingConnectByTaskRef.current[resolvedTaskId];
+          setConnectionStatusByTask((prev) => ({
+            ...prev,
+            [resolvedTaskId]: { state: "error", message },
+          }));
           return;
         }
         const resolvedTaskId = resolveTaskId(tasksSnapshot);
@@ -714,7 +724,7 @@ const App = () => {
     },
     [
       applyTaskUpdates,
-      clearAllSessionIds,
+      clearTaskSessionId,
       defaultAgentInfo,
       scrollToBottom,
       setAgentInfoByTask,
@@ -733,10 +743,12 @@ const App = () => {
       const data: IncomingMessage =
         typeof msg === "string" ? { type: "agent_text", text: msg } : msg;
       console.log("[agent:message]", data);
-      const resolvedTaskId = data.sessionId
-        ? (tasksRef.current.find((task) => task.sessionId === data.sessionId)?.id ??
-          activeTaskIdRef.current)
-        : activeTaskIdRef.current;
+      const resolvedTaskId =
+        data.taskId ||
+        (data.sessionId
+          ? (tasksRef.current.find((task) => task.sessionId === data.sessionId)?.id ??
+            activeTaskIdRef.current)
+          : activeTaskIdRef.current);
       if (resolvedTaskId) {
         setAgentMessageLogByTask((prev) => {
           const existing = prev[resolvedTaskId] ?? [];
@@ -790,7 +802,7 @@ const App = () => {
   }, [handleIncomingMessage]);
 
   const ensureTaskSession = async (task: Task) => {
-    if (connectInFlight.current) {
+    if (connectInFlightByTask.current[task.id]) {
       return null;
     }
     autoConnectAttempted.current = true;
@@ -800,7 +812,7 @@ const App = () => {
       message: `Connecting to: ${task.agentCommand}...`,
     });
 
-    connectInFlight.current = true;
+    connectInFlightByTask.current[task.id] = true;
     try {
       const commandName = task.agentCommand.trim().split(" ")[0];
       if (!commandName) {
@@ -823,6 +835,7 @@ const App = () => {
 
       const connectResult = await window.electron.invoke(
         "agent:connect",
+        task.id,
         task.agentCommand,
         task.workspace,
         task.agentEnv,
@@ -837,24 +850,24 @@ const App = () => {
       }
 
       if (!connectResult.reused) {
-        clearAllSessionIds();
+        clearTaskSessionId(task.id);
       }
 
       let sessionId = connectResult.reused ? task.sessionId : null;
-      const caps = await window.electron.invoke("agent:get-capabilities");
+      const caps = await window.electron.invoke("agent:get-capabilities", task.id);
       const canResume = Boolean(caps?.sessionCapabilities?.resume);
       const canLoad = Boolean(caps?.loadSession);
 
       if (connectResult.reused && sessionId) {
         try {
-          await window.electron.invoke("agent:set-active-session", sessionId, task.workspace);
+          await window.electron.invoke("agent:set-active-session", task.id, sessionId, task.workspace);
         } catch {
           sessionId = null;
         }
       } else if (task.sessionId && (canResume || canLoad)) {
         try {
           if (canResume) {
-            await window.electron.invoke("agent:resume-session", task.sessionId, task.workspace);
+            await window.electron.invoke("agent:resume-session", task.id, task.sessionId, task.workspace);
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -862,7 +875,7 @@ const App = () => {
             });
           } else if (canLoad) {
             sessionLoadInFlightByTask.current[task.id] = true;
-            await window.electron.invoke("agent:load-session", task.sessionId, task.workspace);
+            await window.electron.invoke("agent:load-session", task.id, task.sessionId, task.workspace);
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -877,7 +890,7 @@ const App = () => {
       }
 
       if (!sessionId) {
-        const sessionResult = await window.electron.invoke("agent:new-session", task.workspace);
+        const sessionResult = await window.electron.invoke("agent:new-session", task.id, task.workspace);
         sessionId = sessionResult.sessionId;
         applyTaskUpdates(task.id, {
           sessionId,
@@ -893,7 +906,7 @@ const App = () => {
       });
 
       if (task.modelId) {
-        await window.electron.invoke("agent:set-model", task.modelId);
+        await window.electron.invoke("agent:set-model", task.id, task.modelId);
       }
 
       return sessionId;
@@ -905,12 +918,11 @@ const App = () => {
       });
       return null;
     } finally {
-      connectInFlight.current = false;
-      const pendingTaskId = pendingConnectTaskIdRef.current;
-      if (pendingTaskId && pendingTaskId === activeTaskIdRef.current) {
-        pendingConnectTaskIdRef.current = null;
-        const pendingTask = tasksRef.current.find((entry) => entry.id === pendingTaskId);
-        if (pendingTask && !isConnectedByTaskRef.current[pendingTaskId]) {
+      delete connectInFlightByTask.current[task.id];
+      if (pendingConnectByTaskRef.current[task.id]) {
+        delete pendingConnectByTaskRef.current[task.id];
+        const pendingTask = tasksRef.current.find((entry) => entry.id === task.id);
+        if (pendingTask && !isConnectedByTaskRef.current[task.id]) {
           ensureTaskSession(pendingTask);
         }
       }
@@ -921,8 +933,8 @@ const App = () => {
     if (!activeTask || activeIsConnected) {
       return;
     }
-    if (connectInFlight.current) {
-      pendingConnectTaskIdRef.current = activeTask.id;
+    if (connectInFlightByTask.current[activeTask.id]) {
+      pendingConnectByTaskRef.current[activeTask.id] = true;
       setTaskConnectionStatus(activeTask.id, {
         state: "connecting",
         message: "Queued to connect...",
@@ -934,22 +946,37 @@ const App = () => {
   }, [activeIsConnected, activeTask]);
 
   const handleConnect = async () => {
-    if (connectInFlight.current) {
+    if (activeTask && connectInFlightByTask.current[activeTask.id]) {
       return;
     }
     if (activeIsConnected) {
-      await window.electron.invoke("agent:disconnect");
-      setIsConnectedByTask({});
-      setConnectionStatusByTask({});
-      setWaitingByTask({});
-      setAgentInfoByTask({});
-      setAgentCapabilitiesByTask({});
-      setAgentMessageLogByTask({});
-      clearAllSessionIds();
-      sessionLoadInFlightByTask.current = {};
-      agentTextMsgIdByTaskRef.current = {};
-      agentThoughtMsgIdByTaskRef.current = {};
-      pendingConnectTaskIdRef.current = null;
+      if (!activeTask) {
+        return;
+      }
+      await window.electron.invoke("agent:disconnect", activeTask.id);
+      setTaskConnected(activeTask.id, false);
+      setTaskConnectionStatus(activeTask.id, defaultConnectionStatus);
+      setTaskWaiting(activeTask.id, false);
+      setAgentInfoByTask((prev) => {
+        const next = { ...prev };
+        delete next[activeTask.id];
+        return next;
+      });
+      setAgentCapabilitiesByTask((prev) => {
+        const next = { ...prev };
+        delete next[activeTask.id];
+        return next;
+      });
+      setAgentMessageLogByTask((prev) => {
+        const next = { ...prev };
+        delete next[activeTask.id];
+        return next;
+      });
+      clearTaskSessionId(activeTask.id);
+      delete sessionLoadInFlightByTask.current[activeTask.id];
+      agentTextMsgIdByTaskRef.current[activeTask.id] = null;
+      agentThoughtMsgIdByTaskRef.current[activeTask.id] = null;
+      delete pendingConnectByTaskRef.current[activeTask.id];
       return;
     }
     if (!activeTask) {
@@ -1019,8 +1046,8 @@ const App = () => {
     setActiveTaskId(taskId);
     syncActiveTaskState(task);
 
-    if (connectInFlight.current) {
-      pendingConnectTaskIdRef.current = task.id;
+    if (connectInFlightByTask.current[task.id]) {
+      pendingConnectByTaskRef.current[task.id] = true;
       setTaskConnectionStatus(task.id, {
         state: "connecting",
         message: "Queued to connect...",
@@ -1028,13 +1055,18 @@ const App = () => {
       return;
     }
 
-    // 检查任务是否有会话ID，如果有且已经连接，则不重新连接
-    if (anyConnected && task.sessionId) {
+    // 该任务已连接且有会话ID时，直接切换会话
+    if (isConnectedByTaskRef.current[task.id] && task.sessionId) {
       try {
-        await window.electron.invoke("agent:set-active-session", task.sessionId, task.workspace);
+        await window.electron.invoke(
+          "agent:set-active-session",
+          task.id,
+          task.sessionId,
+          task.workspace,
+        );
         // 当切换任务时，同时更新模型到该任务的模型
         if (task.modelId) {
-          await window.electron.invoke("agent:set-model", task.modelId);
+          await window.electron.invoke("agent:set-model", task.id, task.modelId);
         }
         setTaskConnected(task.id, true);
         setTaskConnectionStatus(task.id, {
@@ -1065,6 +1097,7 @@ const App = () => {
     setTasks(nextTasks);
     await window.electron.invoke("db:delete-task", taskId);
     clearTaskState(taskId);
+    await window.electron.invoke("agent:disconnect", taskId);
 
     if (activeTaskId !== taskId) {
       return;
@@ -1079,21 +1112,17 @@ const App = () => {
       setActiveTaskId(null);
       setIsConnectedByTask({});
       setConnectionStatusByTask({});
-      clearAllSessionIds();
       sessionLoadInFlightByTask.current = {};
-      pendingConnectTaskIdRef.current = null;
-      await window.electron.invoke("agent:disconnect");
     }
   };
 
   const handleStop = async () => {
     try {
-      await window.electron.invoke("agent:stop");
-      if (activeTaskId) {
-        setTaskWaiting(activeTaskId, false);
-      } else {
-        setWaitingByTask({});
+      if (!activeTaskId) {
+        return;
       }
+      await window.electron.invoke("agent:stop", activeTaskId);
+      setTaskWaiting(activeTaskId, false);
     } catch (e: any) {
       console.error("Stop error:", e);
     }
@@ -1150,7 +1179,7 @@ const App = () => {
     agentThoughtMsgIdByTaskRef.current[activeTaskId] = null;
 
     try {
-      await window.electron.invoke("agent:send", text, images);
+      await window.electron.invoke("agent:send", activeTaskId, text, images);
     } catch (e: any) {
       if (activeTaskId) {
         setTaskWaiting(activeTaskId, false);
@@ -1164,7 +1193,10 @@ const App = () => {
 
   const handleModelPick = async (modelId: string) => {
     try {
-      const res = await window.electron.invoke("agent:set-model", modelId);
+      if (!activeTaskId) {
+        return;
+      }
+      const res = await window.electron.invoke("agent:set-model", activeTaskId, modelId);
       if (!res.success) {
         handleIncomingMessage({
           type: "system",

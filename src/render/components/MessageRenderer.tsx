@@ -7,7 +7,7 @@ import { TodoMessage } from "./TodoMessage";
 
 interface MessageRendererProps {
   msg: TMessage;
-  onPermissionResponse?: (permissionId: string, optionId: string | null) => void;
+  onPermissionResponse?: (permissionId: string, optionId: string | null, taskId?: string) => void;
   isLoading?: boolean;
   onStop?: () => void;
 }

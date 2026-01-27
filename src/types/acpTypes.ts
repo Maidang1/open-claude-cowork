@@ -117,4 +117,5 @@ export interface IncomingMessage {
   plan?: any;
   rawInput?: any;
   rawOutput?: any;
+  taskId?: string;
 }
