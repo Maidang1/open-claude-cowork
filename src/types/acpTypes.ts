@@ -5,6 +5,13 @@ export const ACP_METHODS = {
   fsWriteTextFile: "fs/write_text_file",
 } as const;
 
+export type SandboxConfig = {
+  allowedPaths: string[];
+  sensitivePaths: string[];
+  requirePermission: boolean;
+  maxFileSize: number;
+};
+
 export interface AgentPlugin {
   id: string;
   name: string;

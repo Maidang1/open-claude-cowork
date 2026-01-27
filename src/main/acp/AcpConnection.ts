@@ -4,8 +4,9 @@ import { Readable, Writable } from "node:stream";
 import { promisify } from "node:util";
 import type { ContentBlock } from "@agentclientprotocol/sdk";
 import { ClientSideConnection, ndJsonStream } from "@agentclientprotocol/sdk";
-import type { IncomingMessage } from "@src/types/acpTypes";
-import { resolveWorkspacePath } from "./paths";
+import type { IncomingMessage, SandboxConfig } from "@src/types/acpTypes";
+import { validateAndResolvePath } from "./paths";
+import { createDefaultSandboxConfig, validateFileSize } from "./sandbox";
 
 const execAsync = promisify(exec);
 
@@ -33,6 +34,7 @@ export class AcpConnection {
   private connected = false;
   private agentCapabilities: any | null = null;
   private handlers: AcpConnectionHandlers;
+  private sandboxConfig: SandboxConfig | null = null;
 
   private promptTimeout: NodeJS.Timeout | null = null;
   private promptTimeoutStartedAt: number | null = null;
@@ -41,6 +43,18 @@ export class AcpConnection {
 
   constructor(handlers: AcpConnectionHandlers) {
     this.handlers = handlers;
+  }
+
+  setSandboxConfig(config: Partial<SandboxConfig>) {
+    const currentWorkspace = this.cwd;
+    const defaultConfig = createDefaultSandboxConfig(currentWorkspace);
+
+    this.sandboxConfig = {
+      allowedPaths: config.allowedPaths ?? defaultConfig.allowedPaths,
+      sensitivePaths: config.sensitivePaths ?? defaultConfig.sensitivePaths,
+      requirePermission: config.requirePermission ?? defaultConfig.requirePermission,
+      maxFileSize: config.maxFileSize ?? defaultConfig.maxFileSize,
+    };
   }
 
   setWorkspace(cwd: string) {
@@ -116,7 +130,41 @@ export class AcpConnection {
           this.handlers.onSessionUpdate(params.sessionId, params.update);
         },
         readTextFile: async (params) => {
-          const resolvedPath = resolveWorkspacePath(this.cwd, params.path);
+          if (!this.sandboxConfig) {
+            throw new Error("Sandbox configuration not initialized");
+          }
+
+          const resolvedPath = validateAndResolvePath(this.cwd, params.path, this.sandboxConfig);
+
+          const sizeValidation = validateFileSize(resolvedPath, this.sandboxConfig.maxFileSize);
+          if (!sizeValidation.allowed) {
+            throw new Error(sizeValidation.reason);
+          }
+
+          if (this.sandboxConfig.requirePermission) {
+            this.pausePromptTimeout();
+            let response: any;
+            try {
+              response = await this.handlers.onPermissionRequest({
+                tool: "readTextFile",
+                content: `Request to read file:\n${params.path}`,
+                options: [
+                  { optionId: "allow", label: "Allow" },
+                  { optionId: "deny", label: "Deny" },
+                ],
+              });
+            } finally {
+              this.resumePromptTimeout();
+            }
+
+            if (
+              response?.outcome?.outcome !== "selected" ||
+              response.outcome.optionId !== "allow"
+            ) {
+              throw new Error("User denied file read operation");
+            }
+          }
+
           this.handlers.onToolLog?.(`Reading file: ${params.path}`);
           try {
             const content = await fs.readFile(resolvedPath, "utf-8");
@@ -126,7 +174,36 @@ export class AcpConnection {
           }
         },
         writeTextFile: async (params) => {
-          const resolvedPath = resolveWorkspacePath(this.cwd, params.path);
+          if (!this.sandboxConfig) {
+            throw new Error("Sandbox configuration not initialized");
+          }
+
+          const resolvedPath = validateAndResolvePath(this.cwd, params.path, this.sandboxConfig);
+
+          if (this.sandboxConfig.requirePermission) {
+            this.pausePromptTimeout();
+            let response: any;
+            try {
+              response = await this.handlers.onPermissionRequest({
+                tool: "writeTextFile",
+                content: `Request to write file:\n${params.path}`,
+                options: [
+                  { optionId: "allow", label: "Allow" },
+                  { optionId: "deny", label: "Deny" },
+                ],
+              });
+            } finally {
+              this.resumePromptTimeout();
+            }
+
+            if (
+              response?.outcome?.outcome !== "selected" ||
+              response.outcome.optionId !== "allow"
+            ) {
+              throw new Error("User denied file write operation");
+            }
+          }
+
           this.handlers.onToolLog?.(`Writing file: ${params.path}`);
           try {
             await fs.writeFile(resolvedPath, params.content, "utf-8");
@@ -184,6 +261,11 @@ export class AcpConnection {
     if (!this.connection) {
       throw new Error("Connection closed before initialization");
     }
+
+    if (!this.sandboxConfig) {
+      this.setSandboxConfig({});
+    }
+
     const initResult = await this.withTimeout(
       this.connection.initialize({
         protocolVersion: 1,

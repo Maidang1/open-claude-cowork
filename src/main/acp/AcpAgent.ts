@@ -1,9 +1,10 @@
 import fs from "node:fs/promises";
 import type { ContentBlock } from "@agentclientprotocol/sdk";
-import type { AgentInfoState, IncomingMessage } from "@src/types/acpTypes";
+import type { AgentInfoState, IncomingMessage, SandboxConfig } from "@src/types/acpTypes";
 import { AcpAdapter, extractTokenUsage } from "./AcpAdapter";
 import { AcpConnection } from "./AcpConnection";
-import { resolveWorkspacePath } from "./paths";
+import { validateAndResolvePath } from "./paths";
+import { createDefaultSandboxConfig } from "./sandbox";
 
 const buildPromptContent = (
   text: string,
@@ -33,9 +34,14 @@ export class AcpAgent {
   private cwd = process.cwd();
   private agentCapabilities: any | null = null;
   private pendingPermissions = new Map<string, (response: any) => void>();
+  private sandboxConfig: SandboxConfig | null = null;
 
   constructor(onMessage: (msg: IncomingMessage) => void) {
     this.onMessage = onMessage;
+  }
+
+  setSandboxConfig(config: Partial<SandboxConfig>) {
+    this.connection?.setSandboxConfig(config);
   }
 
   async connect(
@@ -334,12 +340,17 @@ export class AcpAgent {
       return text;
     }
 
+    if (!this.sandboxConfig) {
+      this.sandboxConfig = createDefaultSandboxConfig(this.cwd);
+    }
+
     const snippets: string[] = [];
     for (const match of matches) {
       const filePath = match[1];
       if (!filePath) continue;
+
       try {
-        const resolved = resolveWorkspacePath(this.cwd, filePath);
+        const resolved = validateAndResolvePath(this.cwd, filePath, this.sandboxConfig);
         const content = await fs.readFile(resolved, "utf-8");
         snippets.push(`\n\n[File: ${filePath}]\n${content}`);
       } catch (e: any) {
