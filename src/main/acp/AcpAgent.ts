@@ -4,6 +4,7 @@ import type { AgentInfoState, IncomingMessage } from "@src/types/acpTypes";
 import { AcpAdapter, extractTokenUsage } from "./AcpAdapter";
 import { AcpConnection } from "./AcpConnection";
 import { resolveWorkspacePath } from "./paths";
+import { ensurePreWriteCheckpoint } from "../utils/checkpoints";
 
 const buildPromptContent = (
   text: string,
@@ -30,6 +31,7 @@ export class AcpAgent {
   private adapter = new AcpAdapter();
   private onMessage: (msg: IncomingMessage) => void;
   private activeSessionId: string | null = null;
+  private activeTaskId: string | null = null;
   private cwd = process.cwd();
   private agentCapabilities: any | null = null;
   private pendingPermissions = new Map<string, (response: any) => void>();
@@ -65,6 +67,14 @@ export class AcpAgent {
         this.onMessage({ ...msg, sessionId: this.activeSessionId ?? undefined }),
       onToolLog: (text) =>
         this.onMessage({ type: "tool_log", text, sessionId: this.activeSessionId ?? undefined }),
+      onBeforeWrite: async () => {
+        if (!this.activeTaskId) return;
+        try {
+          await ensurePreWriteCheckpoint(this.activeTaskId, this.cwd);
+        } catch (e) {
+          console.warn("[Checkpoint] Pre-write checkpoint failed:", e);
+        }
+      },
     });
 
     await this.connection.connect(command, args, this.cwd, env);
@@ -159,7 +169,7 @@ export class AcpAgent {
     }
   }
 
-  async createSession(cwd?: string, isInitial = false) {
+  async createSession(cwd?: string, isInitial = false, taskId?: string) {
     if (!this.connection) {
       throw new Error("Connection closed before session creation");
     }
@@ -168,6 +178,9 @@ export class AcpAgent {
     this.connection.setWorkspace(nextCwd);
     const sessionResult = await this.connection.newSession(nextCwd);
     this.activeSessionId = sessionResult.sessionId;
+    if (taskId) {
+      this.activeTaskId = taskId;
+    }
     this.onMessage({
       type: "system",
       text: isInitial ? "System: Connected and Session Created." : "System: Session Created.",
@@ -177,7 +190,7 @@ export class AcpAgent {
     return sessionResult.sessionId;
   }
 
-  async loadSession(sessionId: string, cwd?: string) {
+  async loadSession(sessionId: string, cwd?: string, taskId?: string) {
     if (!this.connection) {
       throw new Error("Connection closed before session load");
     }
@@ -186,6 +199,9 @@ export class AcpAgent {
     this.connection.setWorkspace(nextCwd);
     const result = await this.connection.loadSession(sessionId, nextCwd);
     this.activeSessionId = sessionId;
+    if (taskId) {
+      this.activeTaskId = taskId;
+    }
     this.onMessage({
       type: "system",
       text: "System: Session Loaded.",
@@ -194,7 +210,7 @@ export class AcpAgent {
     this.handleSessionInitUpdate(result);
   }
 
-  async resumeSession(sessionId: string, cwd?: string) {
+  async resumeSession(sessionId: string, cwd?: string, taskId?: string) {
     if (!this.connection) {
       throw new Error("Connection closed before session resume");
     }
@@ -203,6 +219,9 @@ export class AcpAgent {
     this.connection.setWorkspace(nextCwd);
     const result = await this.connection.resumeSession(sessionId, nextCwd);
     this.activeSessionId = sessionId;
+    if (taskId) {
+      this.activeTaskId = taskId;
+    }
     this.onMessage({
       type: "system",
       text: "System: Session Resumed.",
@@ -211,8 +230,11 @@ export class AcpAgent {
     this.handleSessionInitUpdate(result);
   }
 
-  setActiveSession(sessionId: string, cwd?: string) {
+  setActiveSession(sessionId: string, cwd?: string, taskId?: string) {
     this.activeSessionId = sessionId;
+    if (taskId) {
+      this.activeTaskId = taskId;
+    }
     if (cwd && this.connection) {
       this.cwd = cwd;
       this.connection.setWorkspace(cwd);
@@ -261,6 +283,7 @@ export class AcpAgent {
     }
     this.connection = null;
     this.activeSessionId = null;
+    this.activeTaskId = null;
     this.agentCapabilities = null;
     this.pendingPermissions.clear();
   }

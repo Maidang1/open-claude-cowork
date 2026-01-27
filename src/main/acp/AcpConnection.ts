@@ -24,6 +24,7 @@ export type AcpConnectionHandlers = {
   onPermissionRequest: (payload: PermissionRequestPayload) => Promise<any>;
   onSystemMessage?: (msg: IncomingMessage) => void;
   onToolLog?: (text: string) => void;
+  onBeforeWrite?: (path: string) => Promise<void>;
 };
 
 export class AcpConnection {
@@ -129,6 +130,9 @@ export class AcpConnection {
           const resolvedPath = resolveWorkspacePath(this.cwd, params.path);
           this.handlers.onToolLog?.(`Writing file: ${params.path}`);
           try {
+            if (this.handlers.onBeforeWrite) {
+              await this.handlers.onBeforeWrite(params.path);
+            }
             await fs.writeFile(resolvedPath, params.content, "utf-8");
             return {};
           } catch (e: any) {

@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 import { type BrowserWindow, ipcMain } from "electron";
 import { AcpAgentManager } from "../acp/AcpAgentManager";
 import { acpDetector } from "../acp/AcpDetector";
+import { createCheckpoint } from "../utils/checkpoints";
 import {
   enrichPathFromLoginShell,
   getCustomNodePath,
@@ -41,6 +42,15 @@ const resolvePackageManager = async (): Promise<PackageManager> => {
 };
 
 export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
+  const createAutoCheckpoint = async (taskId?: string, workspace?: string) => {
+    if (!taskId || !workspace) return;
+    try {
+      await createCheckpoint(taskId, workspace, "auto");
+    } catch (e) {
+      console.warn("[Checkpoint] Auto checkpoint failed:", e);
+    }
+  };
+
   ipcMain.handle(
     "agent:connect",
     async (
@@ -251,32 +261,49 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
     return acpManager?.getCapabilities() ?? null;
   });
 
-  ipcMain.handle("agent:new-session", async (_, cwd?: string) => {
+  ipcMain.handle("agent:new-session", async (_, cwd?: string, taskId?: string) => {
     if (!acpManager) {
       throw new Error("Agent not connected");
     }
-    return await acpManager.createSession(cwd);
+    const result = await acpManager.createSession(cwd, taskId);
+    void createAutoCheckpoint(taskId, cwd);
+    return result;
   });
 
-  ipcMain.handle("agent:load-session", async (_, sessionId: string, cwd?: string) => {
-    if (!acpManager) {
-      throw new Error("Agent not connected");
-    }
-    return await acpManager.loadSession(sessionId, cwd);
+  ipcMain.handle(
+    "agent:load-session",
+    async (_, sessionId: string, cwd?: string, taskId?: string) => {
+      if (!acpManager) {
+        throw new Error("Agent not connected");
+      }
+      const result = await acpManager.loadSession(sessionId, cwd, taskId);
+      void createAutoCheckpoint(taskId, cwd);
+      return result;
+    },
+  );
+
+  ipcMain.handle(
+    "agent:resume-session",
+    async (_, sessionId: string, cwd?: string, taskId?: string) => {
+      if (!acpManager) {
+        throw new Error("Agent not connected");
+      }
+      const result = await acpManager.resumeSession(sessionId, cwd, taskId);
+      void createAutoCheckpoint(taskId, cwd);
+      return result;
+    },
   });
 
-  ipcMain.handle("agent:resume-session", async (_, sessionId: string, cwd?: string) => {
-    if (!acpManager) {
-      throw new Error("Agent not connected");
-    }
-    return await acpManager.resumeSession(sessionId, cwd);
-  });
-
-  ipcMain.handle("agent:set-active-session", async (_, sessionId: string, cwd?: string) => {
-    if (!acpManager) {
-      throw new Error("Agent not connected");
-    }
-    return await acpManager.setActiveSession(sessionId, cwd);
+  ipcMain.handle(
+    "agent:set-active-session",
+    async (_, sessionId: string, cwd?: string, taskId?: string) => {
+      if (!acpManager) {
+        throw new Error("Agent not connected");
+      }
+      const result = await acpManager.setActiveSession(sessionId, cwd, taskId);
+      void createAutoCheckpoint(taskId, cwd);
+      return result;
+    },
   });
 
   ipcMain.handle("agent:set-model", async (_, modelId: string) => {

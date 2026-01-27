@@ -5,8 +5,10 @@ import type {
   IncomingMessage,
   TokenUsage,
 } from "@src/types/acpTypes";
+import type { CheckpointEntry, CheckpointMeta, CheckpointReason } from "@src/types/checkpointTypes";
 
 export type { AgentCommandInfo, AgentInfoState, AgentModelInfo, IncomingMessage, TokenUsage };
+export type { CheckpointEntry, CheckpointMeta, CheckpointReason };
 
 // Shared types between main and render processes
 

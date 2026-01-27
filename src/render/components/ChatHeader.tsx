@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, History } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { AgentModelInfo, ConnectionStatus } from "../types";
 
@@ -10,6 +10,7 @@ interface ChatHeaderProps {
   isModelMenuOpen: boolean;
   onToggleModelMenu: () => void;
   onModelPick: (modelId: string) => void;
+  onOpenCheckpoints?: () => void;
   title?: string;
   showDebug?: boolean;
   agentInfo?: any;
@@ -25,6 +26,7 @@ export const ChatHeader = ({
   isModelMenuOpen,
   onToggleModelMenu,
   onModelPick,
+  onOpenCheckpoints,
   title,
   showDebug,
   agentInfo,
@@ -138,6 +140,16 @@ export const ChatHeader = ({
                 </div>
               )}
             </div>
+          )}
+          {onOpenCheckpoints && (
+            <button
+              type="button"
+              className="rounded-xl border border-ink-900/10 bg-input px-2.5 py-1.5 text-xs font-medium text-ink-700 transition-colors hover:bg-orange-50 hover:border-orange-200 dark:hover:bg-orange-500/20 dark:hover:border-orange-500/40"
+              onClick={onOpenCheckpoints}
+              title="Open checkpoints"
+            >
+              <History size={14} />
+            </button>
           )}
         </div>
       </div>

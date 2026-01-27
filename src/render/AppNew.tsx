@@ -5,11 +5,13 @@ import "./tailwind.css";
 import "./theme.css";
 import { getDefaultAgentPlugin } from "./agents/registry";
 import { ChatHeader, SendBox, Sidebar, VirtualizedMessageList } from "./components";
+import { CheckpointModal } from "./components/CheckpointModal";
 import EnvironmentSetup from "./EnvironmentSetup";
 import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
 import type {
   AgentInfoState,
+  CheckpointEntry,
   ConnectionStatus,
   ImageAttachment,
   IncomingMessage,
@@ -42,6 +44,10 @@ const App = () => {
   const [isConnectedByTask, setIsConnectedByTask] = useState<Record<string, boolean>>({});
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
+  const [isCheckpointOpen, setIsCheckpointOpen] = useState(false);
+  const [checkpoints, setCheckpoints] = useState<CheckpointEntry[]>([]);
+  const [checkpointsLoading, setCheckpointsLoading] = useState(false);
+  const [checkpointsError, setCheckpointsError] = useState<string | null>(null);
   const [currentWorkspace, setCurrentWorkspace] = useState<string | null>(null);
   const [agentCapabilitiesByTask, setAgentCapabilitiesByTask] = useState<
     Record<string, any | null>
@@ -861,14 +867,24 @@ const App = () => {
 
       if (connectResult.reused && sessionId) {
         try {
-          await window.electron.invoke("agent:set-active-session", sessionId, task.workspace);
+          await window.electron.invoke(
+            "agent:set-active-session",
+            sessionId,
+            task.workspace,
+            task.id,
+          );
         } catch {
           sessionId = null;
         }
       } else if (task.sessionId && (canResume || canLoad)) {
         try {
           if (canResume) {
-            await window.electron.invoke("agent:resume-session", task.sessionId, task.workspace);
+            await window.electron.invoke(
+              "agent:resume-session",
+              task.sessionId,
+              task.workspace,
+              task.id,
+            );
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -876,7 +892,12 @@ const App = () => {
             });
           } else if (canLoad) {
             sessionLoadInFlightByTask.current[task.id] = true;
-            await window.electron.invoke("agent:load-session", task.sessionId, task.workspace);
+            await window.electron.invoke(
+              "agent:load-session",
+              task.sessionId,
+              task.workspace,
+              task.id,
+            );
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
               updatedAt: Date.now(),
@@ -891,7 +912,11 @@ const App = () => {
       }
 
       if (!sessionId) {
-        const sessionResult = await window.electron.invoke("agent:new-session", task.workspace);
+        const sessionResult = await window.electron.invoke(
+          "agent:new-session",
+          task.workspace,
+          task.id,
+        );
         sessionId = sessionResult.sessionId;
         applyTaskUpdates(task.id, {
           sessionId,
@@ -1045,7 +1070,12 @@ const App = () => {
     // 检查任务是否有会话ID，如果有且已经连接，则不重新连接
     if (anyConnected && task.sessionId) {
       try {
-        await window.electron.invoke("agent:set-active-session", task.sessionId, task.workspace);
+        await window.electron.invoke(
+          "agent:set-active-session",
+          task.sessionId,
+          task.workspace,
+          task.id,
+        );
         // 当切换任务时，同时更新模型到该任务的模型
         if (task.modelId) {
           await window.electron.invoke("agent:set-model", task.modelId);
@@ -1078,6 +1108,7 @@ const App = () => {
     const nextTasks = tasks.filter((task) => task.id !== taskId);
     setTasks(nextTasks);
     await window.electron.invoke("db:delete-task", taskId);
+    await window.electron.invoke("checkpoint:purge-task", taskId);
     clearTaskState(taskId);
 
     if (activeTaskId !== taskId) {
@@ -1112,6 +1143,124 @@ const App = () => {
       console.error("Stop error:", e);
     }
   };
+
+  const loadCheckpoints = useCallback(async () => {
+    if (!activeTask) return;
+    setCheckpointsLoading(true);
+    setCheckpointsError(null);
+    try {
+      const result = await window.electron.invoke("checkpoint:list", activeTask.id);
+      if (result?.success) {
+        setCheckpoints(Array.isArray(result.checkpoints) ? result.checkpoints : []);
+      } else {
+        setCheckpointsError(result?.error || "Failed to load checkpoints.");
+      }
+    } catch (e: any) {
+      setCheckpointsError(e.message || "Failed to load checkpoints.");
+    } finally {
+      setCheckpointsLoading(false);
+    }
+  }, [activeTask]);
+
+  const handleOpenCheckpoints = useCallback(async () => {
+    if (!activeTask) {
+      window.alert("No active task.");
+      return;
+    }
+    setIsCheckpointOpen(true);
+    await loadCheckpoints();
+  }, [activeTask, loadCheckpoints]);
+
+  const handleCreateCheckpoint = useCallback(async () => {
+    if (!activeTask) {
+      return;
+    }
+    setCheckpointsLoading(true);
+    setCheckpointsError(null);
+    try {
+      const result = await window.electron.invoke(
+        "checkpoint:create",
+        activeTask.id,
+        activeTask.workspace,
+        "manual",
+      );
+      if (!result?.success) {
+        setCheckpointsError(result?.error || "Failed to create checkpoint.");
+      }
+      await loadCheckpoints();
+    } catch (e: any) {
+      setCheckpointsError(e.message || "Failed to create checkpoint.");
+    } finally {
+      setCheckpointsLoading(false);
+    }
+  }, [activeTask, loadCheckpoints]);
+
+  const handleRollbackCheckpoint = useCallback(
+    async (checkpointId: string, mode: "force" | "skip") => {
+      if (!activeTask) return;
+      const confirmed = window.confirm(
+        mode === "force"
+          ? "Restore files from this checkpoint? Current changes will be overwritten."
+          : "Restore files from this checkpoint? Conflicting files will be skipped.",
+      );
+      if (!confirmed) return;
+      setCheckpointsLoading(true);
+      setCheckpointsError(null);
+      try {
+        const result = await window.electron.invoke(
+          "checkpoint:rollback",
+          activeTask.id,
+          activeTask.workspace,
+          checkpointId,
+          { mode },
+        );
+        if (!result?.success) {
+          setCheckpointsError(result?.error || "Failed to restore checkpoint.");
+        } else {
+          window.alert(
+            `Restore completed. Restored: ${result.restored}, Skipped: ${result.skipped}, Conflicts: ${result.conflicts?.length || 0}`,
+          );
+        }
+      } catch (e: any) {
+        setCheckpointsError(e.message || "Failed to restore checkpoint.");
+      } finally {
+        setCheckpointsLoading(false);
+      }
+    },
+    [activeTask],
+  );
+
+  const handleDeleteCheckpoint = useCallback(
+    async (checkpointId: string) => {
+      if (!activeTask) return;
+      const confirmed = window.confirm("Delete this checkpoint? This cannot be undone.");
+      if (!confirmed) return;
+      setCheckpointsLoading(true);
+      setCheckpointsError(null);
+      try {
+        const result = await window.electron.invoke(
+          "checkpoint:delete",
+          activeTask.id,
+          checkpointId,
+        );
+        if (!result?.success) {
+          setCheckpointsError(result?.error || "Failed to delete checkpoint.");
+        }
+        await loadCheckpoints();
+      } catch (e: any) {
+        setCheckpointsError(e.message || "Failed to delete checkpoint.");
+      } finally {
+        setCheckpointsLoading(false);
+      }
+    },
+    [activeTask, loadCheckpoints],
+  );
+
+  useEffect(() => {
+    if (isCheckpointOpen) {
+      loadCheckpoints();
+    }
+  }, [isCheckpointOpen, activeTaskId, loadCheckpoints]);
 
   const handleSend = async () => {
     if (!inputText.trim() && inputImages.length === 0) return;
@@ -1309,6 +1458,17 @@ const App = () => {
           theme={theme}
           onThemeChange={setThemeMode}
         />
+        <CheckpointModal
+          isOpen={isCheckpointOpen}
+          onClose={() => setIsCheckpointOpen(false)}
+          checkpoints={checkpoints}
+          loading={checkpointsLoading}
+          error={checkpointsError}
+          taskTitle={activeTask?.title || null}
+          onCreate={handleCreateCheckpoint}
+          onRollback={handleRollbackCheckpoint}
+          onDelete={handleDeleteCheckpoint}
+        />
         <NewTaskModal
           isOpen={isNewTaskOpen}
           onClose={() => setIsNewTaskOpen(false)}
@@ -1339,6 +1499,7 @@ const App = () => {
             isModelMenuOpen={isModelMenuOpen}
             onToggleModelMenu={() => setIsModelMenuOpen((prev) => !prev)}
             onModelPick={handleModelPick}
+            onOpenCheckpoints={handleOpenCheckpoints}
             title={activeTask?.title || "Agent Cowork"}
             showDebug={showDebug}
             agentInfo={activeAgentInfo}

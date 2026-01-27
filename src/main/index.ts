@@ -5,6 +5,7 @@ import { initializeAcpDetector } from "./acp/AcpDetector";
 import { initDB } from "./db/store";
 import {
   registerAgentHandlers,
+  registerCheckpointHandlers,
   registerDbHandlers,
   registerDialogHandlers,
   registerEnvHandlers,
@@ -38,6 +39,7 @@ const initIpc = () => {
   registerDialogHandlers(mainWindow);
   registerDbHandlers();
   registerAgentHandlers(mainWindow);
+  registerCheckpointHandlers();
   registerUpdaterHandlers(mainWindow);
 };
 

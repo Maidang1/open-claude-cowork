@@ -123,18 +123,18 @@ export class AcpAgentManager {
     });
   }
 
-  async createSession(cwd?: string) {
+  async createSession(cwd?: string, taskId?: string) {
     if (!this.activeAgent) {
       throw new Error("Agent not connected");
     }
-    const sessionId = await this.activeAgent.createSession(cwd);
+    const sessionId = await this.activeAgent.createSession(cwd, false, taskId);
     if (this.activeConnectionKey) {
       this.sessionToConnectionKey.set(sessionId, this.activeConnectionKey);
     }
     return { success: true, sessionId };
   }
 
-  async loadSession(sessionId: string, cwd?: string) {
+  async loadSession(sessionId: string, cwd?: string, taskId?: string) {
     const key = this.sessionToConnectionKey.get(sessionId);
     if (key && this.agents.has(key)) {
       this.activeConnectionKey = key;
@@ -143,14 +143,14 @@ export class AcpAgentManager {
     if (!this.activeAgent) {
       throw new Error("Agent not connected");
     }
-    await this.activeAgent.loadSession(sessionId, cwd);
+    await this.activeAgent.loadSession(sessionId, cwd, taskId);
     if (this.activeConnectionKey) {
       this.sessionToConnectionKey.set(sessionId, this.activeConnectionKey);
     }
     return { success: true };
   }
 
-  async resumeSession(sessionId: string, cwd?: string) {
+  async resumeSession(sessionId: string, cwd?: string, taskId?: string) {
     const key = this.sessionToConnectionKey.get(sessionId);
     if (key && this.agents.has(key)) {
       this.activeConnectionKey = key;
@@ -159,14 +159,14 @@ export class AcpAgentManager {
     if (!this.activeAgent) {
       throw new Error("Agent not connected");
     }
-    await this.activeAgent.resumeSession(sessionId, cwd);
+    await this.activeAgent.resumeSession(sessionId, cwd, taskId);
     if (this.activeConnectionKey) {
       this.sessionToConnectionKey.set(sessionId, this.activeConnectionKey);
     }
     return { success: true };
   }
 
-  async setActiveSession(sessionId: string, cwd?: string) {
+  async setActiveSession(sessionId: string, cwd?: string, taskId?: string) {
     const key = this.sessionToConnectionKey.get(sessionId);
     if (key && this.agents.has(key)) {
       this.activeConnectionKey = key;
@@ -175,7 +175,7 @@ export class AcpAgentManager {
     if (!this.activeAgent) {
       throw new Error("Agent not connected");
     }
-    this.activeAgent.setActiveSession(sessionId, cwd);
+    this.activeAgent.setActiveSession(sessionId, cwd, taskId);
     return { success: true };
   }
 
