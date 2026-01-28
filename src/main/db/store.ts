@@ -20,6 +20,7 @@ export const initDB = () => {
       )
     `);
 
+    // Create tasks table
     db.exec(`
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
@@ -27,6 +28,7 @@ export const initDB = () => {
         workspace TEXT NOT NULL,
         agent_command TEXT NOT NULL,
         agent_env TEXT,
+        mcp_servers TEXT,
         messages TEXT,
         session_id TEXT,
         model_id TEXT,
@@ -36,6 +38,20 @@ export const initDB = () => {
         last_active_at INTEGER NOT NULL
       )
     `);
+
+    // Migration: Add mcp_servers column if it doesn't exist
+    try {
+      const tableInfo = db.prepare("PRAGMA table_info(tasks)").all() as Array<{ name: string }>;
+      const hasMcpServers = tableInfo.some((col) => col.name === "mcp_servers");
+      
+      if (!hasMcpServers) {
+        console.log("[DB] Migrating: Adding mcp_servers column to tasks table");
+        db.exec(`ALTER TABLE tasks ADD COLUMN mcp_servers TEXT`);
+        console.log("[DB] Migration completed successfully");
+      }
+    } catch (migrationError) {
+      console.error("[DB] Migration error:", migrationError);
+    }
   } catch (e) {
     console.error("[DB] Failed to initialize database:", e);
   }
@@ -69,6 +85,7 @@ type TaskRecord = {
   workspace: string;
   agentCommand: string;
   agentEnv: Record<string, string>;
+  mcpServers: unknown[];
   messages: unknown[];
   sessionId: string | null;
   modelId: string | null;
@@ -93,6 +110,7 @@ const normalizeTaskRow = (row: any): TaskRecord => ({
   workspace: row.workspace,
   agentCommand: row.agent_command,
   agentEnv: parseJson<Record<string, string>>(row.agent_env, {}),
+  mcpServers: parseJson<unknown[]>(row.mcp_servers, []),
   messages: parseJson<unknown[]>(row.messages, []),
   sessionId: row.session_id ?? null,
   modelId: row.model_id ?? null,
@@ -131,9 +149,9 @@ export const createTask = (task: TaskRecord) => {
   try {
     const stmt = db.prepare(`
       INSERT INTO tasks (
-        id, title, workspace, agent_command, agent_env, messages,
+        id, title, workspace, agent_command, agent_env, mcp_servers, messages,
         session_id, model_id, token_usage, created_at, updated_at, last_active_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       task.id,
@@ -141,6 +159,7 @@ export const createTask = (task: TaskRecord) => {
       task.workspace,
       task.agentCommand,
       JSON.stringify(task.agentEnv ?? {}),
+      JSON.stringify(task.mcpServers ?? []),
       JSON.stringify(task.messages ?? []),
       task.sessionId,
       task.modelId,
@@ -160,6 +179,7 @@ export const updateTask = (
     Omit<TaskRecord, "id"> & {
       agentCommand: string;
       agentEnv: Record<string, string>;
+      mcpServers: unknown[];
       messages: unknown[];
       sessionId: string | null;
       modelId: string | null;
@@ -183,6 +203,7 @@ export const updateTask = (
   if (updates.workspace !== undefined) setField("workspace", updates.workspace);
   if (updates.agentCommand !== undefined) setField("agent_command", updates.agentCommand);
   if (updates.agentEnv !== undefined) setField("agent_env", JSON.stringify(updates.agentEnv ?? {}));
+  if (updates.mcpServers !== undefined) setField("mcp_servers", JSON.stringify(updates.mcpServers ?? []));
   if (updates.messages !== undefined) setField("messages", JSON.stringify(updates.messages ?? []));
   if (updates.sessionId !== undefined) setField("session_id", updates.sessionId);
   if (updates.modelId !== undefined) setField("model_id", updates.modelId);

@@ -158,14 +158,14 @@ export class AcpAgent {
     }
   }
 
-  async createSession(cwd?: string, isInitial = false) {
+  async createSession(cwd?: string, isInitial = false, mcpServers?: any[]) {
     if (!this.connection) {
       throw new Error("Connection closed before session creation");
     }
     const nextCwd = cwd || this.cwd;
     this.cwd = nextCwd;
     this.connection.setWorkspace(nextCwd);
-    const sessionResult = await this.connection.newSession(nextCwd);
+    const sessionResult = await this.connection.newSession(nextCwd, mcpServers);
     this.activeSessionId = sessionResult.sessionId;
     this.onMessage({
       type: "system",
@@ -175,14 +175,14 @@ export class AcpAgent {
     return sessionResult.sessionId;
   }
 
-  async loadSession(sessionId: string, cwd?: string) {
+  async loadSession(sessionId: string, cwd?: string, mcpServers?: any[]) {
     if (!this.connection) {
       throw new Error("Connection closed before session load");
     }
     const nextCwd = cwd || this.cwd;
     this.cwd = nextCwd;
     this.connection.setWorkspace(nextCwd);
-    const result = await this.connection.loadSession(sessionId, nextCwd);
+    const result = await this.connection.loadSession(sessionId, nextCwd, mcpServers);
     this.activeSessionId = sessionId;
     this.onMessage({
       type: "system",
@@ -191,14 +191,14 @@ export class AcpAgent {
     this.handleSessionInitUpdate(result);
   }
 
-  async resumeSession(sessionId: string, cwd?: string) {
+  async resumeSession(sessionId: string, cwd?: string, mcpServers?: any[]) {
     if (!this.connection) {
       throw new Error("Connection closed before session resume");
     }
     const nextCwd = cwd || this.cwd;
     this.cwd = nextCwd;
     this.connection.setWorkspace(nextCwd);
-    const result = await this.connection.resumeSession(sessionId, nextCwd);
+    const result = await this.connection.resumeSession(sessionId, nextCwd, mcpServers);
     this.activeSessionId = sessionId;
     this.onMessage({
       type: "system",

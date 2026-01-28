@@ -284,24 +284,24 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
     return manager.getCapabilities() ?? null;
   });
 
-  ipcMain.handle("agent:new-session", async (_, taskId: string, cwd?: string) => {
+  ipcMain.handle("agent:new-session", async (_, taskId: string, cwd?: string, mcpServers?: any[]) => {
     const manager = getAcpManager(taskId);
-    return await manager.createSession(cwd);
+    return await manager.createSession(cwd, mcpServers);
   });
 
   ipcMain.handle(
     "agent:load-session",
-    async (_, taskId: string, sessionId: string, cwd?: string) => {
+    async (_, taskId: string, sessionId: string, cwd?: string, mcpServers?: any[]) => {
       const manager = getAcpManager(taskId);
-      return await manager.loadSession(sessionId, cwd);
+      return await manager.loadSession(sessionId, cwd, mcpServers);
     },
   );
 
   ipcMain.handle(
     "agent:resume-session",
-    async (_, taskId: string, sessionId: string, cwd?: string) => {
+    async (_, taskId: string, sessionId: string, cwd?: string, mcpServers?: any[]) => {
       const manager = getAcpManager(taskId);
-      return await manager.resumeSession(sessionId, cwd);
+      return await manager.resumeSession(sessionId, cwd, mcpServers);
     },
   );
 

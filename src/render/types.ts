@@ -5,8 +5,9 @@ import type {
   IncomingMessage,
   TokenUsage,
 } from "@src/types/acpTypes";
+import type { McpServerConfig } from "@src/types/mcpTypes";
 
-export type { AgentCommandInfo, AgentInfoState, AgentModelInfo, IncomingMessage, TokenUsage };
+export type { AgentCommandInfo, AgentInfoState, AgentModelInfo, IncomingMessage, TokenUsage, McpServerConfig };
 
 // Shared types between main and render processes
 
@@ -48,6 +49,7 @@ export interface Task {
   workspace: string;
   agentCommand: string;
   agentEnv: Record<string, string>;
+  mcpServers?: McpServerConfig[]; // MCP server configurations
   messages: Message[];
   sessionId: string | null;
   modelId: string | null;

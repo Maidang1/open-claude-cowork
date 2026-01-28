@@ -1,8 +1,9 @@
 import { X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { McpServerConfig } from "@src/types/mcpTypes";
 import { getAgentPlugin } from "./agents/registry";
-import { AgentSelector, EnvVariables, ThemeSettings, WallpaperSettings } from "./components/settings";
+import { AgentSelector, EnvVariables, McpSettings, ThemeSettings, WallpaperSettings } from "./components/settings";
 import { useEscapeKey, useNodeRuntime } from "./hooks";
 
 interface SettingsModalProps {
@@ -12,6 +13,9 @@ interface SettingsModalProps {
   onAgentCommandChange: (value: string) => void;
   agentEnv: Record<string, string>;
   onAgentEnvChange: (env: Record<string, string>) => void;
+  mcpServers: McpServerConfig[];
+  onMcpServersChange: (servers: McpServerConfig[]) => void;
+  mcpCapabilities?: { http?: boolean; sse?: boolean };
   isConnected: boolean;
   onConnectToggle: () => void;
   wallpaper: string | null;
@@ -27,6 +31,9 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   onAgentCommandChange,
   agentEnv,
   onAgentEnvChange,
+  mcpServers,
+  onMcpServersChange,
+  mcpCapabilities,
   isConnected,
   onConnectToggle,
   wallpaper,
@@ -36,7 +43,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
 }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const [selectedPluginId, setSelectedPluginId] = useState<string>("custom");
-  const [activeTab, setActiveTab] = useState<"agents" | "general" | "display">("agents");
+  const [activeTab, setActiveTab] = useState<"agents" | "mcp" | "general" | "display">("agents");
   const [pluginInstallStatuses, setPluginInstallStatuses] = useState<Record<string, string>>({});
 
   const selectedPlugin = getAgentPlugin(selectedPluginId);
@@ -137,6 +144,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
           <button
             type="button"
+            className={`settings-nav-item ${activeTab === "mcp" ? "active" : ""}`}
+            onClick={() => setActiveTab("mcp")}
+          >
+            <span>🔌</span> MCP Servers
+          </button>
+          <button
+            type="button"
             className={`settings-nav-item ${activeTab === "general" ? "active" : ""}`}
             onClick={() => setActiveTab("general")}
           >
@@ -157,14 +171,26 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
             <h2 className="settings-title">
               {activeTab === "agents"
                 ? "Agents Configuration"
-                : activeTab === "general"
-                  ? "General Settings"
-                  : "Display Settings"}
+                : activeTab === "mcp"
+                  ? "MCP Servers"
+                  : activeTab === "general"
+                    ? "General Settings"
+                    : "Display Settings"}
             </h2>
             <button type="button" onClick={onClose} className="modal-close-btn">
               <X size={20} />
             </button>
           </div>
+
+          {activeTab === "mcp" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              <McpSettings
+                mcpServers={mcpServers}
+                onMcpServersChange={onMcpServersChange}
+                mcpCapabilities={mcpCapabilities}
+              />
+            </div>
+          )}
 
           {activeTab === "display" && (
             <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>

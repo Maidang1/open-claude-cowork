@@ -83,27 +83,27 @@ export class AcpAgentManager {
     this.agent?.resolvePermission(id, response);
   }
 
-  async createSession(cwd?: string) {
+  async createSession(cwd?: string, mcpServers?: any[]) {
     if (!this.agent) {
       throw new Error("Agent not connected");
     }
-    const sessionId = await this.agent.createSession(cwd);
+    const sessionId = await this.agent.createSession(cwd, false, mcpServers);
     return { success: true, sessionId };
   }
 
-  async loadSession(sessionId: string, cwd?: string) {
+  async loadSession(sessionId: string, cwd?: string, mcpServers?: any[]) {
     if (!this.agent) {
       throw new Error("Agent not connected");
     }
-    await this.agent.loadSession(sessionId, cwd);
+    await this.agent.loadSession(sessionId, cwd, mcpServers);
     return { success: true };
   }
 
-  async resumeSession(sessionId: string, cwd?: string) {
+  async resumeSession(sessionId: string, cwd?: string, mcpServers?: any[]) {
     if (!this.agent) {
       throw new Error("Agent not connected");
     }
-    await this.agent.resumeSession(sessionId, cwd);
+    await this.agent.resumeSession(sessionId, cwd, mcpServers);
     return { success: true };
   }
 

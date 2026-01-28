@@ -206,44 +206,61 @@ export class AcpConnection {
     return initResult;
   }
 
-  async newSession(cwd?: string) {
+  async newSession(cwd?: string, mcpServers?: any[]) {
     if (!this.connection) {
       throw new Error("Connection closed before session creation");
     }
+    console.log("[AcpConnection] newSession called with:", {
+      cwd: cwd || this.cwd,
+      mcpServers: mcpServers || [],
+      mcpServersCount: (mcpServers || []).length,
+    });
     return this.withTimeout(
       this.connection.newSession({
         cwd: cwd || this.cwd,
-        mcpServers: [],
+        mcpServers: mcpServers || [],
       }),
       DEFAULT_REQUEST_TIMEOUT_MS,
       "session/new",
     );
   }
 
-  async loadSession(sessionId: string, cwd?: string) {
+  async loadSession(sessionId: string, cwd?: string, mcpServers?: any[]) {
     if (!this.connection || !this.connection.loadSession) {
       throw new Error("Agent does not support session/load");
     }
+    console.log("[AcpConnection] loadSession called with:", {
+      sessionId,
+      cwd: cwd || this.cwd,
+      mcpServers: mcpServers || [],
+      mcpServersCount: (mcpServers || []).length,
+    });
     return this.withTimeout(
       this.connection.loadSession({
         sessionId,
         cwd: cwd || this.cwd,
-        mcpServers: [],
+        mcpServers: mcpServers || [],
       }),
       DEFAULT_REQUEST_TIMEOUT_MS,
       "session/load",
     );
   }
 
-  async resumeSession(sessionId: string, cwd?: string) {
+  async resumeSession(sessionId: string, cwd?: string, mcpServers?: any[]) {
     if (!this.connection || !this.connection.unstable_resumeSession) {
       throw new Error("Agent does not support session/resume");
     }
+    console.log("[AcpConnection] resumeSession called with:", {
+      sessionId,
+      cwd: cwd || this.cwd,
+      mcpServers: mcpServers || [],
+      mcpServersCount: (mcpServers || []).length,
+    });
     return this.withTimeout(
       this.connection.unstable_resumeSession({
         sessionId,
         cwd: cwd || this.cwd,
-        mcpServers: [],
+        mcpServers: mcpServers || [],
       }),
       DEFAULT_REQUEST_TIMEOUT_MS,
       "session/resume",

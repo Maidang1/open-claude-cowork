@@ -15,9 +15,11 @@ import type {
   ConnectionStatus,
   ImageAttachment,
   IncomingMessage,
+  McpServerConfig,
   Task,
 } from "./types";
 import { filesToImageAttachments } from "./utils/imageUtils";
+import { convertMcpServersForAcp } from "./utils/mcpUtils";
 import { MessageComposer } from "./utils/messageComposer";
 import {
   transformIncomingMessage,
@@ -40,6 +42,7 @@ const App = () => {
   const [inputImagesByTask, setInputImagesByTask] = useState<Record<string, ImageAttachment[]>>({});
   const [agentCommand, setAgentCommand] = useState(getDefaultAgentPlugin().defaultCommand);
   const [agentEnv, setAgentEnv] = useState<Record<string, string>>({});
+  const [mcpServers, setMcpServers] = useState<McpServerConfig[]>([]);
   const [agentInfoByTask, setAgentInfoByTask] = useState<Record<string, AgentInfoState>>({});
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isConnectedByTask, setIsConnectedByTask] = useState<Record<string, boolean>>({});
@@ -202,6 +205,7 @@ const App = () => {
     setCurrentWorkspace(task.workspace);
     setAgentCommand(task.agentCommand);
     setAgentEnv(task.agentEnv || {});
+    setMcpServers(task.mcpServers || []);
     setAgentInfoByTask((prev) => {
       const existing = prev[task.id] || defaultAgentInfo;
       return {
@@ -791,6 +795,7 @@ const App = () => {
         ? storedTasks.map((task) => ({
             ...task,
             agentEnv: task.agentEnv || {},
+            mcpServers: task.mcpServers || [],
             messages: Array.isArray(task.messages) ? task.messages : [],
             sessionId: task.sessionId ?? null,
             modelId: task.modelId ?? null,
@@ -878,6 +883,14 @@ const App = () => {
       const caps = await window.electron.invoke("agent:get-capabilities", task.id);
       const canResume = Boolean(caps?.sessionCapabilities?.resume);
       const canLoad = Boolean(caps?.loadSession);
+      const mcpServersForAcp = convertMcpServersForAcp(task.mcpServers);
+
+      console.log("[App] ensureTaskSession - MCP configuration:", {
+        taskId: task.id,
+        taskMcpServers: task.mcpServers,
+        mcpServersForAcp,
+        mcpServersCount: mcpServersForAcp.length,
+      });
 
       if (connectResult.reused && sessionId) {
         try {
@@ -898,6 +911,7 @@ const App = () => {
               task.id,
               task.sessionId,
               task.workspace,
+              mcpServersForAcp,
             );
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
@@ -911,6 +925,7 @@ const App = () => {
               task.id,
               task.sessionId,
               task.workspace,
+              mcpServersForAcp,
             );
             sessionId = task.sessionId;
             applyTaskUpdates(task.id, {
@@ -930,6 +945,7 @@ const App = () => {
           "agent:new-session",
           task.id,
           task.workspace,
+          mcpServersForAcp,
         );
         sessionId = sessionResult.sessionId;
         applyTaskUpdates(task.id, {
@@ -1056,6 +1072,7 @@ const App = () => {
       workspace: nextWorkspace,
       agentCommand: nextCommand,
       agentEnv: agentEnv || {},
+      mcpServers: mcpServers || [],
       messages: [],
       sessionId: null,
       modelId: null,
@@ -1293,6 +1310,17 @@ const App = () => {
     }
   };
 
+  const handleMcpServersChange = (servers: McpServerConfig[]) => {
+    setMcpServers(servers);
+    if (activeTaskId) {
+      applyTaskUpdates(activeTaskId, {
+        mcpServers: servers,
+        updatedAt: Date.now(),
+        lastActiveAt: Date.now(),
+      });
+    }
+  };
+
   // Check environment on mount
   useEffect(() => {
     const checkEnv = async () => {
@@ -1354,6 +1382,9 @@ const App = () => {
           onAgentCommandChange={handleAgentCommandChange}
           agentEnv={agentEnv}
           onAgentEnvChange={handleAgentEnvChange}
+          mcpServers={mcpServers}
+          onMcpServersChange={handleMcpServersChange}
+          mcpCapabilities={activeAgentCapabilities?.mcpCapabilities}
           isConnected={activeIsConnected}
           onConnectToggle={handleConnect}
           wallpaper={wallpaper}
