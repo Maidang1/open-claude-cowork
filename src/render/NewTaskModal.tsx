@@ -1,6 +1,7 @@
 import { Check, ChevronDown } from "lucide-react";
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { AgentIcon } from "./agents/AgentIcon";
 import { AGENT_PLUGINS, getAgentPlugin } from "./agents/registry";
 import { useClickOutside } from "./hooks";
@@ -103,9 +104,13 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
 
   const handlePickFolder = async () => {
     try {
-      const path = await window.electron.invoke("dialog:openFolder");
-      if (path) {
-        setWorkspacePath(path);
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "Select Workspace Folder",
+      });
+      if (selected && typeof selected === "string") {
+        setWorkspacePath(selected);
       }
     } catch (error) {
       console.error("Failed to open folder:", error);

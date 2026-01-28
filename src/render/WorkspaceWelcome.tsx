@@ -1,5 +1,6 @@
 import { FolderOpen } from "lucide-react";
 import type React from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 
 interface WorkspaceWelcomeProps {
   onSelect: (path: string) => void;
@@ -8,9 +9,13 @@ interface WorkspaceWelcomeProps {
 const WorkspaceWelcome: React.FC<WorkspaceWelcomeProps> = ({ onSelect }) => {
   const handleOpenFolder = async () => {
     try {
-      const path = await window.electron.invoke("dialog:openFolder");
-      if (path) {
-        onSelect(path);
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        title: "Select Workspace Folder",
+      });
+      if (selected && typeof selected === "string") {
+        onSelect(selected);
       }
     } catch (error) {
       console.error("Failed to open folder:", error);

@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
+import { platform } from "@tauri-apps/plugin-os";
+import { relaunch } from "@tauri-apps/plugin-process";
 
 export type NodeRuntimePreference = "system" | "custom";
 
@@ -58,16 +61,20 @@ export function useNodeRuntime(isOpen: boolean): NodeRuntimeState & NodeRuntimeA
   }, []);
 
   const browseNodePath = useCallback(async () => {
-    const result = await window.electron.invoke("dialog:openFile", {
+    const currentPlatform = await platform();
+    const isWindows = currentPlatform === "win32";
+    const result = await open({
+      multiple: false,
+      directory: false,
       title: "Select Node.js executable",
       filters: [
         {
           name: "Executable",
-          extensions: process.platform === "win32" ? ["exe"] : ["*"],
+          extensions: isWindows ? ["exe"] : ["*"],
         },
       ],
     });
-    if (result) {
+    if (result && typeof result === "string") {
       setCustomNodePath(result);
     }
   }, []);
@@ -101,7 +108,7 @@ export function useNodeRuntime(isOpen: boolean): NodeRuntimeState & NodeRuntimeA
   }, [nodeRuntime, customNodePath, checkNode]);
 
   const restart = useCallback(async () => {
-    await window.electron.invoke("app:relaunch");
+    await relaunch();
   }, []);
 
   useEffect(() => {

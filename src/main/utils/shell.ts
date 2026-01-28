@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
-import { app } from "electron";
+import { getAppDataDir } from "./app-paths";
 
 const execAsync = promisify(exec);
 
@@ -98,7 +98,7 @@ export const toLatestSpecifier = (specifier: string) => {
 };
 
 // Agents directory management
-export const getAgentsDir = () => path.join(app.getPath("userData"), "agents");
+export const getAgentsDir = () => path.join(getAppDataDir(), "agents");
 
 export const getLocalAgentBin = (command: string) => {
   const agentsDir = getAgentsDir();

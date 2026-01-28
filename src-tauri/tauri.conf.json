@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Open Claude Cowork",
+  "version": "0.2.0",
+  "identifier": "com.madinah.cowork",
+  "build": {
+    "beforeDevCommand": "pnpm run dev:render",
+    "beforeBuildCommand": "pnpm run build:render && pnpm run build:sidecar",
+    "devUrl": "http://localhost:8088",
+    "frontendDist": "../release/dist/render"
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["dmg", "app"],
+    "icon": [
+      "../public/assets/icons/32x32.png",
+      "../public/assets/icons/128x128.png",
+      "../public/assets/icons/icon.icns",
+      "../public/assets/icons/icon.ico"
+    ],
+    "externalBin": ["binaries/node-sidecar"]
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Open Claude Cowork",
+        "width": 1200,
+        "height": 900,
+        "minWidth": 1000,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "plugins": {}
+}

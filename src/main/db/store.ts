@@ -1,11 +1,16 @@
 import path from "node:path";
+import fs from "node:fs";
 import Database from "better-sqlite3";
-import { app } from "electron";
+import { getAppDataDir } from "../utils/app-paths";
 
 let db: Database.Database | null = null;
 
 export const initDB = () => {
-  const dbPath = path.join(app.getPath("userData"), "app.db");
+  const appDataDir = getAppDataDir();
+  if (!fs.existsSync(appDataDir)) {
+    fs.mkdirSync(appDataDir, { recursive: true });
+  }
+  const dbPath = path.join(appDataDir, "app.db");
   console.log(`[DB] Initializing database at ${dbPath}`);
 
   try {

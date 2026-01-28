@@ -53,7 +53,9 @@ The app can install these packages into its own agents directory (`app.getPath("
 
 ## Prerequisites
 
-- **Node.js**: Version 18 or higher recommended.
+- **Node.js**: **v20 LTS or v22 LTS strongly recommended** (v18+ minimum)
+  - ⚠️ **Important**: Node.js v25 is NOT supported due to native module compatibility issues
+  - Use `nvm use` or `fnm use` to switch to the version specified in `.nvmrc`
 - **pnpm** (recommended) or **npm**: Package manager (repo dev/build).
 
 ## Installation
@@ -100,18 +102,34 @@ pnpm run build
 By default, `pnpm run build` will prompt for a platform. To build for a specific platform (no prompt):
 
 ```bash
-pnpm run build:darwin
-pnpm run build:mac-x64
-pnpm run build:mac-arm64
-pnpm run build:win32
-pnpm run build:linux
+pnpm run build:darwin   # macOS universal binary (ARM64 + x64)
+pnpm run build:win32    # Windows x64
+pnpm run build:linux    # Linux x64
 ```
 
-You can also pass a platform flag or env var:
+**Build Process Overview:**
 
+Each platform-specific build script does the following:
+1. Builds the renderer (React UI) → `release/dist/render/`
+2. Bundles the sidecar (Node.js backend) → `src-tauri/binaries/node-sidecar.js`
+3. Packages the sidecar into platform-specific binaries using `pkg`:
+   - macOS: `node-sidecar-aarch64-apple-darwin` (ARM64) + `node-sidecar-x86_64-apple-darwin` (x64)
+   - Windows: `node-sidecar-x86_64-pc-windows-msvc.exe`
+   - Linux: `node-sidecar-x86_64-unknown-linux-gnu`
+4. Runs Tauri build to create the final app bundle
+
+**Troubleshooting:**
+
+If the built app fails to start the sidecar, ensure the platform-specific binaries exist:
 ```bash
-pnpm run build -- --build-platform=darwin
-BUILD_PLATFORM=linux pnpm run build
+ls -lh src-tauri/binaries/
+# Should show: node-sidecar-{arch}-{platform} files
+```
+
+To manually rebuild sidecar binaries:
+```bash
+pnpm run build:sidecar              # Bundle JS
+pnpm run package:sidecar:all        # Package for all platforms
 ```
 
 To build and run the production build locally:

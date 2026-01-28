@@ -6,3 +6,4 @@ public/tools/bun/*/bun.exe
 public/tools/bun/*/version.txt
 .tmp/bun-download/
 .DS_Store
+src-tauri/target/*

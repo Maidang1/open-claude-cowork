@@ -1,6 +1,7 @@
 import { Check, ChevronDown, Plus, Trash2, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { AgentIcon } from "./agents/AgentIcon";
 import { AGENT_PLUGINS, getAgentPlugin } from "./agents/registry";
 import { useClickOutside, useEscapeKey, useNodeRuntime } from "./hooks";
@@ -109,11 +110,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({
   const [pluginInstallStatuses, setPluginInstallStatuses] = useState<Record<string, string>>({});
 
   const handleBrowseWallpaper = async () => {
-    const result = await window.electron.invoke("dialog:openFile", {
+    const result = await open({
+      multiple: false,
+      directory: false,
       title: "Select Wallpaper",
       filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "webp"] }],
     });
-    if (result) {
+    if (result && typeof result === "string") {
       onWallpaperChange(result);
     }
   };

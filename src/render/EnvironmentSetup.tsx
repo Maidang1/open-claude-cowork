@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { open } from "@tauri-apps/plugin-dialog";
+import { platform } from "@tauri-apps/plugin-os";
 
 type EnvStatus = {
   node: {
@@ -157,16 +159,20 @@ export default function EnvironmentSetup({ onReady }: Props) {
   };
 
   const handleBrowseNodePath = async () => {
-    const result = await window.electron.invoke("dialog:openFile", {
+    const currentPlatform = await platform();
+    const isWindows = currentPlatform === "win32";
+    const result = await open({
+      multiple: false,
+      directory: false,
       title: "Select Node.js executable",
       filters: [
         {
           name: "Executable",
-          extensions: process.platform === "win32" ? ["exe"] : ["*"],
+          extensions: isWindows ? ["exe"] : ["*"],
         },
       ],
     });
-    if (result) {
+    if (result && typeof result === "string") {
       setCustomNodePath(result);
     }
   };
@@ -254,17 +260,10 @@ export default function EnvironmentSetup({ onReady }: Props) {
           ? "Linux"
           : "your system";
 
-  envStatus?.platform === "win32"
-    ? "Requires PowerShell and may prompt for administrator approval."
-    : "Uses nvm under your login shell; PATH will be updated automatically.";
-
-  envStatus?.platform === "darwin"
-    ? "macOS"
-    : envStatus?.platform === "win32"
-      ? "Windows"
-      : envStatus?.platform === "linux"
-        ? "Linux"
-        : "your system";
+  const installHint =
+    envStatus?.platform === "win32"
+      ? "Requires PowerShell and may prompt for administrator approval."
+      : "Uses nvm under your login shell; PATH will be updated automatically.";
 
   const canAutoInstall = Boolean(envStatus && getInstallSteps(envStatus.platform).length > 0);
 
