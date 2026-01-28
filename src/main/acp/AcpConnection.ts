@@ -4,7 +4,7 @@ import { Readable, Writable } from "node:stream";
 import { promisify } from "node:util";
 import type { ContentBlock } from "@agentclientprotocol/sdk";
 import { ClientSideConnection, ndJsonStream } from "@agentclientprotocol/sdk";
-import type { IncomingMessage } from "@src/types/acpTypes";
+import type { IncomingMessage } from "@src/types/agentTypes";
 import { resolveWorkspacePath } from "./paths";
 
 const execAsync = promisify(exec);

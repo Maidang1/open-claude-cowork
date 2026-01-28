@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import type { ContentBlock } from "@agentclientprotocol/sdk";
-import type { AgentInfoState, IncomingMessage } from "@src/types/acpTypes";
+import type { AgentInfoState, IncomingMessage } from "@src/types/agentTypes";
 import { AcpAdapter, extractTokenUsage } from "./AcpAdapter";
 import { AcpConnection } from "./AcpConnection";
 import { resolveWorkspacePath } from "./paths";

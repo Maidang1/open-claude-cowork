@@ -26,6 +26,8 @@ export const initDB = () => {
         title TEXT NOT NULL,
         workspace TEXT NOT NULL,
         agent_command TEXT NOT NULL,
+        agent_type TEXT NOT NULL DEFAULT 'acp',
+        agent_config TEXT,
         agent_env TEXT,
         messages TEXT,
         session_id TEXT,
@@ -36,6 +38,12 @@ export const initDB = () => {
         last_active_at INTEGER NOT NULL
       )
     `);
+    try {
+      db.exec(`ALTER TABLE tasks ADD COLUMN agent_type TEXT NOT NULL DEFAULT 'acp'`);
+    } catch {}
+    try {
+      db.exec(`ALTER TABLE tasks ADD COLUMN agent_config TEXT`);
+    } catch {}
   } catch (e) {
     console.error("[DB] Failed to initialize database:", e);
   }
@@ -68,6 +76,8 @@ type TaskRecord = {
   title: string;
   workspace: string;
   agentCommand: string;
+  agentType: string;
+  agentConfig: Record<string, any> | null;
   agentEnv: Record<string, string>;
   messages: unknown[];
   sessionId: string | null;
@@ -92,6 +102,8 @@ const normalizeTaskRow = (row: any): TaskRecord => ({
   title: row.title,
   workspace: row.workspace,
   agentCommand: row.agent_command,
+  agentType: row.agent_type ?? "acp",
+  agentConfig: parseJson<Record<string, any> | null>(row.agent_config, null),
   agentEnv: parseJson<Record<string, string>>(row.agent_env, {}),
   messages: parseJson<unknown[]>(row.messages, []),
   sessionId: row.session_id ?? null,
@@ -131,15 +143,17 @@ export const createTask = (task: TaskRecord) => {
   try {
     const stmt = db.prepare(`
       INSERT INTO tasks (
-        id, title, workspace, agent_command, agent_env, messages,
+        id, title, workspace, agent_command, agent_type, agent_config, agent_env, messages,
         session_id, model_id, token_usage, created_at, updated_at, last_active_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       task.id,
       task.title,
       task.workspace,
       task.agentCommand,
+      task.agentType ?? "acp",
+      JSON.stringify(task.agentConfig ?? null),
       JSON.stringify(task.agentEnv ?? {}),
       JSON.stringify(task.messages ?? []),
       task.sessionId,
@@ -159,6 +173,8 @@ export const updateTask = (
   updates: Partial<
     Omit<TaskRecord, "id"> & {
       agentCommand: string;
+      agentType: string;
+      agentConfig: Record<string, any> | null;
       agentEnv: Record<string, string>;
       messages: unknown[];
       sessionId: string | null;
@@ -182,6 +198,9 @@ export const updateTask = (
   if (updates.title !== undefined) setField("title", updates.title);
   if (updates.workspace !== undefined) setField("workspace", updates.workspace);
   if (updates.agentCommand !== undefined) setField("agent_command", updates.agentCommand);
+  if (updates.agentType !== undefined) setField("agent_type", updates.agentType);
+  if (updates.agentConfig !== undefined)
+    setField("agent_config", JSON.stringify(updates.agentConfig ?? null));
   if (updates.agentEnv !== undefined) setField("agent_env", JSON.stringify(updates.agentEnv ?? {}));
   if (updates.messages !== undefined) setField("messages", JSON.stringify(updates.messages ?? []));
   if (updates.sessionId !== undefined) setField("session_id", updates.sessionId);

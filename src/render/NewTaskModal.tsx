@@ -8,7 +8,13 @@ import { useClickOutside } from "./hooks";
 interface NewTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (payload: { title: string; workspace: string; agentCommand: string }) => void;
+  onCreate: (payload: {
+    title: string;
+    workspace: string;
+    agentCommand: string;
+    agentType: "acp" | "claude-sdk";
+    agentConfig: Record<string, any> | null;
+  }) => void;
   initialWorkspace: string | null;
   initialAgentCommand: string;
   defaultQwenCommand?: string;
@@ -29,6 +35,10 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
   const [customCommand, setCustomCommand] = useState(initialAgentCommand);
   const [pluginInstallStatuses, setPluginInstallStatuses] = useState<Record<string, string>>({});
   const [isAgentDropdownOpen, setIsAgentDropdownOpen] = useState(false);
+  const [claudeApiKey, setClaudeApiKey] = useState("");
+  const [claudeModel, setClaudeModel] = useState("");
+  const [claudeBaseUrl, setClaudeBaseUrl] = useState("");
+  const [claudePermissionMode, setClaudePermissionMode] = useState("ask");
 
   // Check install status for all plugins
   useEffect(() => {
@@ -58,6 +68,10 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
     if (!isOpen) return;
     setTitle("New Task");
     setWorkspacePath(initialWorkspace || "");
+    setClaudeApiKey("");
+    setClaudeModel("");
+    setClaudeBaseUrl("");
+    setClaudePermissionMode("ask");
 
     // Determine plugin from initial command
     let found = false;
@@ -114,8 +128,9 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
 
   const selectedPlugin = getAgentPlugin(selectedPluginId);
   const resolvedCommand = selectedPlugin ? selectedPlugin.defaultCommand : customCommand.trim();
+  const isClaudeSdk = selectedPluginId === "claude-sdk";
 
-  const canCreate = Boolean(workspacePath && resolvedCommand);
+  const canCreate = Boolean(workspacePath && (isClaudeSdk || resolvedCommand));
 
   const handlePluginChange = (pluginId: string) => {
     setSelectedPluginId(pluginId);
@@ -268,20 +283,80 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
               )}
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label htmlFor="new-task-agent-command" className="modal-input-hint">
-                Agent Command
-              </label>
-              <input
-                id="new-task-agent-command"
-                type="text"
-                value={selectedPlugin ? selectedPlugin.defaultCommand : customCommand}
-                onChange={(e) => setCustomCommand(e.target.value)}
-                disabled={!!selectedPlugin}
-                placeholder="Enter agent command"
-                className="modal-input"
-              />
-            </div>
+            {!isClaudeSdk && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label htmlFor="new-task-agent-command" className="modal-input-hint">
+                  Agent Command
+                </label>
+                <input
+                  id="new-task-agent-command"
+                  type="text"
+                  value={selectedPlugin ? selectedPlugin.defaultCommand : customCommand}
+                  onChange={(e) => setCustomCommand(e.target.value)}
+                  disabled={!!selectedPlugin}
+                  placeholder="Enter agent command"
+                  className="modal-input"
+                />
+              </div>
+            )}
+
+            {isClaudeSdk && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <label htmlFor="claude-api-key" className="modal-input-hint">
+                    Claude API Key
+                  </label>
+                  <input
+                    id="claude-api-key"
+                    type="password"
+                    value={claudeApiKey}
+                    onChange={(e) => setClaudeApiKey(e.target.value)}
+                    placeholder="Enter Claude API key"
+                    className="modal-input"
+                  />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <label htmlFor="claude-model" className="modal-input-hint">
+                    Model
+                  </label>
+                  <input
+                    id="claude-model"
+                    type="text"
+                    value={claudeModel}
+                    onChange={(e) => setClaudeModel(e.target.value)}
+                    placeholder="e.g. claude-3-7-sonnet-latest"
+                    className="modal-input"
+                  />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <label htmlFor="claude-base-url" className="modal-input-hint">
+                    Base URL (optional)
+                  </label>
+                  <input
+                    id="claude-base-url"
+                    type="text"
+                    value={claudeBaseUrl}
+                    onChange={(e) => setClaudeBaseUrl(e.target.value)}
+                    placeholder="https://api.anthropic.com"
+                    className="modal-input"
+                  />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <label htmlFor="claude-permission-mode" className="modal-input-hint">
+                    Permission Mode
+                  </label>
+                  <select
+                    id="claude-permission-mode"
+                    value={claudePermissionMode}
+                    onChange={(e) => setClaudePermissionMode(e.target.value)}
+                    className="modal-input"
+                  >
+                    <option value="ask">Ask</option>
+                    <option value="bypassPermissions">Bypass</option>
+                  </select>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -295,7 +370,18 @@ const NewTaskModal: React.FC<NewTaskModalProps> = ({
               onCreate({
                 title: title.trim() || "New Task",
                 workspace: workspacePath,
-                agentCommand: resolvedCommand,
+                agentCommand: isClaudeSdk ? "claude-sdk" : resolvedCommand,
+                agentType: isClaudeSdk ? "claude-sdk" : "acp",
+                agentConfig: isClaudeSdk
+                  ? {
+                      apiKey: claudeApiKey.trim() || undefined,
+                      model: claudeModel.trim() || undefined,
+                      baseUrl: claudeBaseUrl.trim() || undefined,
+                      options: {
+                        permissionMode: claudePermissionMode,
+                      },
+                    }
+                  : null,
               })
             }
             disabled={!canCreate}

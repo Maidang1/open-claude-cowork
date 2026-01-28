@@ -1,4 +1,4 @@
-import type { IncomingMessage } from "@src/types/acpTypes";
+import type { IncomingMessage } from "@src/types/agentTypes";
 import {
   enrichPathFromLoginShell,
   getCustomNodePath,

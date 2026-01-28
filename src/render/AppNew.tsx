@@ -14,6 +14,7 @@ import "./tailwind.css";
 import "./theme.css";
 import { getDefaultAgentPlugin } from "./agents/registry";
 import { ChatHeader, MessageRenderer, SendBox, Sidebar } from "./components";
+import { ClaudeChat } from "./claude-sdk/ClaudeChat";
 import EnvironmentSetup from "./EnvironmentSetup";
 import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
@@ -825,6 +826,8 @@ const App = () => {
       const loadedTasks = Array.isArray(storedTasks)
         ? storedTasks.map((task) => ({
             ...task,
+            agentType: task.agentType ?? "acp",
+            agentConfig: task.agentConfig ?? null,
             agentEnv: task.agentEnv || {},
             messages: Array.isArray(task.messages) ? task.messages : [],
             sessionId: task.sessionId ?? null,
@@ -865,42 +868,70 @@ const App = () => {
     sessionLoadInFlightByTask.current[task.id] = false;
     setTaskConnectionStatus(task.id, {
       state: "connecting",
-      message: `Connecting to: ${task.agentCommand}...`,
+      message:
+        task.agentType === "claude-sdk"
+          ? "Connecting to: Claude SDK..."
+          : `Connecting to: ${task.agentCommand}...`,
     });
 
     connectInFlightByTask.current[task.id] = true;
     try {
-      const commandName = task.agentCommand.trim().split(" ")[0];
-      if (!commandName) {
-        setTaskConnectionStatus(task.id, {
-          state: "error",
-          message: "Agent command is empty.",
-        });
-        return null;
-      }
-      if (!commandName.includes("/") && !commandName.startsWith(".")) {
-        const check = await window.electron.invoke("agent:check-command", commandName);
-        if (!check.installed) {
+      if (task.agentType !== "claude-sdk") {
+        const commandName = task.agentCommand.trim().split(" ")[0];
+        if (!commandName) {
           setTaskConnectionStatus(task.id, {
             state: "error",
-            message: `${commandName} not installed. Please check settings.`,
+            message: "Agent command is empty.",
           });
           return null;
         }
+        if (!commandName.includes("/") && !commandName.startsWith(".")) {
+          const check = await window.electron.invoke("agent:check-command", commandName);
+          if (!check.installed) {
+            setTaskConnectionStatus(task.id, {
+              state: "error",
+              message: `${commandName} not installed. Please check settings.`,
+            });
+            return null;
+          }
+        }
       }
 
-      const connectResult = await window.electron.invoke(
-        "agent:connect",
-        task.id,
-        task.agentCommand,
-        task.workspace,
-        task.agentEnv,
-        { reuseIfSame: true, createSession: false },
-      );
+      const providerConfig =
+        task.agentType === "claude-sdk"
+          ? {
+              type: "claude-sdk" as const,
+              payload: {
+                ...(task.agentConfig ?? {}),
+                cwd: task.workspace,
+              },
+            }
+          : {
+              type: "acp" as const,
+              payload: {
+                command: task.agentCommand,
+                cwd: task.workspace,
+                env: task.agentEnv,
+              },
+            };
+
+      const connectResult = await window.electron.invoke("agent:connect", task.id, providerConfig, {
+        reuseIfSame: true,
+        createSession: false,
+      });
       if (!connectResult.success) {
         setTaskConnectionStatus(task.id, {
           state: "error",
           message: `Connection failed: ${connectResult.error}`,
+        });
+        return null;
+      }
+
+      if (task.agentType === "claude-sdk") {
+        setTaskConnected(task.id, true);
+        setTaskConnectionStatus(task.id, {
+          state: "connected",
+          message: "Connected.",
         });
         return null;
       }
@@ -1059,7 +1090,10 @@ const App = () => {
     }
     setTaskConnectionStatus(activeTask.id, {
       state: "connecting",
-      message: `Connecting to: ${activeTask.agentCommand}...`,
+      message:
+        activeTask.agentType === "claude-sdk"
+          ? "Connecting to: Claude SDK..."
+          : `Connecting to: ${activeTask.agentCommand}...`,
     });
     await ensureTaskSession(activeTask);
     setIsSettingsOpen(false);
@@ -1080,6 +1114,8 @@ const App = () => {
     title: string;
     workspace: string;
     agentCommand: string;
+    agentType: "acp" | "claude-sdk";
+    agentConfig: Record<string, any> | null;
   }) => {
     const nextWorkspace = payload.workspace;
     const nextCommand = payload.agentCommand;
@@ -1089,6 +1125,8 @@ const App = () => {
       title: payload.title,
       workspace: nextWorkspace,
       agentCommand: nextCommand,
+      agentType: payload.agentType,
+      agentConfig: payload.agentConfig ?? null,
       agentEnv: agentEnv || {},
       messages: [],
       sessionId: null,
@@ -1131,7 +1169,7 @@ const App = () => {
     }
 
     // 该任务已连接且有会话ID时，直接切换会话
-    if (isConnectedByTaskRef.current[task.id] && task.sessionId) {
+    if (task.agentType !== "claude-sdk" && isConnectedByTaskRef.current[task.id] && task.sessionId) {
       try {
         await window.electron.invoke(
           "agent:set-active-session",
@@ -1269,6 +1307,13 @@ const App = () => {
       if (!activeTaskId) {
         return;
       }
+      if (activeTask?.agentType === "claude-sdk") {
+        handleIncomingMessage({
+          type: "system",
+          text: "Model switching is not supported for Claude SDK tasks.",
+        });
+        return;
+      }
       const res = await window.electron.invoke("agent:set-model", activeTaskId, modelId);
       if (!res.success) {
         handleIncomingMessage({
@@ -1306,6 +1351,9 @@ const App = () => {
   };
 
   const handleAgentCommandChange = (value: string) => {
+    if (activeTask?.agentType === "claude-sdk") {
+      return;
+    }
     setAgentCommand(value);
     if (activeTaskId) {
       applyTaskUpdates(activeTaskId, {
@@ -1317,6 +1365,9 @@ const App = () => {
   };
 
   const handleAgentEnvChange = (env: Record<string, string>) => {
+    if (activeTask?.agentType === "claude-sdk") {
+      return;
+    }
     setAgentEnv(env);
     if (activeTaskId) {
       applyTaskUpdates(activeTaskId, {
@@ -1440,71 +1491,90 @@ const App = () => {
             agentMessageLog={activeAgentMessageLog}
           />
 
-          <div className="relative flex-1 bg-surface-cream px-5">
-            {activeTask ? (
+          {activeTask ? (
+            activeTask.agentType === "claude-sdk" ? (
+              <ClaudeChat
+                taskId={activeTask.id}
+                virtualMessages={virtualMessages}
+                virtuosoRef={virtuosoRef}
+                autoFollowOutput={autoFollowOutput}
+                onAtBottomStateChange={handleAtBottomStateChange}
+                onAtTopStateChange={handleAtTopStateChange}
+                isWaitingForResponse={isWaitingForResponse}
+                onPermissionResponse={handlePermissionResponse}
+                onStop={handleStop}
+                inputText={inputText}
+                onInputTextChange={setCurrentInputText}
+                inputImages={inputImages}
+                onInputImagesChange={setCurrentInputImages}
+                onInputImagesAppend={appendCurrentInputImages}
+                onSend={handleSend}
+              />
+            ) : (
               <>
-                <Virtuoso
-                  key={activeTask.id}
-                  ref={virtuosoRef}
-                  data={virtualMessages}
-                  style={{ height: "100%" }}
-                  followOutput={autoFollowOutput ? "smooth" : false}
-                  atBottomStateChange={handleAtBottomStateChange}
-                  atTopStateChange={handleAtTopStateChange}
-                  computeItemKey={(index, msg) => msg.id || index}
-                  increaseViewportBy={{ top: 400, bottom: 800 }}
-                  components={{
-                    List: forwardRef<
-                      HTMLDivElement,
-                      HTMLAttributes<HTMLDivElement>
-                    >((props, ref) => (
-                      <div
-                        ref={ref}
-                        {...props}
-                        className={`flex w-full flex-col gap-1 px-4 pt-5 ${
-                          props.className || ""
-                        }`}
+                <div className="relative flex-1 bg-surface-cream px-5">
+                  <Virtuoso
+                    key={activeTask.id}
+                    ref={virtuosoRef}
+                    data={virtualMessages}
+                    style={{ height: "100%" }}
+                    followOutput={autoFollowOutput ? "smooth" : false}
+                    atBottomStateChange={handleAtBottomStateChange}
+                    atTopStateChange={handleAtTopStateChange}
+                    computeItemKey={(index, msg) => msg.id || index}
+                    increaseViewportBy={{ top: 400, bottom: 800 }}
+                    components={{
+                      List: forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
+                        (props, ref) => (
+                          <div
+                            ref={ref}
+                            {...props}
+                            className={`flex w-full flex-col gap-1 px-4 pt-5 ${
+                              props.className || ""
+                            }`}
+                          />
+                        ),
+                      ),
+                      EmptyPlaceholder: () => (
+                        <div className="w-full px-4 pt-5 text-center text-muted">
+                          <div className="mb-2">Beginning of conversation</div>
+                          <div className="mx-auto h-px w-10 bg-ink-900/10" />
+                        </div>
+                      ),
+                    }}
+                    itemContent={(_, msg) => (
+                      <MessageRenderer
+                        msg={msg}
+                        onPermissionResponse={handlePermissionResponse}
+                        isLoading={msg.id === "loading" && isWaitingForResponse}
+                        onStop={msg.id === "loading" ? handleStop : undefined}
                       />
-                    )),
-                    EmptyPlaceholder: () => (
-                      <div className="w-full px-4 pt-5 text-center text-muted">
-                        <div className="mb-2">Beginning of conversation</div>
-                        <div className="mx-auto h-px w-10 bg-ink-900/10" />
-                      </div>
-                    ),
+                    )}
+                  />
+                </div>
+
+                <SendBox
+                  value={inputText}
+                  onChange={setCurrentInputText}
+                  loading={isWaitingForResponse}
+                  placeholder="Describe what you want agent to handle... (paste images to include)"
+                  onStop={handleStop}
+                  onFilesAdded={(files) => {
+                    filesToImageAttachments(files, appendCurrentInputImages);
                   }}
-                  itemContent={(_, msg) => (
-                    <MessageRenderer
-                      msg={msg}
-                      onPermissionResponse={handlePermissionResponse}
-                      isLoading={msg.id === "loading" && isWaitingForResponse}
-                      onStop={msg.id === "loading" ? handleStop : undefined}
-                    />
-                  )}
+                  supportedExts={["image/png", "image/jpeg", "image/webp"]}
+                  onSend={handleSend}
+                  images={inputImages}
+                  onImagesChange={setCurrentInputImages}
                 />
               </>
-            ) : (
-              <div className="w-full px-4 pt-5 text-center text-muted">
-                <div className="mb-2">Beginning of conversation</div>
-                <div className="mx-auto h-px w-10 bg-ink-900/10" />
-              </div>
-            )}
-          </div>
-
-          <SendBox
-            value={inputText}
-            onChange={setCurrentInputText}
-            loading={isWaitingForResponse}
-            placeholder="Describe what you want agent to handle... (paste images to include)"
-            onStop={handleStop}
-            onFilesAdded={(files) => {
-              filesToImageAttachments(files, appendCurrentInputImages);
-            }}
-            supportedExts={["image/png", "image/jpeg", "image/webp"]}
-            onSend={handleSend}
-            images={inputImages}
-            onImagesChange={setCurrentInputImages}
-          />
+            )
+          ) : (
+            <div className="w-full px-4 pt-5 text-center text-muted">
+              <div className="mb-2">Beginning of conversation</div>
+              <div className="mx-auto h-px w-10 bg-ink-900/10" />
+            </div>
+          )}
         </main>
       </div>
     </ConfigProvider>

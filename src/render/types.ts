@@ -4,7 +4,7 @@ import type {
   AgentModelInfo,
   IncomingMessage,
   TokenUsage,
-} from "@src/types/acpTypes";
+} from "@src/types/agentTypes";
 
 export type { AgentCommandInfo, AgentInfoState, AgentModelInfo, IncomingMessage, TokenUsage };
 
@@ -47,6 +47,8 @@ export interface Task {
   title: string;
   workspace: string;
   agentCommand: string;
+  agentType: "acp" | "claude-sdk";
+  agentConfig: Record<string, any> | null;
   agentEnv: Record<string, string>;
   messages: Message[];
   sessionId: string | null;

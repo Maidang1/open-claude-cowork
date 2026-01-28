@@ -3,7 +3,8 @@ import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import { promisify } from "node:util";
 import { type BrowserWindow, ipcMain } from "electron";
-import { AcpAgentManager } from "../acp/AcpAgentManager";
+import type { AgentProviderConfig } from "../providers/base/AgentProvider";
+import { ProviderManager } from "../providers/base/ProviderManager";
 import { acpDetector } from "../acp/AcpDetector";
 import {
   enrichPathFromLoginShell,
@@ -25,18 +26,7 @@ import {
 
 const execAsync = promisify(exec);
 
-const acpManagers = new Map<string, AcpAgentManager>();
-
-const getAcpManager = (taskId?: string) => {
-  if (!taskId) {
-    throw new Error("Task id is required");
-  }
-  const manager = acpManagers.get(taskId);
-  if (!manager) {
-    throw new Error("Agent not connected");
-  }
-  return manager;
-};
+let providerManager: ProviderManager | null = null;
 
 type PackageManager = {
   kind: "npm";
@@ -51,13 +41,28 @@ const resolvePackageManager = async (): Promise<PackageManager> => {
 };
 
 export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
+  if (!providerManager) {
+    providerManager = new ProviderManager((msg, taskId) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      if (typeof msg === "string") {
+        mainWindow.webContents.send("agent:message", {
+          type: "agent_text",
+          text: msg,
+          taskId,
+        });
+        return;
+      }
+      mainWindow.webContents.send("agent:message", { ...msg, taskId });
+    });
+  }
+
   ipcMain.handle(
     "agent:connect",
     async (
       _,
       taskId: string,
-      command: string,
-      cwd?: string,
+      configOrCommand: AgentProviderConfig | string,
+      cwdOrOptions?: string | { reuseIfSame?: boolean; createSession?: boolean },
       env?: Record<string, string>,
       options?: { reuseIfSame?: boolean; createSession?: boolean },
     ) => {
@@ -65,24 +70,30 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
         if (!taskId) {
           return { success: false, error: "Task id is required" };
         }
-        let manager = acpManagers.get(taskId);
-        if (!manager) {
-          manager = new AcpAgentManager((msg) => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              if (typeof msg === "string") {
-                mainWindow.webContents.send("agent:message", {
-                  type: "agent_text",
-                  text: msg,
-                  taskId,
-                });
-                return;
-              }
-              mainWindow.webContents.send("agent:message", { ...msg, taskId });
-            }
-          });
-          acpManagers.set(taskId, manager);
+        if (!providerManager) {
+          throw new Error("Provider manager not initialized");
         }
-        return await manager.connect(command, cwd, env, options);
+
+        let providerConfig: AgentProviderConfig;
+        let connectOptions: { reuseIfSame?: boolean; createSession?: boolean } | undefined;
+
+        if (typeof configOrCommand === "string") {
+          providerConfig = {
+            type: "acp",
+            payload: {
+              command: configOrCommand,
+              cwd: typeof cwdOrOptions === "string" ? cwdOrOptions : undefined,
+              env,
+            },
+          };
+          connectOptions = options;
+        } else {
+          providerConfig = configOrCommand;
+          connectOptions =
+            typeof cwdOrOptions === "object" ? (cwdOrOptions as typeof connectOptions) : undefined;
+        }
+
+        return await providerManager.connect(taskId, providerConfig, connectOptions);
       } catch (e: any) {
         console.error("Connect error:", e);
         return { success: false, error: e.message || "Connection failed" };
@@ -259,8 +270,10 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
 
   ipcMain.handle("agent:permission-response", (_, taskId: string, id: string, response: any) => {
     try {
-      const manager = getAcpManager(taskId);
-      manager.resolvePermission(id, response);
+      if (!providerManager) {
+        throw new Error("Provider manager not initialized");
+      }
+      providerManager.resolvePermission(taskId, id, response);
     } catch (e: any) {
       console.warn("Permission response error:", e?.message || e);
     }
@@ -274,49 +287,63 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
       message: string,
       images?: Array<{ mimeType: string; dataUrl: string }>,
     ) => {
-      const manager = getAcpManager(taskId);
-      await manager.sendMessage(message, images);
+      if (!providerManager) {
+        throw new Error("Provider manager not initialized");
+      }
+      await providerManager.sendMessage(taskId, message, images);
     },
   );
 
   ipcMain.handle("agent:get-capabilities", async (_, taskId: string) => {
-    const manager = getAcpManager(taskId);
-    return manager.getCapabilities() ?? null;
+    if (!providerManager) {
+      throw new Error("Provider manager not initialized");
+    }
+    return providerManager.getCapabilities(taskId);
   });
 
   ipcMain.handle("agent:new-session", async (_, taskId: string, cwd?: string) => {
-    const manager = getAcpManager(taskId);
-    return await manager.createSession(cwd);
+    if (!providerManager) {
+      throw new Error("Provider manager not initialized");
+    }
+    return await providerManager.createSession(taskId, cwd);
   });
 
   ipcMain.handle(
     "agent:load-session",
     async (_, taskId: string, sessionId: string, cwd?: string) => {
-      const manager = getAcpManager(taskId);
-      return await manager.loadSession(sessionId, cwd);
+      if (!providerManager) {
+        throw new Error("Provider manager not initialized");
+      }
+      return await providerManager.loadSession(taskId, sessionId, cwd);
     },
   );
 
   ipcMain.handle(
     "agent:resume-session",
     async (_, taskId: string, sessionId: string, cwd?: string) => {
-      const manager = getAcpManager(taskId);
-      return await manager.resumeSession(sessionId, cwd);
+      if (!providerManager) {
+        throw new Error("Provider manager not initialized");
+      }
+      return await providerManager.resumeSession(taskId, sessionId, cwd);
     },
   );
 
   ipcMain.handle(
     "agent:set-active-session",
     async (_, taskId: string, sessionId: string, cwd?: string) => {
-      const manager = getAcpManager(taskId);
-      return await manager.setActiveSession(sessionId, cwd);
+      if (!providerManager) {
+        throw new Error("Provider manager not initialized");
+      }
+      return await providerManager.setActiveSession(taskId, sessionId, cwd);
     },
   );
 
   ipcMain.handle("agent:set-model", async (_, taskId: string, modelId: string) => {
     try {
-      const manager = getAcpManager(taskId);
-      return await manager.setModel(modelId);
+      if (!providerManager) {
+        throw new Error("Provider manager not initialized");
+      }
+      return await providerManager.setModel(taskId, modelId);
     } catch (e: any) {
       console.error("Set model error:", e);
       return { success: false, error: e.message };
@@ -327,23 +354,19 @@ export const registerAgentHandlers = (mainWindow: BrowserWindow | null) => {
     if (!taskId) {
       return { success: true };
     }
-    const manager = acpManagers.get(taskId);
-    if (!manager) {
+    if (!providerManager) {
       return { success: true };
     }
-    const result = await manager.disconnect();
-    acpManagers.delete(taskId);
-    return result;
+    return await providerManager.disconnect(taskId);
   });
 
   ipcMain.handle("agent:stop", async (_, taskId: string) => {
     if (!taskId) {
       return { success: true };
     }
-    const manager = acpManagers.get(taskId);
-    if (!manager) {
+    if (!providerManager) {
       return { success: true };
     }
-    return await manager.stopCurrentRequest();
+    return await providerManager.stopCurrentRequest(taskId);
   });
 };

@@ -3,7 +3,7 @@ import type {
   AgentModelInfo,
   IncomingMessage,
   TokenUsage,
-} from "@src/types/acpTypes";
+} from "@src/types/agentTypes";
 
 const normalizeModelsFromConfigOptions = (configOptions: any[]) => {
   if (!Array.isArray(configOptions)) return null;
