@@ -61,6 +61,7 @@ const App = () => {
   >({});
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNewTaskOpen, setIsNewTaskOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [autoFollowOutput, setAutoFollowOutput] = useState(true);
   const handleAtBottomStateChange = useCallback((atBottom: boolean) => {
     setAutoFollowOutput((prev) => (prev === atBottom ? prev : atBottom));
@@ -1505,10 +1506,18 @@ const App = () => {
           onOpenSettings={() => setIsSettingsOpen(true)}
           theme={theme}
           onThemeChange={setThemeMode}
+          collapsed={isSidebarCollapsed}
+          onToggleCollapse={() =>
+            setIsSidebarCollapsed((prev) => !prev)
+          }
         />
 
         {/* Main Chat Area */}
-        <main className="ml-[280px] flex h-full flex-col bg-surface-cream">
+        <main
+          className={`flex h-full flex-col bg-surface-cream transition-[margin] ${
+            isSidebarCollapsed ? "ml-[72px]" : "ml-[280px]"
+          }`}
+        >
           <ChatHeader
             connectionStatus={activeConnectionStatus}
             currentWorkspace={currentWorkspace}
@@ -1535,9 +1544,7 @@ const App = () => {
                   followOutput={autoFollowOutput ? "smooth" : false}
                   atBottomStateChange={handleAtBottomStateChange}
                   atTopStateChange={handleAtTopStateChange}
-                  computeItemKey={(index, msg) =>
-                    msg.id ? msg.id + index : index
-                  }
+                  computeItemKey={(index, msg) => msg.id || index}
                   increaseViewportBy={{ top: 400, bottom: 800 }}
                   components={{
                     List: forwardRef<
@@ -1547,13 +1554,13 @@ const App = () => {
                       <div
                         ref={ref}
                         {...props}
-                        className={`mx-auto flex w-full max-w-3xl flex-col gap-1 px-4 pt-5 ${
+                        className={`flex w-full flex-col gap-1 px-4 pt-5 ${
                           props.className || ""
                         }`}
                       />
                     )),
                     EmptyPlaceholder: () => (
-                      <div className="mx-auto w-full max-w-3xl px-4 pt-5 text-center text-muted">
+                      <div className="w-full px-4 pt-5 text-center text-muted">
                         <div className="mb-2">Beginning of conversation</div>
                         <div className="mx-auto h-px w-10 bg-ink-900/10" />
                       </div>
@@ -1570,7 +1577,7 @@ const App = () => {
                 />
               </>
             ) : (
-              <div className="mx-auto w-full max-w-3xl px-4 pt-5 text-center text-muted">
+              <div className="w-full px-4 pt-5 text-center text-muted">
                 <div className="mb-2">Beginning of conversation</div>
                 <div className="mx-auto h-px w-10 bg-ink-900/10" />
               </div>

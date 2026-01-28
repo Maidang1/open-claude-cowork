@@ -1,15 +1,16 @@
 import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { TAcpToolCallMessage } from "../types/messageTypes";
 
 interface MessageAcpToolCallProps {
   msg: TAcpToolCallMessage;
 }
 
+const expandedDetailsByToolCallId = new Map<string, boolean>();
+const expandedOutputByToolCallId = new Map<string, boolean>();
+
 export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
   const [copied, setCopied] = useState<string | null>(null);
-  const [showDetails, setShowDetails] = useState(false);
-  const [isOutputExpanded, setIsOutputExpanded] = useState(false);
   const [outputHeight, setOutputHeight] = useState<number | null>(null);
   const outputRef = useState<HTMLDivElement | null>(null);
 
@@ -23,6 +24,18 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
 
   const { toolCallId, name, kind, title, description, rawInput, rawOutput } =
     mergedContent;
+  const detailStateKey = toolCallId || msg.id;
+  const [showDetails, setShowDetails] = useState(
+    () => expandedDetailsByToolCallId.get(detailStateKey) ?? false,
+  );
+  const [isOutputExpanded, setIsOutputExpanded] = useState(
+    () => expandedOutputByToolCallId.get(detailStateKey) ?? false,
+  );
+
+  useEffect(() => {
+    setShowDetails(expandedDetailsByToolCallId.get(detailStateKey) ?? false);
+    setIsOutputExpanded(expandedOutputByToolCallId.get(detailStateKey) ?? false);
+  }, [detailStateKey]);
 
   const handleCopy = async (text: string, key: string) => {
     try {
@@ -137,7 +150,7 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
   const outputLabel = "Output";
 
   return (
-    <div className="max-w-[720px] w-full">
+    <div className="w-full">
       <div className="rounded-[8px] bg-surface-secondary px-3 py-2 text-[14px] font-medium text-text-primary shadow-soft">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-success" />
@@ -168,7 +181,13 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
           {hasHiddenContent && (
             <button
               type="button"
-              onClick={() => setIsOutputExpanded((prev) => !prev)}
+              onClick={() => {
+                setIsOutputExpanded((prev) => {
+                  const next = !prev;
+                  expandedOutputByToolCallId.set(detailStateKey, next);
+                  return next;
+                });
+              }}
               className="mt-2 text-[12px] font-medium text-accent hover:text-accent-hover"
             >
               {isOutputExpanded ? "▲ Collapse" : "▼ Expand"}
@@ -181,7 +200,13 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
         <div className="mt-3">
           <button
             type="button"
-            onClick={() => setShowDetails(!showDetails)}
+            onClick={() => {
+              setShowDetails((prev) => {
+                const next = !prev;
+                expandedDetailsByToolCallId.set(detailStateKey, next);
+                return next;
+              });
+            }}
             className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary"
           >
             {showDetails ? (

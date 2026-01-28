@@ -158,9 +158,9 @@ export const SendBox = ({
   };
 
   return (
-    <section className="fixed bottom-0 left-0 right-0 bg-gradient-to-t from-surface via-surface to-transparent pb-6 px-2 lg:pb-8 lg:ml-[280px]">
+    <section className="bg-gradient-to-t from-surface via-surface to-transparent pb-6 px-2 lg:pb-8">
       <div
-        className="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-2xl border border-ink-900/10 px-4 py-3 shadow-card transition-colors  focus-within:border-[#d97757] bg-input"
+        className="flex w-full flex-col gap-2 rounded-2xl border border-ink-900/10 px-4 py-3 shadow-card transition-colors  focus-within:border-[#d97757] bg-input"
         onDrop={handleDrop}
         onDragOver={handleDragOver}
       >
