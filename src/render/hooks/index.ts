@@ -1,4 +1,11 @@
 export { type InstallStatus, useAgentInstall } from "./useAgentInstall";
+export { useChatMessages } from "./useChatMessages";
 export { useClickOutside } from "./useClickOutside";
 export { useEscapeKey } from "./useEscapeKey";
 export { type NodeRuntimePreference, useNodeRuntime } from "./useNodeRuntime";
+export { useTaskManagement } from "./useTaskManagement";
+export { useAgentConnection } from "./useAgentConnection";
+export { useInputState } from "./useInputState";
+export { useWaitingState } from "./useWaitingState";
+export { useTheme } from "./useTheme";
+export { useWallpaper } from "./useWallpaper";

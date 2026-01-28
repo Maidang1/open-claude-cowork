@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type NodeRuntimePreference = "custom";
+export type NodeRuntimePreference = "system" | "custom";
 
 interface NodeRuntimeState {
   nodeRuntime: NodeRuntimePreference;

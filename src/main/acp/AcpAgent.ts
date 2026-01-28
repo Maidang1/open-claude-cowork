@@ -122,6 +122,12 @@ export class AcpAgent {
           });
         }
       }
+      // 发送回复结束消息
+      this.onMessage({
+        type: "response_end",
+        sessionId: this.activeSessionId ?? undefined,
+        stopReason: response?.stopReason,
+      });
     } catch (err: any) {
       if (err?.message?.includes("timed out")) {
         this.onMessage({

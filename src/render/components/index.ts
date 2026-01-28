@@ -1,7 +1,9 @@
 export { ChatHeader } from "./ChatHeader";
+export { ChatPanel } from "./ChatPanel";
 export { Diff2Html } from "./Diff2Html";
 export { MessageAcpPermission } from "./MessageAcpPermission";
 export { MessageAcpToolCall } from "./MessageAcpToolCall";
+export { MessageList } from "./MessageList";
 export { MessageRenderer } from "./MessageRenderer";
 export { MessageText } from "./MessageText";
 export { SendBox } from "./SendBox";

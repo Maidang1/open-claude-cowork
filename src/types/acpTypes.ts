@@ -111,7 +111,8 @@ export interface IncomingMessage {
     | "system"
     | "permission_request"
     | "agent_plan"
-    | "agent_status";
+    | "agent_status"
+    | "response_end";
   text?: string;
   toolCallId?: string;
   id?: string;
@@ -127,4 +128,5 @@ export interface IncomingMessage {
   rawInput?: any;
   rawOutput?: any;
   taskId?: string;
+  stopReason?: string;
 }

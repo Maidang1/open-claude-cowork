@@ -1,20 +1,13 @@
 import { theme as antdTheme, ConfigProvider } from "antd";
 import { Loader2 } from "lucide-react";
-import {
-  forwardRef,
-  type HTMLAttributes,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { VirtuosoHandle } from "react-virtuoso";
 import "./tailwind.css";
 import "./theme.css";
 import { getDefaultAgentPlugin } from "./agents/registry";
-import { ChatHeader, MessageRenderer, SendBox, Sidebar } from "./components";
+import { ChatHeader, ChatPanel, SendBox, Sidebar } from "./components";
 import EnvironmentSetup from "./EnvironmentSetup";
+import { useChatMessages } from "./hooks";
 import NewTaskModal from "./NewTaskModal";
 import SettingsModal from "./SettingsModal";
 import type {
@@ -76,7 +69,7 @@ const App = () => {
   const [waitingByTask, setWaitingByTask] = useState<Record<string, boolean>>({});
 
   const [theme, setTheme] = useState<"light" | "dark" | "auto">(() => {
-    if (typeof window !== "undefined" && window.matchMedia) {
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
       return "auto";
     }
     return "light";
@@ -127,10 +120,12 @@ const App = () => {
   const activeAgentInfo = useMemo(() => {
     if (!activeTaskId) return defaultAgentInfo;
     const stored = agentInfoByTask[activeTaskId] || defaultAgentInfo;
+    // 优先使用 stored.currentModelId（来自 agent），如果没有才使用 task.modelId
+    const currentModelId = stored.currentModelId ?? activeTask?.modelId ?? null;
     return {
       models: stored.models || [],
       commands: stored.commands || [],
-      currentModelId: activeTask?.modelId ?? stored.currentModelId ?? null,
+      currentModelId,
       tokenUsage: activeTask?.tokenUsage ?? stored.tokenUsage ?? null,
     };
   }, [
@@ -157,29 +152,13 @@ const App = () => {
   const activeConnectionStatus = activeTaskId
     ? (connectionStatusByTask[activeTaskId] ?? defaultConnectionStatus)
     : defaultConnectionStatus;
-  const renderMessages = useMemo(() => {
-    if (!activeTask) return [];
-    return transformMessages(activeTask.messages, activeTaskId || "default");
-  }, [activeTask, activeTaskId]);
-  const isWaitingForResponse = activeTaskId ? Boolean(waitingByTask[activeTaskId]) : false;
-  const loadingMessage = useMemo(
-    () => ({
-      id: "loading",
-      conversation_id: activeTaskId || "default",
-      type: "thought" as const,
-      content: {
-        thought: "Thinking...",
-      },
-      position: "left" as const,
-    }),
-    [activeTaskId],
-  );
-  const virtualMessages = useMemo(() => {
-    if (isWaitingForResponse) {
-      return [...renderMessages, loadingMessage];
-    }
-    return renderMessages;
-  }, [isWaitingForResponse, loadingMessage, renderMessages]);
+
+  const { virtualMessages, isWaitingForResponse } = useChatMessages({
+    activeTask,
+    activeTaskId,
+    waitingByTask,
+    virtuosoRef,
+  });
 
   // 初始化消息合并器
   useEffect(() => {
@@ -335,13 +314,16 @@ const App = () => {
       return;
     }
     const task = tasks.find((entry) => entry.id === activeTaskId);
-    if (!task?.modelId && activeAgentInfo.currentModelId) {
+    const stored = agentInfoByTask[activeTaskId];
+    // 只有当 task 存在、task 没有 modelId、且 stored 有 currentModelId 时才同步
+    if (task && !task.modelId && stored?.currentModelId) {
       applyTaskUpdates(activeTaskId, {
-        modelId: activeAgentInfo.currentModelId,
+        modelId: stored.currentModelId,
         updatedAt: Date.now(),
       });
     }
-  }, [activeAgentInfo.currentModelId, activeTaskId, applyTaskUpdates, tasks]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTaskId, agentInfoByTask]);
 
   useEffect(() => {
     if (!activeTaskId) {
@@ -370,28 +352,15 @@ const App = () => {
   }, [activeIsConnected, activeTaskId]);
 
   useEffect(() => {
-    if (!activeTaskId && Object.keys(agentMessageLogByTask).length > 0) {
-      setAgentMessageLogByTask({});
-    }
-  }, [activeTaskId, agentMessageLogByTask]);
-
-  const scrollToBottom = useCallback(
-    (behavior: ScrollBehavior = "smooth") => {
-      const targetIndex = virtualMessages.length - 1;
-      if (targetIndex < 0) return;
-      virtuosoRef.current?.scrollToIndex({
-        index: targetIndex,
-        align: "end",
-        behavior,
+    if (!activeTaskId) {
+      setAgentMessageLogByTask((prev) => {
+        if (Object.keys(prev).length > 0) {
+          return {};
+        }
+        return prev;
       });
-    },
-    [virtualMessages.length],
-  );
-
-  useEffect(() => {
-    // 当任务切换时，滚动到聊天区域底部
-    setTimeout(() => scrollToBottom("auto"), 0);
-  }, [activeTaskId, scrollToBottom]);
+    }
+  }, [activeTaskId]);
 
   const setCurrentInputText = useCallback(
     (value: string) => {
@@ -522,16 +491,12 @@ const App = () => {
       };
       const resolvedTaskIdSnapshot = resolveTaskId(tasksSnapshot);
 
-      // Clear waiting state only for the task that owns this message
-      if (
-        data.type === "agent_text" ||
-        data.type === "agent_thought" ||
-        data.type === "tool_call" ||
-        data.type === "tool_call_update"
-      ) {
+      // Clear waiting state only when response ends
+      if (data.type === "response_end") {
         if (resolvedTaskIdSnapshot) {
           setTaskWaiting(resolvedTaskIdSnapshot, false);
         }
+        return;
       }
 
       if (
@@ -1018,7 +983,8 @@ const App = () => {
     }
     // removed hardcoded qwen check
     ensureTaskSession(activeTask);
-  }, [activeIsConnected, activeTask]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIsConnected, activeTaskId]);
 
   const handleConnect = async () => {
     if (activeTask && connectInFlightByTask.current[activeTask.id]) {
@@ -1414,9 +1380,7 @@ const App = () => {
           theme={theme}
           onThemeChange={setThemeMode}
           collapsed={isSidebarCollapsed}
-          onToggleCollapse={() =>
-            setIsSidebarCollapsed((prev) => !prev)
-          }
+          onToggleCollapse={() => setIsSidebarCollapsed((prev) => !prev)}
         />
 
         {/* Main Chat Area */}
@@ -1441,54 +1405,17 @@ const App = () => {
           />
 
           <div className="relative flex-1 bg-surface-cream px-5">
-            {activeTask ? (
-              <>
-                <Virtuoso
-                  key={activeTask.id}
-                  ref={virtuosoRef}
-                  data={virtualMessages}
-                  style={{ height: "100%" }}
-                  followOutput={autoFollowOutput ? "smooth" : false}
-                  atBottomStateChange={handleAtBottomStateChange}
-                  atTopStateChange={handleAtTopStateChange}
-                  computeItemKey={(index, msg) => msg.id || index}
-                  increaseViewportBy={{ top: 400, bottom: 800 }}
-                  components={{
-                    List: forwardRef<
-                      HTMLDivElement,
-                      HTMLAttributes<HTMLDivElement>
-                    >((props, ref) => (
-                      <div
-                        ref={ref}
-                        {...props}
-                        className={`flex w-full flex-col gap-1 px-4 pt-5 ${
-                          props.className || ""
-                        }`}
-                      />
-                    )),
-                    EmptyPlaceholder: () => (
-                      <div className="w-full px-4 pt-5 text-center text-muted">
-                        <div className="mb-2">Beginning of conversation</div>
-                        <div className="mx-auto h-px w-10 bg-ink-900/10" />
-                      </div>
-                    ),
-                  }}
-                  itemContent={(_, msg) => (
-                    <MessageRenderer
-                      msg={msg}
-                      onPermissionResponse={handlePermissionResponse}
-                      isLoading={msg.id === "loading" && isWaitingForResponse}
-                      onStop={msg.id === "loading" ? handleStop : undefined}
-                    />
-                  )}
-                />
-              </>
-            ) : (
-              <div className="w-full px-4 pt-5 text-center text-muted">
-                <div className="mb-2">Beginning of conversation</div>
-                <div className="mx-auto h-px w-10 bg-ink-900/10" />
-              </div>
-            )}
+            <ChatPanel
+              activeTaskId={activeTaskId}
+              messages={virtualMessages}
+              isWaitingForResponse={isWaitingForResponse}
+              onPermissionResponse={handlePermissionResponse}
+              onStop={handleStop}
+              virtuosoRef={virtuosoRef}
+              autoFollowOutput={autoFollowOutput}
+              atBottomStateChange={handleAtBottomStateChange}
+              atTopStateChange={handleAtTopStateChange}
+            />
           </div>
 
           <SendBox
