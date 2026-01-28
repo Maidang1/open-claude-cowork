@@ -1,10 +1,16 @@
 # open-claude-cowork
 
+## 0.1.5
+
+### Patch Changes
+
+- bug fix
+
 ## 0.1.4
 
 ### Patch Changes
 
-- 新功能 增加多 agent 并行 
+- 新功能 增加多 agent 并行
 - 消息渲染使用虚拟列表
 
 ## 0.1.3
