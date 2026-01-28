@@ -79,33 +79,17 @@ export const MessageRenderer = ({
   // 文本消息
   if (msg.type === "text") {
     const isCenter = msg.position === "center";
-    const isUser = (msg.content as any).sender === "user";
-    if (!isUser) {
-      return (
-        <div className={`my-3 ${!isCenter ? "text-left" : "text-center"}`}>
-          <div className="flex flex-col gap-1.5">
-            <div className={roleLabelClassName}>Assistant</div>
-            <div className="text-sm text-ink-800">
-              <MessageText
-                content={(msg.content as any).text}
-                images={(msg.content as any).images}
-                sender={(msg.content as any).sender}
-                align="left"
-              />
-            </div>
-          </div>
-        </div>
-      );
-    }
+    const content = msg.content as any;
+    const isUser = content.sender === "user";
     return (
       <div className={`my-3 ${!isCenter ? "text-left" : "text-center"}`}>
         <div className="flex flex-col gap-1.5">
-          <div className={roleLabelClassName}>User</div>
+          <div className={roleLabelClassName}>{isUser ? "User" : "Assistant"}</div>
           <div className="text-sm text-ink-800">
             <MessageText
-              content={(msg.content as any).text}
-              images={(msg.content as any).images}
-              sender={(msg.content as any).sender}
+              content={content.text}
+              images={content.images}
+              sender={content.sender}
               align="left"
             />
           </div>

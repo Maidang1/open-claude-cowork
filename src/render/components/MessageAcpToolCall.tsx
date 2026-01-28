@@ -22,8 +22,7 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
     [msg.content],
   );
 
-  const { toolCallId, name, kind, title, description, rawInput, rawOutput } =
-    mergedContent;
+  const { toolCallId, name, kind, title, description, rawInput, rawOutput } = mergedContent;
   const detailStateKey = toolCallId || msg.id;
   const [showDetails, setShowDetails] = useState(
     () => expandedDetailsByToolCallId.get(detailStateKey) ?? false,
@@ -63,12 +62,7 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
         if (parts.length > 0) return parts.join(" ");
       }
       const candidate =
-        input.command ||
-        input.cmd ||
-        input.input ||
-        input.query ||
-        input.prompt ||
-        input.script;
+        input.command || input.cmd || input.input || input.query || input.prompt || input.script;
       if (typeof candidate === "string") return candidate;
       try {
         return JSON.stringify(input);
@@ -155,25 +149,17 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-success" />
           <span className="text-accent font-semibold">{toolLabel}</span>
-          {commandLabel && (
-            <span className="truncate font-mono text-ink-600">
-              {commandLabel}
-            </span>
-          )}
+          {commandLabel && <span className="truncate font-mono text-ink-600">{commandLabel}</span>}
         </div>
       </div>
 
       {rawOutput !== undefined && (
         <div className="mt-2">
-          <div className="text-[14px] font-medium text-accent my-2 ">
-            {outputLabel}
-          </div>
+          <div className="text-[14px] font-medium text-accent my-2 ">{outputLabel}</div>
           <div
             ref={handleOutputRef}
             className={`rounded-[8px] bg-surface-secondary px-4 py-2 text-[14px] leading-relaxed text-text-secondary shadow-soft overflow-auto transition-all duration-200 ${
-              !isOutputExpanded && hasHiddenContent
-                ? "max-h-[200px]"
-                : "max-h-none"
+              !isOutputExpanded && hasHiddenContent ? "max-h-[200px]" : "max-h-none"
             }`}
           >
             <pre className="whitespace-pre-wrap font-mono">{outputText}</pre>
@@ -209,11 +195,7 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
             }}
             className="flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary"
           >
-            {showDetails ? (
-              <ChevronDown size={14} />
-            ) : (
-              <ChevronRight size={14} />
-            )}
+            {showDetails ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             {showDetails ? "Hide details" : "Show details"}
           </button>
         </div>
@@ -221,44 +203,28 @@ export const MessageAcpToolCall = ({ msg }: MessageAcpToolCallProps) => {
 
       {showDetails && (
         <div className="mt-3 space-y-3">
-          {description && (
-            <div className="text-xs text-text-secondary">{description}</div>
-          )}
-          {kind && (
-            <div className="text-xs text-text-secondary">Kind: {kind}</div>
-          )}
+          {description && <div className="text-xs text-text-secondary">{description}</div>}
+          {kind && <div className="text-xs text-text-secondary">Kind: {kind}</div>}
           {rawInput !== undefined && (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <h4 className="text-[11px] font-medium text-text-secondary uppercase">
-                  Input
-                </h4>
+                <h4 className="text-[11px] font-medium text-text-secondary uppercase">Input</h4>
                 <button
                   type="button"
-                  onClick={() =>
-                    handleCopy(JSON.stringify(rawInput, null, 2), "input")
-                  }
+                  onClick={() => handleCopy(JSON.stringify(rawInput, null, 2), "input")}
                   className="flex items-center gap-1 text-[11px] text-text-secondary hover:text-text-primary"
                 >
-                  {copied === "input" ? (
-                    <Check size={12} />
-                  ) : (
-                    <Copy size={12} />
-                  )}
+                  {copied === "input" ? <Check size={12} /> : <Copy size={12} />}
                   {copied === "input" ? "Copied" : "Copy"}
                 </button>
               </div>
               <pre className="rounded-lg bg-input px-3 py-2 text-[11px] text-text-secondary shadow-soft whitespace-break-spaces">
-                {typeof rawInput === "string"
-                  ? rawInput
-                  : JSON.stringify(rawInput, null, 2)}
+                {typeof rawInput === "string" ? rawInput : JSON.stringify(rawInput, null, 2)}
               </pre>
             </div>
           )}
           {toolCallId && (
-            <div className="text-[11px] text-text-tertiary">
-              Tool Call ID: {toolCallId}
-            </div>
+            <div className="text-[11px] text-text-tertiary">Tool Call ID: {toolCallId}</div>
           )}
         </div>
       )}

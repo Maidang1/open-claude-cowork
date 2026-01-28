@@ -31,17 +31,13 @@ export const buildCommandString = (file: string, args: string[]) => {
 export const buildEnvPrefix = (env?: Record<string, string>) => {
   if (!env || Object.keys(env).length === 0) return "";
   if (process.platform === "win32") {
-    return (
-      Object.entries(env)
-        .map(([key, value]) => `set "${key}=${value}"`)
-        .join(" && ") + " && "
-    );
+    return `${Object.entries(env)
+      .map(([key, value]) => `set "${key}=${value}"`)
+      .join(" && ")} && `;
   }
-  return (
-    Object.entries(env)
-      .map(([key, value]) => `${key}=${quoteForShell(value)}`)
-      .join(" ") + " "
-  );
+  return `${Object.entries(env)
+    .map(([key, value]) => `${key}=${quoteForShell(value)}`)
+    .join(" ")} `;
 };
 
 // Parse command line with proper quote handling
@@ -122,12 +118,7 @@ export const getLocalAgentBin = (command: string) => {
 
 export const readInstalledPackageVersion = async (packageName: string) => {
   const parts = packageName.split("/").filter(Boolean);
-  const pkgJsonPath = path.join(
-    getAgentsDir(),
-    "node_modules",
-    ...parts,
-    "package.json",
-  );
+  const pkgJsonPath = path.join(getAgentsDir(), "node_modules", ...parts, "package.json");
   try {
     const data = await fs.readFile(pkgJsonPath, "utf-8");
     const parsed = JSON.parse(data);
@@ -138,9 +129,7 @@ export const readInstalledPackageVersion = async (packageName: string) => {
 };
 
 // System command resolution
-export const resolveSystemCommand = async (
-  command: string,
-): Promise<string | null> => {
+export const resolveSystemCommand = async (command: string): Promise<string | null> => {
   try {
     const whichCmd = process.platform === "win32" ? "where" : "which";
     const { stdout } = await execAsync(`${whichCmd} ${command}`);

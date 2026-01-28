@@ -45,7 +45,6 @@ type PackageManager = {
 };
 
 const resolvePackageManager = async (): Promise<PackageManager> => {
-  getCustomNodePath();
   await enrichPathFromLoginShell();
   const systemNpm = await resolveSystemCommand("npm");
   return { kind: "npm", cmd: systemNpm || "npm", source: "system" };

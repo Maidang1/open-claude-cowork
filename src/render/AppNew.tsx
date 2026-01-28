@@ -24,6 +24,7 @@ import type {
   IncomingMessage,
   Task,
 } from "./types";
+import { filesToImageAttachments } from "./utils/imageUtils";
 import { MessageComposer } from "./utils/messageComposer";
 import {
   transformIncomingMessage,
@@ -1497,23 +1498,7 @@ const App = () => {
             placeholder="Describe what you want agent to handle... (paste images to include)"
             onStop={handleStop}
             onFilesAdded={(files) => {
-              const newImages: ImageAttachment[] = [];
-              files.forEach((file) => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                  newImages.push({
-                    id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-                    filename: file.name,
-                    mimeType: file.type,
-                    dataUrl: e.target?.result as string,
-                    size: file.size,
-                  });
-                  if (newImages.length === files.length) {
-                    appendCurrentInputImages(newImages);
-                  }
-                };
-                reader.readAsDataURL(file);
-              });
+              filesToImageAttachments(files, appendCurrentInputImages);
             }}
             supportedExts={["image/png", "image/jpeg", "image/webp"]}
             onSend={handleSend}

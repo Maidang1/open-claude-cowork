@@ -1,6 +1,7 @@
 import { Send, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ImageAttachment } from "../types";
+import { filesToImageAttachments } from "../utils/imageUtils";
 
 interface SendBoxProps {
   value: string;
@@ -36,8 +37,8 @@ export const SendBox = ({
 
   // 处理粘贴事件
   const handlePaste = (e: React.ClipboardEvent) => {
-    const imageFilesFromClipboard = Array.from(e.clipboardData.files).filter(
-      (file) => file.type.startsWith("image/"),
+    const imageFilesFromClipboard = Array.from(e.clipboardData.files).filter((file) =>
+      file.type.startsWith("image/"),
     );
     const imageFiles =
       imageFilesFromClipboard.length > 0
@@ -62,23 +63,8 @@ export const SendBox = ({
       return;
     }
 
-    const newImages: ImageAttachment[] = [];
-    imageFiles.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        newImages.push({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-          filename: file.name || `image-${Date.now()}`,
-          mimeType: file.type,
-          dataUrl: event.target?.result as string,
-          size: file.size,
-        });
-
-        if (newImages.length === imageFiles.length) {
-          onImagesChange([...images, ...newImages]);
-        }
-      };
-      reader.readAsDataURL(file);
+    filesToImageAttachments(imageFiles, (newImages) => {
+      onImagesChange([...images, ...newImages]);
     });
   };
 
@@ -120,9 +106,7 @@ export const SendBox = ({
 
   // 处理文件上传
   const handleFiles = (files: File[]) => {
-    const validFiles = files.filter((file) =>
-      supportedExts.includes(file.type),
-    );
+    const validFiles = files.filter((file) => supportedExts.includes(file.type));
     if (validFiles.length > 0 && onFilesAdded) {
       onFilesAdded(validFiles);
     }
@@ -166,9 +150,7 @@ export const SendBox = ({
       >
         {prefix}
         {tools && (
-          <div className="flex items-center gap-2 border-b border-ink-900/10 pb-2">
-            {tools}
-          </div>
+          <div className="flex items-center gap-2 border-b border-ink-900/10 pb-2">{tools}</div>
         )}
 
         {/* 图片预览区域 */}

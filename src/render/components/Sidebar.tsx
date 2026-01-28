@@ -1,5 +1,4 @@
-import { Plus } from "lucide-react";
-import type { CSSProperties } from "react";
+import { Check, ChevronLeft, ChevronRight, Edit2, Plus, Settings, Trash2, X } from "lucide-react";
 import { useState } from "react";
 import type { Task } from "../types";
 
@@ -25,14 +24,9 @@ export const Sidebar = ({
   onDeleteTask,
   onRenameTask,
   onOpenSettings,
-  theme,
-  onThemeChange,
   collapsed,
   onToggleCollapse,
 }: SidebarProps) => {
-  const { Moon, Sun, Settings, Trash2, Edit2, ChevronLeft, ChevronRight } =
-    require("lucide-react");
-  const dragStyle = { WebkitAppRegion: "drag" } as CSSProperties;
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
 
@@ -154,20 +148,7 @@ export const Sidebar = ({
                         }}
                         aria-label="Save task name"
                       >
-                        {/* Check icon */}
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
+                        <Check size={14} />
                       </button>
                       <button
                         type="button"
@@ -178,21 +159,7 @@ export const Sidebar = ({
                         }}
                         aria-label="Cancel task name"
                       >
-                        {/* X icon */}
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <line x1="18" y1="6" x2="6" y2="18" />
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                        </svg>
+                        <X size={14} />
                       </button>
                     </div>
                   ) : (

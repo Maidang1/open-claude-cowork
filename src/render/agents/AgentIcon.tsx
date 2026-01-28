@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 const ICONS = {
   qwen: Qwen,
   claude: Claude,
-  opencode: ()=> null,
+  opencode: () => null,
   openai: OpenAI,
   gemini: Gemini,
 } as const;
