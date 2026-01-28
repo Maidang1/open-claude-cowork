@@ -28,6 +28,15 @@ export const ACP_BACKENDS_ALL: AgentPlugin[] = [
     icon: "qwen",
   },
   {
+    id: "opencode",
+    name: "OpenCode Agent",
+    description: "OpenCode agent with ACP protocol support.",
+    packageSpec: "opencode-ai",
+    defaultCommand: "opencode acp",
+    checkCommand: "opencode",
+    defaultEnv: {},
+  },
+  {
     id: "claude",
     name: "Claude Agent",
     description: "Claude agent with ACP protocol support using @zed-industries/claude-code-acp.",
