@@ -13,8 +13,8 @@ const buildTarget =
 const getMacArch = () => {
   if (buildTarget === "darwin-x64") return ["x64"];
   if (buildTarget === "darwin-arm64") return ["arm64"];
-  // 只构建 ARM64（现代 macOS 设备主要是 ARM）
-  return ["arm64"];
+  // 默认只构建当前架构，避免 universal binary 问题
+  return [process.arch === "arm64" ? "arm64" : "x64"];
 };
 
 const dir = buildTarget + "/" + dayjs().format("YYYY_MM_DD_HH_mm_ss");
