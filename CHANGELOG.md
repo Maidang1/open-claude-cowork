@@ -1,5 +1,11 @@
 # open-claude-cowork
 
+## 0.1.7
+
+### Patch Changes
+
+- 替换图标
+
 ## 0.1.6
 
 ### Patch Changes
