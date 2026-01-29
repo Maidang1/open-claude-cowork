@@ -1,5 +1,11 @@
 # open-claude-cowork
 
+## 0.1.6
+
+### Patch Changes
+
+- release v0.1.6
+
 ## 0.1.5
 
 ### Patch Changes
